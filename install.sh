@@ -413,7 +413,11 @@ remove_packages() {
     *" luci-i18n-podkop-ru "*) RU_WAS=1 ;;
     esac
     pkg_is_installed luci-i18n-podkop-exp-ru && RU_WAS=1
-    [ -x /etc/init.d/podkop ] && /etc/init.d/podkop stop 2>/dev/null
+    # podkop goes: its service stops first. The service of an installed podkop-exp is left
+    # to the package: an install of the same version changes nothing and starts nothing.
+    case " $REMOVE " in
+    *" podkop "*) [ -x /etc/init.d/podkop ] && /etc/init.d/podkop stop 2>/dev/null ;;
+    esac
     # podkop 0.7: its backend is a shell script
     [ "$(head -c 2 /usr/bin/podkop 2>/dev/null)" = "#!" ] && OLD_CONFIG=$(uci -q get podkop.settings.config_path)
     if [ "$PKG_IS_APK" -eq 1 ]; then
