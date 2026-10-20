@@ -214,8 +214,9 @@ main() {
         fi
     done
     if [ -n "$ru" ]; then
-        # the translation of podkop's page (luci-i18n-podkop-ru) has the same files
-        if pkg_is_installed luci-i18n-podkop; then
+        # the translation of podkop's page (luci-i18n-podkop-ru) has the same files: removed
+        # with podkop above, or still there with apk
+        if [ -n "$RU_WAS" ] || pkg_is_installed luci-i18n-podkop; then
                 msg "Upgrading Russian translation..."
                 pkg_remove luci-i18n-podkop*
                 pkg_install "$DOWNLOAD_DIR/$ru"
@@ -345,6 +346,7 @@ pkg_arch() {
 # needs stays without a question. Called once the packages are downloaded: while podkop
 # 0.7 runs, the router resolves names through sing-box.
 APK_CHANGES=""
+RU_WAS=""
 retire_sing_box() {
     local pkg engines="" boxes="" kept="" remove answer old_config others shell_podkop=""
     [ "$(head -c 2 /usr/bin/podkop 2>/dev/null)" = "#!" ] && shell_podkop=1
@@ -445,6 +447,10 @@ retire_podkop() {
     done
     [ -z "$old" ] && return
     msg "Replacing with podkop-exp:$old"
+    # the translation of podkop's page goes now: the one of podkop-exp comes without asking
+    case " $old " in
+    *" luci-i18n-podkop-ru "*) RU_WAS=1 ;;
+    esac
     [ -x /etc/init.d/podkop ] && service podkop stop
     if [ "$PKG_IS_APK" -eq 0 ]; then
         cp /etc/config/podkop "$DOWNLOAD_DIR/podkop.config" 2>/dev/null
