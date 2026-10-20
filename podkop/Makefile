@@ -73,29 +73,32 @@ endef
 
 # An upgrade made by apk does not stop the service (the script of the removal is not run,
 # and a start of a service that runs changes nothing): the backend that runs would stay the
-# one of the package that was replaced. opkg stops the service before an upgrade and starts
-# it after; the restart is harmless there. The guard is new: on an upgrade from podkop 0.7
-# nothing would enable it (only a fresh install enables services), so it is enabled here
-# unless the settings turn it off.
+# one of the package that was replaced, so a service that runs is restarted. opkg has
+# stopped it before the upgrade: it is started (a restart would first stop what procd no
+# longer has, and ubus says "Command failed: Not found"). The guard is new: on an upgrade
+# from podkop 0.7 nothing would enable it (only a fresh install enables services), so it is
+# enabled here unless the settings turn it off.
 define Package/podkop-exp/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
+# start what is stopped, restart what runs
+again() { if "$$1" running; then "$$1" restart; else "$$1" start; fi; }
 if [ "$${PKG_UPGRADE}" = "1" ]; then
 	case "$$(uci -q get podkop.settings.guard)" in
 	0 | off | false | no | disabled) ;;
-	*) /etc/init.d/podkop-guard enable; /etc/init.d/podkop-guard restart ;;
+	*) /etc/init.d/podkop-guard enable; again /etc/init.d/podkop-guard ;;
 	esac
-	/etc/init.d/podkop restart
+	again /etc/init.d/podkop
 fi
 exit 0
 endef
 
-# The stop gives back the DNS of the LAN, the firewall table and the routing.
+# The services are stopped by the prerm OpenWrt gives every package (default_prerm), and
+# the stop of podkop gives back the DNS of the LAN, the firewall table and the routing; a
+# stop of its own here would stop them twice ("Command failed: Not found").
 define Package/podkop-exp/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
-/etc/init.d/podkop-guard stop
-/etc/init.d/podkop stop
 grep -q "105 podkop" /etc/iproute2/rt_tables 2> /dev/null && sed -i "/105 podkop/d" /etc/iproute2/rt_tables
 exit 0
 endef

@@ -872,7 +872,7 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 		}
 	}
 	instance.OnRuleSetUpdate(tags, func(tag string) {
-		s.log("info", "list ", tag, " loaded (", sources[tag], ")")
+		s.log("info", "list ", tag, " updated (", sources[tag], ")")
 		select {
 		case s.derive <- struct{}{}:
 		default:
@@ -895,6 +895,9 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	s.tellNotes()
 	s.storeConfig(next)
 	s.log("info", describeConfig(next))
+	for _, tag := range tags {
+		s.log("info", "list ", tag, ": ", sources[tag])
+	}
 	return instance, nil
 }
 
