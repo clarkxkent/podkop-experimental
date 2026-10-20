@@ -87,7 +87,8 @@ export const PodkopShellMethods = {
       Podkop.AvailableMethods.GLOBAL_CHECK,
       label && port ? [label, String(port)] : [],
       '/usr/bin/podkop',
-      30000,
+      // LuCI aborts a call after 20 s whatever is asked here
+      19000,
     ),
   showSingBoxConfig: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),

@@ -258,6 +258,9 @@ function createSettingsContent(section, singBoxFeatures = []) {
   );
   o.depends("enable_yacd_wan_access", "1");
   o.rmempty = false;
+  // the backend keeps a key in it with WAN access off too, and the page sends it as its
+  // token: hidden, the option must not be deleted by a save
+  o.retain = true;
 
   if (singBoxFeatures.includes("tls.utls-fallback")) {
     o = section.option(

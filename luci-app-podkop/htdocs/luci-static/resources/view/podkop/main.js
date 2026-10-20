@@ -705,7 +705,8 @@ var PodkopShellMethods = {
     Podkop.AvailableMethods.GLOBAL_CHECK,
     label && port ? [label, String(port)] : [],
     "/usr/bin/podkop",
-    3e4
+    // LuCI aborts a call after 20 s whatever is asked here
+    19e3
   ),
   showSingBoxConfig: async () => callBaseMethod(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
   checkLogsSince: async (cursor) => callBaseMethod(Podkop.AvailableMethods.CHECK_LOGS, [
@@ -1085,7 +1086,7 @@ function knockFakeIpRepeatedly() {
   const start = setTimeout(() => {
     knock(url);
     interval = setInterval(() => knock(url), 400);
-  }, 1e3);
+  }, 2e3);
   return {
     label,
     port,
@@ -4877,7 +4878,7 @@ async function executeShellCommand({
   timeout = COMMAND_TIMEOUT
 }) {
   try {
-    return withTimeout(
+    return await withTimeout(
       execute(command, args),
       timeout,
       [command, ...args].join(" ")

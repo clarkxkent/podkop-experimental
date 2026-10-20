@@ -11,7 +11,7 @@ export function knockFakeIp(): string {
 }
 
 // Opens connections to a check name with a port of its own while global_check runs, the
-// first a second after it is asked for and then about every 400 ms until stop is called.
+// first two seconds after it is asked for and then about every 400 ms until stop is called.
 // global_check traces the DNS questions for that name and the packets to that port while
 // it waits for one of them; the delay has the first question come after the trace is
 // there, as a device may not ask again for a name it was refused. The ports are those no
@@ -28,7 +28,7 @@ export function knockFakeIpRepeatedly(): {
   const start = setTimeout(() => {
     knock(url);
     interval = setInterval(() => knock(url), 400);
-  }, 1000);
+  }, 2000);
 
   return {
     label,

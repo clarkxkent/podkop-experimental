@@ -50,7 +50,8 @@ export async function executeShellCommand({
   timeout = COMMAND_TIMEOUT,
 }: ExecuteShellCommandParams): Promise<ExecuteShellCommandResponse> {
   try {
-    return withTimeout(
+    // awaited here: a rejection must reach the catch below
+    return await withTimeout(
       execute(command, args),
       timeout,
       [command, ...args].join(' '),
