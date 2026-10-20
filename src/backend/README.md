@@ -34,14 +34,14 @@ sing-box is one package to port.
 
 `go.mod` requires `github.com/sagernet/sing-box` at the release podkop-engine is based on,
 and replaces it with the podkop-engine line in the fork
-[FiyeroT/sing-box](https://github.com/FiyeroT/sing-box) (branch `podkop-engine-1.14`). The
-replaces of `sing-vmess` and `sing-quic` repeat the ones of podkop-engine's own `go.mod`:
+[podkop-net/sing-box](https://github.com/podkop-net/sing-box) (branch `podkop-engine-1.14`). The
+replace of `sing-vmess` repeats the one of podkop-engine's own `go.mod`:
 Go applies a `replace` only in the main module.
 
 To move to another commit of podkop-engine:
 
 ```sh
-go mod edit -replace=github.com/sagernet/sing-box=github.com/FiyeroT/sing-box@<commit>
+go mod edit -replace=github.com/sagernet/sing-box=github.com/podkop-net/sing-box@<commit>
 go mod tidy
 ```
 

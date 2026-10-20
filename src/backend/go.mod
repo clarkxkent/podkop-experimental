@@ -6,9 +6,9 @@ require (
 	github.com/miekg/dns v1.1.72
 	github.com/sagernet/netlink v0.0.0-20260814022025-64455d367bbf
 	github.com/sagernet/nftables v0.3.0-mod.4
-	github.com/sagernet/sing v0.9.6-0.20260922013354-87c33f17688f
-	github.com/sagernet/sing-box v1.14.2
-	github.com/sagernet/sing-tun v0.9.6-0.20260924001923-ddaa4ca25e3b
+	github.com/sagernet/sing v0.9.7-0.20260929150544-0ad23b637bd4
+	github.com/sagernet/sing-box v1.14.3
+	github.com/sagernet/sing-tun v0.9.7-0.20261009020158-bca4bf029237
 	github.com/spf13/cobra v1.10.2
 	github.com/stretchr/testify v1.12.0
 	go4.org/netipx v0.0.0-20231129151722-fdeea329fbba
@@ -29,7 +29,6 @@ require (
 	github.com/axiomhq/hyperloglog v0.0.0-20240319100328-84253e514e02 // indirect
 	github.com/caddyserver/certmagic v0.25.3-0.20260421143802-60d9d8b415d6 // indirect
 	github.com/caddyserver/zerossl v0.1.5 // indirect
-	github.com/clipperhouse/uax29/v2 v2.2.0 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
 	github.com/coreos/go-iptables v0.7.1-0.20240112124308-65c67c9f46e6 // indirect
 	github.com/coreos/go-oidc/v3 v3.17.0 // indirect
@@ -80,14 +79,12 @@ require (
 	github.com/libp2p/go-nat v1.0.1-0.20250821073202-01afc089f138 // indirect
 	github.com/libp2p/go-netroute v0.2.1 // indirect
 	github.com/logrusorgru/aurora v2.0.3+incompatible // indirect
-	github.com/mattn/go-runewidth v0.0.27 // indirect
 	github.com/mdlayher/netlink v1.11.2 // indirect
 	github.com/mdlayher/socket v0.6.0 // indirect
 	github.com/metacubex/utls v1.8.7 // indirect
 	github.com/mholt/acmez/v3 v3.1.6 // indirect
 	github.com/mitchellh/go-ps v1.0.0 // indirect
 	github.com/openai/openai-go/v3 v3.26.0 // indirect
-	github.com/oschwald/maxminddb-golang v1.13.1 // indirect
 	github.com/pierrec/lz4/v4 v4.1.26 // indirect
 	github.com/pion/dtls/v3 v3.1.5 // indirect
 	github.com/pion/logging v0.2.4 // indirect
@@ -132,21 +129,21 @@ require (
 	github.com/sagernet/fswatch v0.1.2 // indirect
 	github.com/sagernet/gliderssh v0.3.4-0.20260531100337-2194faca5648 // indirect
 	github.com/sagernet/gvisor v0.0.0-20260727.0-sing-box-mod.1 // indirect
-	github.com/sagernet/quic-go v0.61.0-sing-box-mod.7 // indirect
-	github.com/sagernet/sing-cloudflared v0.1.3-0.20260706062323-d9787e794aa3 // indirect
-	github.com/sagernet/sing-mux v0.3.8 // indirect
-	github.com/sagernet/sing-openconnect v0.0.0-20260810065514-53aa8058f8df // indirect
-	github.com/sagernet/sing-openvpn v0.0.0-20260729104525-103eb5fe5eb6 // indirect
-	github.com/sagernet/sing-quic v0.7.1-0.20260924092235-6a3a24d65b99 // indirect
-	github.com/sagernet/sing-shadowsocks v0.2.8 // indirect
+	github.com/sagernet/quic-go v0.61.0-sing-box-mod.9 // indirect
+	github.com/sagernet/sing-cloudflared v0.1.4-0.20261002084126-c1255ae368f2 // indirect
+	github.com/sagernet/sing-mux v0.3.10-0.20260929204512-caf09fe32475 // indirect
+	github.com/sagernet/sing-openconnect v0.1.1-0.20260929151225-cbd68c45de58 // indirect
+	github.com/sagernet/sing-openvpn v0.1.1-0.20260929151220-7c3045dbddce // indirect
+	github.com/sagernet/sing-quic v0.7.2-0.20261002084117-75c3ac4fa12b // indirect
+	github.com/sagernet/sing-shadowsocks v0.2.9-0.20260929204512-65740e0f0e3e // indirect
 	github.com/sagernet/sing-shadowsocks2 v0.2.2-0.20260929152114-a69d1086332b // indirect
-	github.com/sagernet/sing-shadowtls v0.2.1 // indirect
-	github.com/sagernet/sing-snell v0.0.0-20260829071736-20f2eaec77c3 // indirect
+	github.com/sagernet/sing-shadowtls v0.2.2-0.20260928201441-a9c0127d5c99 // indirect
+	github.com/sagernet/sing-snell v0.0.0-20260904135315-bc5a12ac736f // indirect
 	github.com/sagernet/sing-usbip v0.0.0-20260817040617-28bd42667eca // indirect
-	github.com/sagernet/sing-vmess v0.2.8 // indirect
+	github.com/sagernet/sing-vmess v0.2.9-0.20260929152519-9b95ab8c9478 // indirect
 	github.com/sagernet/smux v1.5.50-sing-box-mod.1 // indirect
 	github.com/sagernet/tailscale v1.102.1-sing-box-1.14-mod.5 // indirect
-	github.com/sagernet/wireguard-go v0.0.7 // indirect
+	github.com/sagernet/wireguard-go v0.0.8-0.20260929150556-6731c7387c81 // indirect
 	github.com/sagernet/ws v0.0.0-20231204124109-acfe8907c854 // indirect
 	github.com/smallstep/pkcs7 v0.1.1 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -181,7 +178,6 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.org/x/tools v0.47.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
-	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20241231184526-a9ab2273dd10 // indirect
 	golang.zx2c4.com/wireguard/windows v0.5.3 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251202230838-ff82c1b0f217 // indirect
 	google.golang.org/grpc v1.79.1 // indirect
@@ -191,11 +187,10 @@ require (
 	zombiezen.com/go/capnproto2 v2.18.2+incompatible // indirect
 )
 
-// podkop-engine, the sing-box of podkop: the line of podkop-engine in a fork of sing-box
-replace github.com/sagernet/sing-box => github.com/FiyeroT/sing-box v0.0.0-20261018213053-91b5d9a561c5
+// podkop-engine, the sing-box of podkop: the branch podkop-engine-1.14 of the fork
+// podkop-net/sing-box (podkop-engine r15, sing-box 1.14.3)
+replace github.com/sagernet/sing-box => github.com/podkop-net/sing-box v0.0.0-20261019195946-1d47804dc783
 
-// the forks podkop-engine builds with (its go.mod has them; a replace counts only in the
+// the fork podkop-engine builds with (its go.mod has it; a replace counts only in the
 // main module)
-replace github.com/sagernet/sing-vmess => github.com/FiyeroT/sing-vmess v0.2.8-pdk.2
-
-replace github.com/sagernet/sing-quic => github.com/FiyeroT/sing-quic v0.7.1-pdk.1
+replace github.com/sagernet/sing-vmess => github.com/FiyeroT/sing-vmess v0.2.9-pdk.1
