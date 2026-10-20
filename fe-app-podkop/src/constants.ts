@@ -5,8 +5,6 @@ export const STATUS_COLORS = {
 };
 
 export const PODKOP_LUCI_APP_VERSION = '__COMPILED_VERSION_VARIABLE__';
-export const FAKEIP_CHECK_DOMAIN = 'fakeip.podkop.fyi';
-export const IP_CHECK_DOMAIN = 'ip.podkop.fyi';
 export const FAKEIP_CHECK_SUFFIX = 'fakeipchecker.podkop.net';
 
 export const REGIONAL_OPTIONS = [

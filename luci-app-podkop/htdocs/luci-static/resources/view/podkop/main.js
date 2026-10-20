@@ -902,8 +902,6 @@ var STATUS_COLORS = {
   WARNING: "#ff9800"
 };
 var PODKOP_LUCI_APP_VERSION = "__COMPILED_VERSION_VARIABLE__";
-var FAKEIP_CHECK_DOMAIN = "fakeip.podkop.fyi";
-var IP_CHECK_DOMAIN = "ip.podkop.fyi";
 var FAKEIP_CHECK_SUFFIX = "fakeipchecker.podkop.net";
 var REGIONAL_OPTIONS = [
   "russia_inside",
@@ -1015,63 +1013,6 @@ var COMMAND_SCHEDULING = {
   // Lowest priority
 };
 
-// src/podkop/api.ts
-async function createBaseApiRequest(fetchFn, options) {
-  const wrappedFn = () => options?.timeoutMs && options?.operationName ? withTimeout(
-    fetchFn(),
-    options.timeoutMs,
-    options.operationName,
-    options.timeoutMessage
-  ) : fetchFn();
-  try {
-    const response = await wrappedFn();
-    if (!response.ok) {
-      return {
-        success: false,
-        message: `${_("HTTP error")} ${response.status}: ${response.statusText}`
-      };
-    }
-    const data = await response.json();
-    return {
-      success: true,
-      data
-    };
-  } catch (e) {
-    return {
-      success: false,
-      message: e instanceof Error ? e.message : _("Unknown error")
-    };
-  }
-}
-
-// src/podkop/methods/fakeip/getFakeIpCheck.ts
-async function getFakeIpCheck() {
-  return createBaseApiRequest(
-    () => fetch(`https://${FAKEIP_CHECK_DOMAIN}/check`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" }
-    }),
-    {
-      operationName: "getFakeIpCheck",
-      timeoutMs: 5e3
-    }
-  );
-}
-
-// src/podkop/methods/fakeip/getIpCheck.ts
-async function getIpCheck() {
-  return createBaseApiRequest(
-    () => fetch(`https://${IP_CHECK_DOMAIN}/check`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" }
-    }),
-    {
-      operationName: "getIpCheck",
-      timeoutMs: 5e3
-    }
-  );
-}
-
 // src/podkop/methods/fakeip/knockFakeIp.ts
 function knockFakeIp() {
   const label = newLabel();
@@ -1114,8 +1055,6 @@ function knock(url) {
 
 // src/podkop/methods/fakeip/index.ts
 var RemoteFakeIPMethods = {
-  getFakeIpCheck,
-  getIpCheck,
   knockFakeIp,
   knockFakeIpRepeatedly
 };
@@ -5007,10 +4946,8 @@ return baseclass.extend({
   DashboardTab,
   DiagnosticTab,
   ERROR_POLL_INTERVAL,
-  FAKEIP_CHECK_DOMAIN,
   FAKEIP_CHECK_SUFFIX,
   FETCH_TIMEOUT,
-  IP_CHECK_DOMAIN,
   Logger,
   PODKOP_LUCI_APP_VERSION,
   PodkopShellMethods,
