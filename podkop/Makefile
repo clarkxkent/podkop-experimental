@@ -41,20 +41,24 @@ define Package/podkop
 	TITLE:=Domain routing app
 	URL:=https://podkop.net
 	DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +kmod-nft-tproxy
-	PROVIDES:=sing-box
-	CONFLICTS:=https-dns-proxy nextdns luci-app-passwall luci-app-passwall2 \
-		sing-box sing-box-tiny podkop-engine podkop-engine-full
+	# https-dns-proxy, nextdns and luci-app-xray take the forwarding of dnsmasq as soon as
+	# they are installed. podkop-engine is the sing-box of podkop 0.7 and nothing else.
+	# A sing-box package does not conflict: this package has no /usr/bin/sing-box and
+	# touches neither the settings nor the files of one. opkg alone reads these names
+	# (apk packages of OpenWrt have no conflicts): the backend tells what took dnsmasq or
+	# the marks over at run time (podkop global_check).
+	CONFLICTS:=https-dns-proxy nextdns luci-app-xray podkop-engine podkop-engine-full
 endef
 
 define Package/podkop/description
 	Domain routing. Use of VLESS, Shadowsocks technologies.
-	One program: the backend of podkop and sing-box (podkop-engine) inside it. It also
-	answers as sing-box (/usr/bin/sing-box).
+	One program: the backend of podkop with sing-box (podkop-engine) inside it, as a
+	library. It is not a sing-box for other programs: a sing-box package may be installed
+	beside it.
 endef
 
 define Package/podkop/conffiles
 /etc/config/podkop
-/etc/sing-box/
 endef
 
 define Build/Prepare
@@ -94,9 +98,8 @@ endef
 define Package/podkop/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(GO_PKG_BUILD_BIN_DIR)/podkop $(1)/usr/bin/podkop
-	$(LN) podkop $(1)/usr/bin/sing-box
 
-	$(INSTALL_DIR) $(1)/etc/sing-box
+	$(INSTALL_DIR) $(1)/usr/share/podkop
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/etc/config/podkop $(1)/etc/config/podkop
 	$(INSTALL_DIR) $(1)/etc/init.d

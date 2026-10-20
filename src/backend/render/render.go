@@ -21,7 +21,7 @@ type Request struct {
 	UCIPath string
 	// Facts are what is known of the router besides the settings.
 	Facts plan.Facts
-	// OutputPath is where the configuration goes; the path the settings name when empty.
+	// OutputPath is where the configuration goes.
 	OutputPath string
 	// RuleSetDir is where the rule-set files go; the backend's usual place when empty.
 	RuleSetDir string
@@ -61,10 +61,7 @@ func Run(request Request) (*Outcome, error) {
 	}
 	outputPath := request.OutputPath
 	if outputPath == "" {
-		outputPath = config.Settings.ConfigPath
-	}
-	if outputPath == "" {
-		return nil, E.New("the settings do not say where the configuration goes (config_path)")
+		return nil, E.New("no path for the configuration")
 	}
 	rooted := func(path string) string {
 		if request.Root == "" {

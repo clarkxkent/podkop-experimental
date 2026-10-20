@@ -39,6 +39,12 @@ import (
 //     apart anyway, the option is deprecated and 1.16 removes it.
 //  7. The Clash API has the key of the settings whenever there is one, YACD on or not;
 //     the shell backend gives it only with YACD.
+//  8. The files are in the backend's own directories, none in those of the sing-box
+//     package: the rule-set files in /var/run/podkop/rulesets (the shell backend:
+//     /tmp/sing-box/rulesets), and a cache file the settings name in /tmp/sing-box or
+//     /usr/share/sing-box under the same name in /var/run/podkop or /usr/share/podkop
+//     (model.CachePath); without cache_path it is /var/run/podkop/cache.db (the shell
+//     backend: /tmp/sing-box/cache.db).
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -179,11 +185,50 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 			}
 		}
 	}
+	movePaths(document, options.RuleSetDir)
 	converted.Config, err = indented(document)
 	if err != nil {
 		return nil, err
 	}
 	return converted, nil
+}
+
+// shellRuleSetDir is where the shell backend keeps the rule-set files it makes.
+const shellRuleSetDir = "/tmp/sing-box/rulesets"
+
+// movePaths takes the paths of the shell backend's files to the backend's own directories
+// (item 8): the rule-set files it makes and the cache file of sing-box.
+func movePaths(document *object, ruleSetDir string) {
+	if route, _ := document.get("route"); route != nil {
+		if routeObject, isObject := route.(*object); isObject {
+			ruleSets, _ := routeObject.get("rule_set")
+			list, _ := ruleSets.([]any)
+			for _, entry := range list {
+				ruleSet, isObject := entry.(*object)
+				if !isObject {
+					continue
+				}
+				path, _ := ruleSet.get("path")
+				if text, isText := path.(string); isText {
+					if rest, found := strings.CutPrefix(text, shellRuleSetDir+"/"); found {
+						ruleSet.set("path", ruleSetDir+"/"+rest)
+					}
+				}
+			}
+		}
+	}
+	if experimental, _ := document.get("experimental"); experimental != nil {
+		if experimentalObject, isObject := experimental.(*object); isObject {
+			if cacheFile, _ := experimentalObject.get("cache_file"); cacheFile != nil {
+				if cacheObject, isObject := cacheFile.(*object); isObject {
+					path, _ := cacheObject.get("path")
+					if text, isText := path.(string); isText {
+						cacheObject.set("path", model.CachePath(text))
+					}
+				}
+			}
+		}
+	}
 }
 
 // shellRemoteTags are the tags the shell backend gives the remote lists of a section and

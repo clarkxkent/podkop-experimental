@@ -29,10 +29,12 @@ const SocketPath = "/var/run/podkop/ctl.sock"
 const ProtocolVersion = 1
 
 // The files of the directory of the configuration (supervisor.Options.ConfigDir). The
-// configuration that runs is there while it runs; the last configuration sing-box refused
-// is there until the next settings are read.
+// configuration that runs is there while it runs, and as the last one once it stops,
+// until the next one runs; the last configuration sing-box refused is there until the
+// next settings are read.
 const (
 	RunningConfig  = "config.json"
+	LastConfig     = "config.last.json"
 	RejectedConfig = "config.rejected.json"
 )
 

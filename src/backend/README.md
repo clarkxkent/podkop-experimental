@@ -2,8 +2,11 @@
 
 One program, `/usr/bin/podkop`: the backend of podkop with sing-box inside it. sing-box is
 not a separate package and process any more: it is a Go module the backend builds with
-(podkop-engine, the sing-box of podkop). The package links `/usr/bin/sing-box` to the same
-file; called by that name, the program is the command line of sing-box.
+(podkop-engine, the sing-box of podkop). To the system the program is not sing-box: there is
+no `/usr/bin/sing-box` of it, it uses neither the settings (`/etc/config/sing-box`) nor the
+directories (`/etc/sing-box`, `/usr/share/sing-box`) of a sing-box package, and one may be
+installed beside it. Its own files are in `/var/run/podkop` (RAM: the configuration that
+runs, the rule-set files) and `/usr/share/podkop` (the cache file when it is on flash).
 
 The settings stay `/etc/config/podkop` in the format of podkop 0.7, and the page (LuCI)
 calls the same commands (`podkop get_status`, `podkop check_logs`, ...).
@@ -42,8 +45,8 @@ go mod edit -replace=github.com/sagernet/sing-box=github.com/FiyeroT/sing-box@<c
 go mod tidy
 ```
 
-The package takes the version sing-box reports (`sing-box version`, the page) from these
-lines: `<release>-pdk-<commit>`.
+The package takes the version of sing-box the page shows (`podkop show_sing_box_version`)
+from these lines: `<release>-pdk-<commit>`.
 
 ## Build and test
 

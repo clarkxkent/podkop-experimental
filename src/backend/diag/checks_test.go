@@ -91,14 +91,14 @@ func TestMaskConfig(t *testing.T) {
 			{"type": "ssh", "tag": "e", "user": "secret-s", "private_key": "secret-k", "private_key_passphrase": "secret-q"}
 		],
 		"endpoints": [{"type": "wireguard", "tag": "f", "private_key": "secret-w", "peers": [{"public_key": "pk", "pre_shared_key": "secret-r"}]}],
-		"route": {"rule_set": [{"type": "local", "tag": "g", "format": "source", "path": "/tmp/sing-box/rulesets/g.json"}]},
+		"route": {"rule_set": [{"type": "local", "tag": "g", "format": "source", "path": "/var/run/podkop/rulesets/g.json"}]},
 		"experimental": {"clash_api": {"external_controller": "192.168.1.1:9090", "secret": "secret-c"}}
 	}`))
 	require.NoError(t, err)
 	text = string(masked)
 	require.NotContains(t, text, "secret-")
 	require.NotContains(t, text, "abc123")
-	for _, kept := range []string{`"path": "/xh"`, `"path": "/tmp/sing-box/rulesets/g.json"`, `"plugin": "obfs-local"`, `"external_controller": "192.168.1.1:9090"`, `"type": "xhttp"`} {
+	for _, kept := range []string{`"path": "/xh"`, `"path": "/var/run/podkop/rulesets/g.json"`, `"plugin": "obfs-local"`, `"external_controller": "192.168.1.1:9090"`, `"type": "xhttp"`} {
 		require.Contains(t, text, kept)
 	}
 }

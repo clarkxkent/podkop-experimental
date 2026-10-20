@@ -21,11 +21,6 @@ var compat = []compatItem{
 		Until: "the shell backend cannot be installed in place of this one",
 	},
 	{
-		Name:  "config-export",
-		Why:   "the configuration that runs is written at config_path as well: the shell backend compares with it, and people look for it there",
-		Until: "the shell backend cannot be installed in place of this one",
-	},
-	{
 		Name:  "rule-set-files",
 		Why:   "the rule-set files are removed at the stop: the shell backend takes a file it finds for one of its own",
 		Until: "the shell backend cannot be installed in place of this one",

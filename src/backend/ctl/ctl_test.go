@@ -105,7 +105,6 @@ func TestCommands(t *testing.T) {
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o755))
 		return path
 	}
-	config := write("config.json", `{"outbounds":[{"type":"socks","tag":"main-out","server":"203.0.113.15","server_port":1080,"password":"p"}]}`)
 	logs := logbuf.New(1 << 16)
 	logs.Write("backend", "info", "running")
 	running := &backend{status: api.Status{Running: true}, result: api.Result{OK: false, Message: "the settings cannot be used, nothing is changed: no link"}}
@@ -113,7 +112,7 @@ func TestCommands(t *testing.T) {
 		Version: "0.8.0-test", SingBoxVersion: "1.14.2-test", Features: []string{"tools.decode-link", "urltest.fallbacks"},
 		Socket: serve(t, running, logs),
 		Paths: diag.Paths{
-			Settings: write("podkop", "config settings 'settings'\n\toption dns_type 'udp'\n\toption config_path '"+config+"'\n\toption yacd_secret_key 'k'\n\nconfig section 'main'\n\toption proxy_string 'socks5://u:p@203.0.113.15:1080'\n"),
+			Settings: write("podkop", "config settings 'settings'\n\toption dns_type 'udp'\n\toption yacd_secret_key 'k'\n\nconfig section 'main'\n\toption proxy_string 'socks5://u:p@203.0.113.15:1080'\n"),
 			DHCP:     write("dhcp", "config dnsmasq\n\tlist server '127.0.0.42'\n\toption noresolv '1'\n\toption cachesize '0'\n"),
 			Network:  write("network", "config interface 'lan'\n"),
 		},
@@ -126,16 +125,16 @@ func TestCommands(t *testing.T) {
 	require.Equal(t, "{\"running\":1,\"enabled\":0,\"status\":\"running but disabled\",\"dns_configured\":1}\n", output)
 	output, _ = run(env, "get_sing_box_features")
 	require.Equal(t, "[\"tools.decode-link\",\"urltest.fallbacks\"]\n", output)
-	output, _ = run(env, "show_sing_box_config")
-	require.Contains(t, output, `"tag": "main-out"`)
-	require.NotContains(t, output, "203.0.113.15")
-	// with the copies the backend keeps: the one that runs; the refused one when asked,
-	// and when nothing runs; the export when there is neither
+	// the copies the backend keeps, all in RAM: the one that runs; the refused one when
+	// asked, and when nothing runs; the one that ran last when there is neither
+	_, status = run(env, "show_sing_box_config")
+	require.Equal(t, 1, status, "no directory of the copies")
 	runDir := filepath.Join(directory, "run")
 	require.NoError(t, os.MkdirAll(runDir, 0o755))
 	env.ConfigDir = runDir
 	require.NoError(t, os.WriteFile(filepath.Join(runDir, api.RunningConfig), []byte(`{"outbounds":[{"type":"direct","tag":"running"}]}`), 0o600))
 	require.NoError(t, os.WriteFile(filepath.Join(runDir, api.RejectedConfig), []byte(`{"outbounds":[{"type":"socks","tag":"refused","server":"203.0.113.16"}]}`), 0o600))
+	require.NoError(t, os.WriteFile(filepath.Join(runDir, api.LastConfig), []byte(`{"outbounds":[{"type":"socks","tag":"main-out","server":"203.0.113.15","server_port":1080,"password":"p"}]}`), 0o600))
 	output, _ = run(env, "show_sing_box_config")
 	require.Contains(t, output, `"tag": "running"`)
 	output, _ = run(env, "show_sing_box_config", "--rejected")
@@ -147,6 +146,7 @@ func TestCommands(t *testing.T) {
 	require.NoError(t, os.Remove(filepath.Join(runDir, api.RejectedConfig)))
 	output, _ = run(env, "show_sing_box_config")
 	require.Contains(t, output, `"tag": "main-out"`)
+	require.NotContains(t, output, "203.0.113.15")
 	_, status = run(env, "show_sing_box_config", "--rejected")
 	require.Equal(t, 1, status)
 	env.ConfigDir = ""

@@ -51,7 +51,7 @@ var commandRender = &cobra.Command{
 
 func init() {
 	commandRender.Flags().StringVar(&commandRenderFlagUCI, "uci", "/etc/config/podkop", "The settings file")
-	commandRender.Flags().StringVar(&commandRenderFlagOutput, "output", "", "Where the configuration goes (default: the path the settings name)")
+	commandRender.Flags().StringVar(&commandRenderFlagOutput, "output", "/tmp/podkop-render/config.json", "Where the configuration goes")
 	commandRender.Flags().StringVar(&commandRenderFlagRuleSetDir, "rule-set-dir", "", "Where the rule-set files go (default "+plan.DefaultRuleSetDir+")")
 	commandRender.Flags().StringVar(&commandRenderFlagRoot, "root", "", "A directory put before every path read or written, the settings file excepted")
 	commandRender.Flags().StringVar(&commandRenderFlagLANAddress, "lan-address", "", "The IPv4 address of the LAN, for the services that listen there")

@@ -13,7 +13,6 @@
 - При обновлении **обязательно** [очищайте кэш LuCI](https://podkop.net/docs/clear-browser-cache/).
 - После обновления проверяйте конфигурацию — она может изменяться между версиями.
 - При старте Podkop модифицируется конфигурация Dnsmasq.
-- Podkop изменяет конфигурацию sing-box. Если вы используете собственную конфигурацию, заранее сохраните её.
 
 ### Системные требования
 - Требуется OpenWrt 24.10 или выше.
@@ -40,7 +39,7 @@ https://podkop.net/
 sh <(wget -O - https://raw.githubusercontent.com/itdoginfo/podkop/refs/heads/main/install.sh)
 ```
 
-С версии 0.8 sing-box входит в Podkop: пакет podkop содержит [podkop-engine](https://github.com/FiyeroT/podkop-engine) — сборку sing-box с исправлениями и возможностями для Podkop (ссылки с транспортом xhttp, резервные ссылки в URLTest и другие). Отдельный пакет sing-box не нужен: установщик заменяет его, а команда `sing-box` на роутере остаётся.
+С версии 0.8 sing-box входит в Podkop: пакет podkop содержит [podkop-engine](https://github.com/podkop-net/podkop-engine) — сборку sing-box с исправлениями и возможностями для Podkop (ссылки с транспортом xhttp, резервные ссылки в URLTest и другие). Отдельный пакет sing-box не нужен и не используется: Podkop не трогает ни его настройки, ни его файлы, и его можно оставить для других задач. Установщик предлагает удалить sing-box, оставшийся от прошлых версий Podkop.
 
 Альтернативный скрипт установки:
 ```

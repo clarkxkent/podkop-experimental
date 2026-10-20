@@ -20,7 +20,7 @@ func TestLoadDefaults(t *testing.T) {
 	require.Equal(t, "60", config.Settings.DNSRewriteTTL)
 	require.Equal(t, "1d", config.Settings.UpdateInterval)
 	require.Equal(t, "warn", config.Settings.LogLevel)
-	require.Equal(t, "/tmp/sing-box/cache.db", config.Settings.CachePath)
+	require.Equal(t, "/var/run/podkop/cache.db", config.Settings.CachePath)
 	require.Len(t, config.Sections, 1)
 	section := config.Sections[0]
 	require.Equal(t, []string{"a://1", "b://2", "c://3"}, section.SelectorProxyLinks)
@@ -35,6 +35,11 @@ func TestLoadDefaults(t *testing.T) {
 func TestLoadNoSettings(t *testing.T) {
 	t.Parallel()
 	parsed, err := uci.Parse([]byte("config section 'main'\n"))
+	require.NoError(t, err)
+	_, err = Load(parsed)
+	require.Error(t, err)
+	// a section of another type named settings is no settings
+	parsed, err = uci.Parse([]byte("config section 'settings'\n\toption connection_type 'proxy'\n"))
 	require.NoError(t, err)
 	_, err = Load(parsed)
 	require.Error(t, err)
@@ -69,5 +74,22 @@ func TestIsOne(t *testing.T) {
 	}
 	for _, text := range []string{"", "0", "2", "11", "on", "true", "1x", "-1", "10", "+"} {
 		require.False(t, isOne(text), text)
+	}
+}
+
+// The cache file is never in a directory of the sing-box package: the places podkop 0.7
+// offered are taken to the backend's own.
+func TestCachePathMoved(t *testing.T) {
+	t.Parallel()
+	for path, want := range map[string]string{
+		"/tmp/sing-box/cache.db":       "/var/run/podkop/cache.db",
+		"/usr/share/sing-box/cache.db": "/usr/share/podkop/cache.db",
+		"/mnt/usb/cache.db":            "/mnt/usb/cache.db",
+	} {
+		parsed, err := uci.Parse([]byte("config settings 'settings'\n\toption cache_path '" + path + "'\n\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n"))
+		require.NoError(t, err)
+		config, err := Load(parsed)
+		require.NoError(t, err)
+		require.Equal(t, want, config.Settings.CachePath, path)
 	}
 }

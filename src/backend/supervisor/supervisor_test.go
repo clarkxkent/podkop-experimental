@@ -120,7 +120,9 @@ func newFixture(t *testing.T) *fixture {
 // settings writes the settings file: one section with a list of names, and what a test adds.
 func (f *fixture) settings(settings string, section string) {
 	text := "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '127.0.0.1:9'\n\toption update_interval '1d'\n" +
-		"\toption config_path '" + filepath.Join(f.directory, "config.json") + "'\n\toption cache_path '" + filepath.Join(f.directory, "cache.db") + "'\n" + settings +
+		// podkop 0.7 wrote the configuration where config_path named: the backend does not
+		"\toption config_path '" + filepath.Join(f.directory, "config.json") + "'\n" +
+		"\toption cache_path '" + filepath.Join(f.directory, "cache.db") + "'\n" + settings +
 		"\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://u:p@203.0.113.15:1080#s5'\n" + section
 	require.NoError(f.t, os.WriteFile(f.supervisor.options.SettingsPath, []byte(text), 0o644))
 }
@@ -213,17 +215,6 @@ func TestBootApplyStop(t *testing.T) {
 	require.Equal(t, []string{"routing", "firewall update", "dns"}, f.system.take())
 	second := s.current.instance
 
-	// only the path of the export changes: the configuration is the same, and the
-	// export is written at the new path
-	moved := filepath.Join(f.directory, "moved", "config.json")
-	f.settings("\toption dns_rewrite_ttl '120'\n\toption config_path '"+moved+"'\n", oneName+"\tlist user_domains 'two.lab.example'\n")
-	s.Apply()
-	require.Same(t, second, s.current.instance)
-	exported, err := os.ReadFile(moved)
-	require.NoError(t, err, "the export is not written when only its path changes")
-	require.Equal(t, f.kept(RunningConfig), string(exported))
-	f.system.take()
-
 	// settings that cannot be used change nothing
 	f.settings("\toption dns_rewrite_ttl '120'\n", strings.Replace(oneName, "one.lab.example", "three.lab.example", 1)+"\toption proxy_string 'vless://broken'\n")
 	s.Apply()
@@ -254,21 +245,24 @@ func TestBootApplyStop(t *testing.T) {
 	require.Contains(t, f.kept(RejectedConfig), takenPort)
 	require.NotContains(t, f.kept(RunningConfig), takenPort)
 
-	// the configuration that runs is stored where the settings say, for those who read it
-	stored, err := os.ReadFile(filepath.Join(f.directory, "config.json"))
-	require.NoError(t, err)
-	require.Equal(t, string(s.current.result.Config), string(stored))
+	// the configuration that runs is in the directory of the copies only: nothing is
+	// written where the settings of podkop 0.7 named (config_path)
+	_, err = os.Stat(filepath.Join(f.directory, "config.json"))
+	require.True(t, os.IsNotExist(err), "a configuration outside the directory of the copies: %v", err)
+	ran := string(s.current.result.Config)
 	files, err := os.ReadDir(s.options.RuleSetDir)
 	require.NoError(t, err)
 	require.NotEmpty(t, files)
 
 	// the stop gives the DNS of the LAN back before anything else, and leaves no rule-set
-	// file and nothing that tells of a configuration
+	// file; the configuration that ran is kept as the last one, nothing as running or
+	// refused
 	s.Stop()
 	require.False(t, s.Running())
 	require.Equal(t, []string{"no dns", "no firewall", "no routing"}, f.system.take())
 	require.Empty(t, f.kept(RunningConfig))
 	require.Empty(t, f.kept(RejectedConfig))
+	require.Equal(t, ran, f.kept(LastConfig))
 	require.False(t, answer("one.lab.example"))
 	files, err = os.ReadDir(s.options.RuleSetDir)
 	require.NoError(t, err)
@@ -324,7 +318,7 @@ func TestCacheDirectoryIsMade(t *testing.T) {
 	s := f.supervisor
 	cache := filepath.Join(f.directory, "after-reboot", "sing-box", "cache.db")
 	text := "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '127.0.0.1:9'\n" +
-		"\toption config_path '" + filepath.Join(f.directory, "config.json") + "'\n\toption cache_path '" + cache + "'\n" +
+		"\toption cache_path '" + cache + "'\n" +
 		"\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n"
 	require.NoError(t, os.WriteFile(s.options.SettingsPath, []byte(text), 0o644))
 	s.Boot()
@@ -582,8 +576,7 @@ func TestProbe(t *testing.T) {
 	// what is no label is not asked about
 	require.Equal(t, ProbeResult{}, s.Probe(ctx, "NO SUCH", time.Second))
 	// the configuration that runs has the rules of the check names, after the service ones
-	config, err := os.ReadFile(filepath.Join(f.directory, "config.json"))
-	require.NoError(t, err)
-	require.Contains(t, string(config), `"domain_suffix": "fakeipchecker.podkop.net"`)
-	require.Contains(t, string(config), `"override_address": "127.0.0.1"`)
+	config := f.kept(RunningConfig)
+	require.Contains(t, config, `"domain_suffix": "fakeipchecker.podkop.net"`)
+	require.Contains(t, config, `"override_address": "127.0.0.1"`)
 }

@@ -11,6 +11,7 @@ import (
 
 	"github.com/itdoginfo/podkop/src/backend/api"
 	"github.com/itdoginfo/podkop/src/backend/clock"
+	"github.com/itdoginfo/podkop/src/backend/dataplane"
 	"github.com/itdoginfo/podkop/src/backend/logbuf"
 	"github.com/itdoginfo/podkop/src/backend/probe"
 	"github.com/itdoginfo/podkop/src/backend/supervisor"
@@ -125,18 +126,17 @@ var commandRelease = &cobra.Command{
 
 const (
 	// statePath tells the guard of the package what the backend is doing.
-	statePath = "/var/run/podkop/state"
+	statePath = dataplane.RunDir + "/state"
 	// configDir keeps the configuration that runs and the last one refused, for
 	// show_sing_box_config.
-	configDir = "/var/run/podkop"
+	configDir = dataplane.RunDir
 	// downloadURL is the download test of urltest groups whose section keeps the
 	// default: 64 KiB through the member before a group switches to it. A server frozen
 	// after ~16 KB passes the usual small test, not this one. podkop-engine set it for its
 	// sing-box service; the backend writes it into the configuration itself.
 	downloadURL = "https://speed.cloudflare.com/__down?bytes=65536"
-	// workDir is the working directory, where YACD is downloaded to: the one of the
-	// sing-box service of OpenWrt.
-	workDir = "/usr/share/sing-box"
+	// workDir is the working directory of sing-box, where YACD is downloaded to.
+	workDir = dataplane.DataDir
 	// fileLimit is the number of open files the backend may have. The default of a
 	// service, 4096, runs out at some 2000 proxied connections, and then DNS queries fail
 	// for want of a socket.

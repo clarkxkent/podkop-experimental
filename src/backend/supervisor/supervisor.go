@@ -144,14 +144,15 @@ type Options struct {
 	Watcher *probe.Watcher
 }
 
-// The files of Options.ConfigDir (api.RunningConfig, api.RejectedConfig). The
-// configuration that runs is there while it runs, written after every start that came
-// up, the start of the previous configuration included; it goes at the stop and when the
-// router is given back. The last configuration sing-box refused is there until the next
-// settings are read, so a message that names a place in it (outbounds[2]) can be read
-// beside it; it goes at the stop.
+// The files of Options.ConfigDir (api.RunningConfig, api.LastConfig, api.RejectedConfig).
+// The configuration that runs is there while it runs, written after every start that came
+// up, the start of the previous configuration included; at the stop and when the router is
+// given back it becomes the last one, shown while nothing runs. The last configuration
+// sing-box refused is there until the next settings are read, so a message that names a
+// place in it (outbounds[2]) can be read beside it; it goes at the stop.
 const (
 	RunningConfig  = api.RunningConfig
+	LastConfig     = api.LastConfig
 	RejectedConfig = api.RejectedConfig
 )
 
@@ -802,10 +803,9 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	if err != nil {
 		return nil, err
 	}
-	// sing-box opens the cache file but does not make its directory. The shell backend made
-	// /tmp/sing-box at every start; here it was there only when a rule-set file had been
-	// written into it, and after a reboot settings whose lists are all downloaded or local
-	// write none
+	// sing-box opens the cache file but does not make its directory, and after a reboot
+	// settings whose lists are all downloaded or local write no rule-set file that would
+	// have made it
 	if path := next.settings.Settings.CachePath; path != "" {
 		err = os.MkdirAll(filepath.Dir(path), 0o755)
 		if err != nil {
@@ -860,25 +860,20 @@ func (s *Supervisor) tellNotes() {
 	}
 }
 
-// compat: config-export
-// storeConfig keeps the configuration that runs: in ConfigDir, which the user interface
-// shows, and at the path the settings name, an export for those who read it there (the
-// shell backend compares with it). sing-box here is given the configuration in memory.
-// The export is written only when it differs: the path is on flash as a rule.
+// storeConfig keeps the configuration that runs in ConfigDir, which the user interface
+// shows. sing-box here is given the configuration in memory; nothing is written anywhere
+// else (no file of a sing-box package).
 func (s *Supervisor) storeConfig(running *candidate) {
 	s.keepConfig(RunningConfig, running.result.Config)
-	path := running.settings.Settings.ConfigPath
-	if path == "" {
+}
+
+// retireConfig keeps the configuration that ran, if one did, as the last one: it is
+// shown while nothing runs, until the next one runs or a reboot (ConfigDir is in RAM).
+func (s *Supervisor) retireConfig() {
+	if s.options.ConfigDir == "" {
 		return
 	}
-	current, err := os.ReadFile(path)
-	if err == nil && bytes.Equal(current, running.result.Config) {
-		return
-	}
-	err = render.WriteFile(path, running.result.Config)
-	if err != nil {
-		s.log("warn", "store the configuration at ", path, ": ", err)
-	}
+	_ = os.Rename(filepath.Join(s.options.ConfigDir, RunningConfig), filepath.Join(s.options.ConfigDir, LastConfig))
 }
 
 // keepConfig writes a file of ConfigDir, or removes it when content is nil.
@@ -926,8 +921,8 @@ func (s *Supervisor) close(instance Instance) bool {
 func (s *Supervisor) Boot() Result {
 	started := time.Now()
 	s.writeState(stateBooting)
-	// what a backend before this one kept says nothing of this one
-	s.keepConfig(RunningConfig, nil)
+	// what a backend before this one kept is what ran last, not what runs
+	s.retireConfig()
 	next, err := s.prepare()
 	if err != nil {
 		s.log("error", "the settings cannot be used: ", err)
@@ -1202,7 +1197,7 @@ func (s *Supervisor) Release() {
 // release gives the router back what the backend took: the DNS of the LAN, the firewall
 // table, the routing. Each is no error when it is not there. Nothing runs after it.
 func (s *Supervisor) release() {
-	s.keepConfig(RunningConfig, nil)
+	s.retireConfig()
 	changed, err := s.options.System.RestoreDNS()
 	if err != nil {
 		s.log("error", "give the DNS of the LAN back: ", err)

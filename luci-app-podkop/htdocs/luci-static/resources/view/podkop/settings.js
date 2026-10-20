@@ -341,19 +341,6 @@ function createSettingsContent(section, singBoxFeatures = []) {
   o.rmempty = false;
 
   o = section.option(
-    form.ListValue,
-    "config_path",
-    _("Config File Path"),
-    _(
-      "Select path for sing-box config file. Change this ONLY if you know what you are doing",
-    ),
-  );
-  o.value("/etc/sing-box/config.json", "Flash (/etc/sing-box/config.json)");
-  o.value("/tmp/sing-box/config.json", "RAM (/tmp/sing-box/config.json)");
-  o.default = "/etc/sing-box/config.json";
-  o.rmempty = false;
-
-  o = section.option(
     form.Value,
     "cache_path",
     _("Cache File Path"),
@@ -361,12 +348,9 @@ function createSettingsContent(section, singBoxFeatures = []) {
       "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing",
     ),
   );
-  o.value("/tmp/sing-box/cache.db", "RAM (/tmp/sing-box/cache.db)");
-  o.value(
-    "/usr/share/sing-box/cache.db",
-    "Flash (/usr/share/sing-box/cache.db)",
-  );
-  o.default = "/tmp/sing-box/cache.db";
+  o.value("/var/run/podkop/cache.db", "RAM (/var/run/podkop/cache.db)");
+  o.value("/usr/share/podkop/cache.db", "Flash (/usr/share/podkop/cache.db)");
+  o.default = "/var/run/podkop/cache.db";
   o.rmempty = false;
   o.validate = function (section_id, value) {
     if (!value) {

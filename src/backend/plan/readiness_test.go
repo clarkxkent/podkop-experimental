@@ -19,7 +19,7 @@ import (
 // before the first one it surely matches routes it to the FakeIP server, and so does that
 // one; the server answers from dataplane.FakeIPRange.
 func TestReadinessNameIsAnsweredFromFakeIP(t *testing.T) {
-	const head = "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n\toption config_path '/etc/sing-box/config.json'\n"
+	const head = "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n"
 	const proxy = "\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n"
 	for name, settings := range map[string]string{
 		"a proxy without lists": head + proxy,

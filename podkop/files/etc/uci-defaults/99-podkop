@@ -4,14 +4,14 @@
 # one beside it as .apk-new. An /etc/init.d/podkop of podkop's shell backend that was
 # edited stays in place then: the service runs the shell backend's script, which calls
 # /usr/bin/podkop (the binary of this package) for its actions, and this binary calls the
-# script back. Put the package's scripts in place, the old ones aside in /etc/sing-box
+# script back. Put the package's scripts in place, the old ones aside in /usr/share/podkop
 # (not in /etc/init.d, where they would show as services); a script that could not be
 # replaced stays where it was. This runs before default_postinst enables and starts the
 # services of the package.
 for service in podkop podkop-guard; do
 	[ -f /etc/init.d/$service.apk-new ] || continue
-	mkdir -p /etc/sing-box
-	old=/etc/sing-box/$service.init.before-podkop-0.8 kept=""
+	mkdir -p /usr/share/podkop
+	old=/usr/share/podkop/$service.init.before-podkop-0.8 kept=""
 	if [ -f /etc/init.d/$service ] && mv -f /etc/init.d/$service $old 2>/dev/null; then
 		chmod 0644 $old
 		kept=", the old one is $old"
@@ -23,4 +23,24 @@ for service in podkop podkop-guard; do
 		logger -t podkop "/etc/init.d/$service is not the one of the package and could not be replaced by /etc/init.d/$service.apk-new"
 	fi
 done
+
+# podkop 0.7 kept its files in the directories of the sing-box package: this package uses
+# none of them, nor the settings of sing-box (the backend has sing-box inside). config_path
+# named where the shell backend wrote its configuration: nothing is written there now. The
+# cache file of sing-box moves to the same name in the backend's own directories, so the
+# FakeIP addresses handed out before stay theirs.
+uci -q delete podkop.settings.config_path
+cache=$(uci -q get podkop.settings.cache_path)
+case "$cache" in
+/tmp/sing-box/*) new=/var/run/podkop/${cache#/tmp/sing-box/} ;;
+/usr/share/sing-box/*) new=/usr/share/podkop/${cache#/usr/share/sing-box/} ;;
+*) new="" ;;
+esac
+if [ -n "$new" ]; then
+	uci -q set podkop.settings.cache_path="$new"
+	if [ -f "$cache" ] && [ ! -e "$new" ]; then
+		mkdir -p "${new%/*}" && mv -f "$cache" "$new" && logger -t podkop "the cache file moved from $cache to $new"
+	fi
+fi
+uci -q commit podkop
 exit 0

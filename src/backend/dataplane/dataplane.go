@@ -52,6 +52,14 @@ const (
 	// it, and a test of plan holds it to that); without that every start would end in
 	// "does not answer" and the LAN would be given back its own DNS.
 	ReadinessName = "fakeip.podkop.fyi"
+
+	// RunDir keeps what the backend has while it runs, in RAM (/var/run is /tmp/run on
+	// OpenWrt): its state, the configuration that runs and the rule-set files. DataDir
+	// keeps what stays over a reboot. Neither is a directory of a sing-box package: the
+	// backend has sing-box inside and touches nothing of a sing-box installed beside it
+	// (/etc/sing-box, /usr/share/sing-box, /etc/config/sing-box).
+	RunDir  = "/var/run/podkop"
+	DataDir = "/usr/share/podkop"
 )
 
 // DNSServer is the address and the port of the DNS inbound, as a DNS client dials it.

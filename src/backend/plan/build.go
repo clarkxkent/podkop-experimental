@@ -31,8 +31,9 @@ const (
 	domainCheckProxyIP = "ip.podkop.fyi"
 
 	urlCommunityLists = "https://github.com/itdoginfo/allow-domains/releases/latest/download"
-	// DefaultRuleSetDir is where the shell backend keeps the rule-set files it makes.
-	DefaultRuleSetDir     = "/tmp/sing-box/rulesets"
+	// DefaultRuleSetDir is where the backend keeps the rule-set files it makes (the
+	// shell backend: /tmp/sing-box/rulesets).
+	DefaultRuleSetDir     = dataplane.RunDir + "/rulesets"
 	fingerprintsFallback  = "safari,randomized,edge,firefox,chrome"
 	versionSourceRuleSet  = 3
 	versionUDPOverTCP     = 2

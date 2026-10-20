@@ -1,18 +1,14 @@
 // The program podkop: the backend of podkop with sing-box inside (podkop-engine, a module),
-// and the command line of both.
+// and its command line. It is not sing-box to the system: there is no /usr/bin/sing-box
+// of it, and it uses neither the settings nor the files of a sing-box package.
 //
-// Installed, or linked, as "sing-box" it is sing-box: the command line of sing-box, with
-// the version and the features of podkop-engine. Under any other name it is podkop: its
-// own commands (daemon, release, ctl, and in a lab build those of the lab), and the
+// Its commands: daemon, release, ctl, and in a lab build those of the lab; and the
 // commands of the user interface, which the shell backend had as the commands of
 // /usr/bin/podkop: "podkop get_status" is "podkop ctl get_status".
 package main
 
 import (
 	"os"
-	"path/filepath"
-
-	"github.com/sagernet/sing-box/cmd/sing-box/cli"
 
 	"github.com/spf13/cobra"
 )
@@ -26,10 +22,6 @@ var mainCommand = &cobra.Command{
 }
 
 func main() {
-	if filepath.Base(os.Args[0]) == "sing-box" {
-		cli.Main()
-		return
-	}
 	if len(os.Args) < 2 || !ownCommand(os.Args[1]) {
 		os.Args = append([]string{os.Args[0], "ctl"}, os.Args[1:]...)
 	}

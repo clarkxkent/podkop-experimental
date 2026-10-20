@@ -9,7 +9,7 @@
 #    guard stops podkop then, and the stop gives the router its own DNS back
 #    (podkop release). When the binary cannot even run that, the guard points dnsmasq at the
 #    router's servers and removes the firewall table itself. Internet keeps working without
-#    the proxy; the cause goes to the log and to /etc/sing-box/guard.last. podkop is started
+#    the proxy; the cause goes to the log and to /usr/share/podkop/guard.last. podkop is started
 #    again by hand or by a reboot once the cause is fixed.
 # 2. A backend that runs and answers nothing (a deadlock, a stall): procd does not restart
 #    it, and dnsmasq keeps asking it. Every PROBE_INTERVAL seconds the guard asks the DNS
@@ -30,7 +30,7 @@ FIFO=/var/run/podkop-guard.fifo
 # left by the probe when it kills the backend: "<pid> <time> <seconds without an answer>"
 MARK=/var/run/podkop-guard.liveness
 # what the guard last stopped podkop for: the system log is in RAM and is lost at a reboot
-LAST=/etc/sing-box/guard.last
+LAST=/usr/share/podkop/guard.last
 # what the backend is doing: "<state> <pid> <since>", written by the backend
 STATE=/var/run/podkop/state
 main=$$
@@ -201,7 +201,7 @@ memory_state() {
 	rss=$(dmesg 2>/dev/null | grep 'Killed process .*(podkop)' | tail -n 1 | sed -n 's/.*anon-rss:\([0-9]*\)kB.*/\1/p')
 	[ -n "$oom_last" ] && [ -n "$rss" ] && printf "; the backend had %d MB when killed" $((rss / 1024))
 	df -k /tmp 2>/dev/null | awk 'NR == 2 {printf "; /tmp %d of %d MB", $3 / 1024, $2 / 1024}'
-	cache=$(uci -q get podkop.settings.cache_path || echo /tmp/sing-box/cache.db)
+	cache=$(uci -q get podkop.settings.cache_path || echo /var/run/podkop/cache.db)
 	[ -f "$cache" ] && wc -c < "$cache" | awk -v c="$cache" '{printf "; %s %.1f MB", c, $1 / 1048576}'
 	for status in /proc/[0-9]*/status; do
 		awk '/^Name:/ {n = $2} /^VmRSS:/ {print $2, n}' "$status" 2>/dev/null
@@ -294,6 +294,7 @@ while read -r event; do
 		/etc/init.d/podkop stop >/dev/null 2>&1
 		raw_release && log "the backend could not give the router back its DNS: dnsmasq asks the router's servers again and the firewall table is removed"
 		# after DNS is back, and never in its way: the overlay may be full or read-only
+		mkdir -p "${LAST%/*}" 2>/dev/null
 		{ date '+%Y-%m-%d %H:%M:%S %z'; echo "$state"; echo "$cause"; } > "$LAST" 2>/dev/null || true
 		;;
 	esac

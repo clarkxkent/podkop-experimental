@@ -102,7 +102,7 @@ func fakeFixture(t *testing.T) (*Supervisor, *fakeEngine, *recorder, func(name s
 	})
 	settings := func(name string, ttl string) {
 		text := "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '127.0.0.1:9'\n\toption dns_rewrite_ttl '" + ttl + "'\n" +
-			"\toption config_path '" + filepath.Join(directory, "config.json") + "'\n\toption cache_path '" + filepath.Join(directory, "cache.db") + "'\n" +
+			"\toption cache_path '" + filepath.Join(directory, "cache.db") + "'\n" +
 			"\toption yacd_secret_key 'k'\n" +
 			"\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n" +
 			"\toption user_domain_list_type 'dynamic'\n\tlist user_domains '" + name + "'\n"

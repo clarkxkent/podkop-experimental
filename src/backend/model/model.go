@@ -7,6 +7,8 @@ package model
 import (
 	"strings"
 
+	"github.com/itdoginfo/podkop/src/backend/dataplane"
+
 	"github.com/itdoginfo/podkop/src/backend/uci"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -42,7 +44,6 @@ type Settings struct {
 	DownloadListsViaProxySection string
 	DontTouchDHCP                bool
 
-	ConfigPath           string
 	CachePath            string
 	LogLevel             string
 	ServiceListenAddress string
@@ -93,7 +94,9 @@ type Section struct {
 // Load takes the settings out of a parsed file.
 func Load(parsed *uci.Package) (*Config, error) {
 	settings := parsed.Section("settings")
-	if settings == nil {
+	if settings == nil || settings.Type != "settings" {
+		// the page writes "config settings 'settings'"; a section of another type that
+		// takes the name is no settings
 		return nil, E.New("the file has no section \"settings\"")
 	}
 	get := func(section *uci.Section, name string, defaultValue string) string {
@@ -121,8 +124,7 @@ func Load(parsed *uci.Package) (*Config, error) {
 		DownloadListsViaProxy:        settings.Bool("download_lists_via_proxy", false),
 		DownloadListsViaProxySection: settings.Get("download_lists_via_proxy_section"),
 		DontTouchDHCP:                settings.Bool("dont_touch_dhcp", false),
-		ConfigPath:                   settings.Get("config_path"),
-		CachePath:                    get(settings, "cache_path", "/tmp/sing-box/cache.db"),
+		CachePath:                    CachePath(get(settings, "cache_path", DefaultCachePath)),
 		LogLevel:                     get(settings, "log_level", "warn"),
 		ServiceListenAddress:         settings.Get("service_listen_address"),
 	}}
@@ -211,4 +213,28 @@ func (s *Section) HasEnabledLists() bool {
 // HasOutbound tells whether traffic of the section leaves through an outbound of its own.
 func (s *Section) HasOutbound() bool {
 	return s.ConnectionType == "proxy" || s.ConnectionType == "vpn"
+}
+
+// DefaultCachePath is the cache file of sing-box (FakeIP, rule sets) when the settings name
+// none: in RAM, as the shell backend had it.
+const DefaultCachePath = dataplane.RunDir + "/cache.db"
+
+// movedDirs are the directories of the sing-box package that podkop 0.7 offered for the
+// cache file, and where the backend has it instead.
+var movedDirs = [][2]string{
+	{"/tmp/sing-box/", dataplane.RunDir + "/"},
+	{"/usr/share/sing-box/", dataplane.DataDir + "/"},
+}
+
+// CachePath is the cache file the settings name, a path in a directory of the sing-box
+// package taken to the same name in the backend's own: settings kept from podkop 0.7 name
+// those. The package moves the file there once (uci-defaults), so the FakeIP addresses
+// handed out before stay.
+func CachePath(path string) string {
+	for _, moved := range movedDirs {
+		if rest, found := strings.CutPrefix(path, moved[0]); found {
+			return moved[1] + rest
+		}
+	}
+	return path
 }

@@ -109,6 +109,17 @@ func TestFromShell(t *testing.T) {
 	text = string(converted.Config)
 	require.Contains(t, text, `"path": "/etc/lists/good.lst"`)
 	require.Contains(t, text, `"format": "text"`)
-	require.Contains(t, text, `"path": "/tmp/sing-box/rulesets/main-gone-local-domains-ruleset.json"`)
+	require.Contains(t, text, `"path": "/var/run/podkop/rulesets/main-gone-local-domains-ruleset.json"`)
 	require.Contains(t, text, `"main-good-local-domains-ruleset",`)
+
+	// the files of the shell backend in the directories of the sing-box package are the
+	// backend's in its own (item 8)
+	shell = []byte(`{"route":{"rule_set":[{"type":"local","tag":"main-user-domains-ruleset","format":"source","path":"/tmp/sing-box/rulesets/main-user-domains-ruleset.json"}]},` +
+		`"experimental":{"cache_file":{"enabled":true,"path":"/usr/share/sing-box/cache.db","store_fakeip":true}}}`)
+	converted, err = FromShell(shell, Shell{Settings: &model.Config{}, Options: noFiles})
+	require.NoError(t, err)
+	text = string(converted.Config)
+	require.Contains(t, text, `"path": "/var/run/podkop/rulesets/main-user-domains-ruleset.json"`)
+	require.Contains(t, text, `"path": "/usr/share/podkop/cache.db"`)
+	require.NotContains(t, text, "sing-box")
 }

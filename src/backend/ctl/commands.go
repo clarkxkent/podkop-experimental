@@ -193,7 +193,7 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		}
 		return logs(client, output)
 	case "show_sing_box_config":
-		return showConfig(env, settings, len(arguments) > 1 && arguments[1] == "--rejected", output, errorOutput)
+		return showConfig(env, len(arguments) > 1 && arguments[1] == "--rejected", output, errorOutput)
 	case "show_config":
 		content, err := os.ReadFile(env.Paths.Settings)
 		if err != nil {
@@ -416,25 +416,23 @@ func logsSince(client api.Client, cursor string) *api.LogPage {
 
 // showConfig prints a sing-box configuration, masked: the one that runs, or with rejected
 // the last one sing-box refused. When nothing runs, the refused one is printed if there is
-// one, else the export at config_path, which is what ran last; the terminal is told which
-// (the user interface reads the output alone, as JSON).
-func showConfig(env Environment, settings *model.Settings, rejected bool, output io.Writer, errorOutput io.Writer) int {
+// one, else the one that ran last; the terminal is told which (the user interface reads
+// the output alone, as JSON).
+func showConfig(env Environment, rejected bool, output io.Writer, errorOutput io.Writer) int {
 	type source struct {
 		path string
 		note string
 	}
-	var sources []source
-	if env.ConfigDir != "" {
-		sources = append(sources, source{filepath.Join(env.ConfigDir, api.RunningConfig), ""},
-			source{filepath.Join(env.ConfigDir, api.RejectedConfig), "nothing runs; this is the configuration sing-box refused last"})
+	if env.ConfigDir == "" {
+		return 1
+	}
+	sources := []source{
+		{filepath.Join(env.ConfigDir, api.RunningConfig), ""},
+		{filepath.Join(env.ConfigDir, api.RejectedConfig), "nothing runs; this is the configuration sing-box refused last"},
+		{filepath.Join(env.ConfigDir, api.LastConfig), "nothing runs; this is the configuration that ran last"},
 	}
 	if rejected {
-		if len(sources) == 0 {
-			return 1
-		}
 		sources = []source{{sources[1].path, ""}}
-	} else if path := settings.ConfigPath; path != "" {
-		sources = append(sources, source{path, "nothing runs; this is the configuration that ran last"})
 	}
 	for _, from := range sources {
 		content, err := os.ReadFile(from.path)

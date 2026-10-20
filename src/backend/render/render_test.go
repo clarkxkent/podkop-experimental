@@ -101,6 +101,9 @@ func caseNames(t *testing.T) []string {
 	return names
 }
 
+// outputPath is where a test has the configuration written, under its root.
+const outputPath = "/out/config.json"
+
 // placeCase puts the settings and the list files of a case under a root and returns the
 // request that runs it there.
 func placeCase(t *testing.T, name string, root string) Request {
@@ -133,7 +136,7 @@ func placeCase(t *testing.T, name string, root string) Request {
 			t.Fatal(err)
 		}
 	}
-	return Request{UCIPath: settings, Facts: plan.Facts{LANAddress: facts.LANAddress}, Root: root}
+	return Request{UCIPath: settings, Facts: plan.Facts{LANAddress: facts.LANAddress}, Root: root, OutputPath: outputPath}
 }
 
 // wanted returns the files of a case under a directory of it, by their names there.
@@ -169,8 +172,8 @@ func TestCases(t *testing.T) {
 				if err == nil {
 					t.Fatalf("the settings are taken, the shell backend refuses them; written %s", outcome.ConfigPath)
 				}
-				if strings.TrimSpace(err.Error()) == "" || len(leftFiles(t, root, "etc")) != 0 {
-					t.Fatalf("refused with %q, files left: %v", err, leftFiles(t, root, "etc"))
+				if strings.TrimSpace(err.Error()) == "" || len(leftFiles(t, root, "out")) != 0 {
+					t.Fatalf("refused with %q, files left: %v", err, leftFiles(t, root, "out"))
 				}
 				return
 			}
@@ -295,7 +298,7 @@ func TestRefusedSettingsKeepTheConfiguration(t *testing.T) {
 func TestLeftOutItemsAreTold(t *testing.T) {
 	root := t.TempDir()
 	settings := filepath.Join(root, "podkop")
-	err := os.WriteFile(settings, []byte("config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n\toption config_path '/etc/sing-box/config.json'\n"+
+	err := os.WriteFile(settings, []byte("config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n"+
 		"\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n"+
 		"\toption user_domain_list_type 'dynamic'\n\tlist user_domains 'good.example'\n\tlist user_domains 'bad!one'\n\tlist user_domains 'bad!two'\n"+
 		"\tlist local_domain_lists '/list.lst'\n"), 0o644)
@@ -306,7 +309,7 @@ func TestLeftOutItemsAreTold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	outcome, err := Run(Request{UCIPath: settings, Root: root, SkipCheck: true})
+	outcome, err := Run(Request{UCIPath: settings, Root: root, OutputPath: outputPath, SkipCheck: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -329,21 +332,21 @@ func TestRefusedLinkIsNamed(t *testing.T) {
 	const uuid = "6f1c9a0e-3b52-4c1e-9a55-2d4a1b0f7c11"
 	root := t.TempDir()
 	settings := filepath.Join(root, "podkop")
-	err := os.WriteFile(settings, []byte("config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n\toption config_path '/etc/sing-box/config.json'\n"+
+	err := os.WriteFile(settings, []byte("config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n"+
 		"\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'urltest'\n"+
 		"\tlist urltest_proxy_links 'socks5://203.0.113.15:1080'\n"+
 		"\tlist urltest_proxy_links 'vless://"+uuid+"@example.org:443?security=reality&pbk="+canary+"&sid=01'\n"), 0o644)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = Run(Request{UCIPath: settings, Root: root})
+	_, err = Run(Request{UCIPath: settings, Root: root, OutputPath: outputPath})
 	if err == nil {
 		t.Fatal("the settings are taken")
 	}
 	if !strings.HasPrefix(err.Error(), "section main: cannot use the proxy link of main-2: ") || strings.Contains(err.Error(), canary) || strings.Contains(err.Error(), uuid) {
 		t.Fatalf("refused with %q", err)
 	}
-	if left := leftFiles(t, root, "etc"); len(left) != 0 {
+	if left := leftFiles(t, root, "out"); len(left) != 0 {
 		t.Fatalf("files left: %v", left)
 	}
 }
