@@ -577,11 +577,11 @@ async function getConfigSections() {
 }
 
 // src/podkop/methods/shell/callBaseMethod.ts
-async function callBaseMethod(method, args = [], command = "/usr/bin/podkop") {
+async function callBaseMethod(method, args = [], command = "/usr/bin/podkop", timeout = 15e3) {
   const response = await executeShellCommand({
     command,
     args: [method, ...args],
-    timeout: 15e3
+    timeout
   });
   if (response.stdout) {
     try {
@@ -699,7 +699,14 @@ var PodkopShellMethods = {
     [],
     "/etc/init.d/podkop"
   ),
-  globalCheck: async () => callBaseMethod(Podkop.AvailableMethods.GLOBAL_CHECK),
+  // with the label and the port of a check name this browser opens connections to while
+  // the report is made, the report tells what became of them (it waits up to 5 s for one)
+  globalCheck: async (label, port) => callBaseMethod(
+    Podkop.AvailableMethods.GLOBAL_CHECK,
+    label && port ? [label, String(port)] : [],
+    "/usr/bin/podkop",
+    3e4
+  ),
   showSingBoxConfig: async () => callBaseMethod(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
   checkLogsSince: async (cursor) => callBaseMethod(Podkop.AvailableMethods.CHECK_LOGS, [
     "--since",
@@ -1066,25 +1073,40 @@ async function getIpCheck() {
 
 // src/podkop/methods/fakeip/knockFakeIp.ts
 function knockFakeIp() {
-  const label = Array.from(
+  const label = newLabel();
+  knock(`https://${label}.${FAKEIP_CHECK_SUFFIX}/`);
+  return label;
+}
+function knockFakeIpRepeatedly() {
+  const label = newLabel();
+  const port = 4e4 + Math.floor(Math.random() * 1e4);
+  const url = `https://${label}.${FAKEIP_CHECK_SUFFIX}:${port}/`;
+  knock(url);
+  const interval = setInterval(() => knock(url), 400);
+  return { label, port, stop: () => clearInterval(interval) };
+}
+function newLabel() {
+  return Array.from(
     crypto.getRandomValues(new Uint8Array(10)),
     (byte) => byte.toString(16).padStart(2, "0")
   ).join("");
+}
+function knock(url) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 3e3);
-  fetch(`https://${label}.${FAKEIP_CHECK_SUFFIX}/`, {
+  fetch(url, {
     mode: "no-cors",
     cache: "no-store",
     signal: controller.signal
   }).catch(() => void 0).finally(() => clearTimeout(timer));
-  return label;
 }
 
 // src/podkop/methods/fakeip/index.ts
 var RemoteFakeIPMethods = {
   getFakeIpCheck,
   getIpCheck,
-  knockFakeIp
+  knockFakeIp,
+  knockFakeIpRepeatedly
 };
 
 // src/podkop/services/tab.service.ts
@@ -4187,8 +4209,12 @@ async function handleShowGlobalCheck() {
       globalCheck: { loading: true }
     }
   });
+  const knock2 = RemoteFakeIPMethods.knockFakeIpRepeatedly();
   try {
-    const globalCheck = await PodkopShellMethods.globalCheck();
+    const globalCheck = await PodkopShellMethods.globalCheck(
+      knock2.label,
+      knock2.port
+    );
     if (globalCheck.success) {
       ui.showModal(
         _("Global check"),
@@ -4202,6 +4228,7 @@ async function handleShowGlobalCheck() {
     logger.error("[DIAGNOSTIC]", "handleShowGlobalCheck - e", e);
     showToast(_("Failed to execute!"), "error");
   } finally {
+    knock2.stop();
     store.set({
       diagnosticsActions: {
         ...diagnosticsActions,

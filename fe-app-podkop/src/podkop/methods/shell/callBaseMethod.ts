@@ -5,11 +5,12 @@ export async function callBaseMethod<T>(
   method: Podkop.AvailableMethods,
   args: string[] = [],
   command: string = '/usr/bin/podkop',
+  timeout: number = 15000,
 ): Promise<Podkop.MethodResponse<T>> {
   const response = await executeShellCommand({
     command,
     args: [method as string, ...args],
-    timeout: 15000,
+    timeout,
   });
 
   if (response.stdout) {

@@ -1,11 +1,14 @@
 package netcfg
 
 import (
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/itdoginfo/podkop/src/backend/dataplane"
 )
 
 // The tests change the routing of their network namespace and compare with the ip
@@ -114,5 +117,46 @@ func TestLANAddress(t *testing.T) {
 		} else if err != nil || address.String() != want {
 			t.Errorf("%q: %v %v, want %s", content, address, err, want)
 		}
+	}
+}
+
+// The kernel says where a marked packet of a LAN device goes: to the router itself once
+// the rule and the route of the backend are there, past it without them, or when a rule
+// of higher priority takes the packet first.
+func TestMarkedRoute(t *testing.T) {
+	needIP(t)
+	TableNamesPath = filepath.Join(t.TempDir(), "rt_tables")
+	ip(t, "link", "add", "pdktest0", "type", "dummy")
+	defer exec.Command("ip", "link", "del", "pdktest0").Run()
+	ip(t, "addr", "add", "10.99.0.1/24", "dev", "pdktest0")
+	ip(t, "link", "set", "pdktest0", "up")
+	source, destination := netip.MustParseAddr("10.99.0.2"), netip.MustParseAddr("198.18.0.1")
+	if err := Remove(); err != nil {
+		t.Fatal(err)
+	}
+	// without the rule the packet is not the router's (or not routed at all here)
+	if route, err := MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark); err == nil && route.Local {
+		t.Fatalf("local without the rule of the backend: %+v", route)
+	}
+	if err := Apply(); err != nil {
+		t.Fatal(err)
+	}
+	defer Remove()
+	route, err := MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !route.Local || route.Table != dataplane.RoutingTable {
+		t.Fatalf("with the rule of the backend: %+v", route)
+	}
+	// the ip program says the same
+	if text := ip(t, "route", "get", destination.String(), "from", source.String(), "iif", "pdktest0", "mark", "0x100000"); !strings.HasPrefix(text, "local ") || !strings.Contains(text, "table 105") {
+		t.Fatalf("ip route get: %s", text)
+	}
+	// a rule of higher priority takes the packet before the one of the backend
+	ip(t, "rule", "add", "from", "10.99.0.0/24", "lookup", "main", "priority", "50")
+	defer exec.Command("ip", "rule", "del", "priority", "50").Run()
+	if route, err := MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark); err == nil && route.Local {
+		t.Fatalf("local past a rule of priority 50: %+v", route)
 	}
 }

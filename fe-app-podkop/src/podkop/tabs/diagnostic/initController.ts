@@ -214,8 +214,14 @@ async function handleShowGlobalCheck() {
     },
   });
 
+  // this browser knocks on a check name meanwhile: the report tells whether its DNS
+  // question and its connections came to sing-box, and where they were lost
+  const knock = RemoteFakeIPMethods.knockFakeIpRepeatedly();
   try {
-    const globalCheck = await PodkopShellMethods.globalCheck();
+    const globalCheck = await PodkopShellMethods.globalCheck(
+      knock.label,
+      knock.port,
+    );
 
     if (globalCheck.success) {
       ui.showModal(
@@ -230,6 +236,7 @@ async function handleShowGlobalCheck() {
     logger.error('[DIAGNOSTIC]', 'handleShowGlobalCheck - e', e);
     showToast(_('Failed to execute!'), 'error');
   } finally {
+    knock.stop();
     store.set({
       diagnosticsActions: {
         ...diagnosticsActions,

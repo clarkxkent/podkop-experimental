@@ -20,10 +20,9 @@ func (Router) LANAddress() string {
 	return address.String()
 }
 
-func (Router) ApplyRouting() error {
-	netcfg.AllowBridgedTraffic()
-	return netcfg.Apply()
-}
+func (Router) ApplyRouting() error { return netcfg.Apply() }
+
+func (Router) AllowBridgedTraffic() []string { return netcfg.AllowBridgedTraffic() }
 
 func (Router) RemoveRouting() error { return netcfg.Remove() }
 

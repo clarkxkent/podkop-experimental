@@ -45,6 +45,16 @@ type recorder struct {
 	routingGone, firewallGone bool
 	// secrets are the keys of the Clash API written into the settings
 	secrets []string
+	// bridged is whether bridged packets pass the IP firewall hooks (br_netfilter)
+	bridged bool
+}
+
+func (r *recorder) AllowBridgedTraffic() []string {
+	if !r.bridged {
+		return nil
+	}
+	r.bridged = false
+	return []string{"net.bridge.bridge-nf-call-iptables"}
 }
 
 func (r *recorder) SetClashSecret(key string) error { r.secrets = append(r.secrets, key); return nil }
@@ -234,6 +244,9 @@ func TestBootApplyStop(t *testing.T) {
 	s.Apply()
 	require.True(t, s.Running(), "%v", f.lines())
 	require.True(t, f.logged("going back to the previous one"), "%v", f.lines())
+	// who holds the port is told: this test, which listens there
+	require.True(t, f.logged(fmt.Sprintf("127.0.0.1:%d (tcp) is taken: ", port)), "%v", f.lines())
+	require.True(t, f.logged(fmt.Sprintf("(pid %d) on 127.0.0.1:%d", os.Getpid(), port)), "%v", f.lines())
 	require.NotSame(t, second, s.current.instance)
 	require.True(t, answer("two.lab.example"), "the previous configuration does not answer after the way back")
 	require.False(t, answer("four.lab.example"))
@@ -368,6 +381,13 @@ func TestRestoreRouting(t *testing.T) {
 	require.Contains(t, message, "the firewall table")
 	require.Equal(t, []string{"routing", "firewall", "dns"}, f.system.take())
 	require.True(t, f.logged("the network changed"), "%v", f.lines())
+	// another program let bridged packets through the IP firewall hooks (dockerd does):
+	// turned off again, told, and the rest left as it is
+	f.system.routingGone, f.system.firewallGone = false, false
+	f.system.bridged = true
+	require.Contains(t, s.restoreRouting(), "br_netfilter")
+	require.True(t, f.logged("net.bridge.bridge-nf-call-iptables was 1 (br_netfilter): set to 0"), "%v", f.lines())
+	require.Equal(t, []string{"dns"}, f.system.take())
 }
 
 // Settings that cannot be used at the boot leave the router without the backend and with

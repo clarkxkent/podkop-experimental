@@ -72,7 +72,7 @@ var Commands = [][2]string{
 	{"check_fakeip", "Whether a name asked on the router is answered from FakeIP and a connection of the router to it reaches sing-box"},
 	{"check_fakeip_client", "<label> [ms]: what the backend saw of the check name a device opened a connection to"},
 	{"clash_api", "get_proxies | get_proxy_latency <tag> [ms] | get_group_latency <tag> [ms] | set_group_proxy <group> <proxy>"},
-	{"global_check", "Every check as one report"},
+	{"global_check", "[label port]: every check as one report; with the label of a check name and a port the device that asks opens connections to meanwhile, also what came of its DNS question and its connections"},
 	{"check_logs", "[--since RUN:NUMBER]: the log of the backend and of sing-box; with --since, as JSON, only the lines after that number of that run (all of another run), and where to go on from"},
 	{"show_sing_box_config", "The sing-box configuration that runs, secrets masked; --rejected: the last one refused"},
 	{"show_config", "The settings, secrets masked"},
@@ -182,10 +182,18 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 	case "clash_api":
 		return clashAPI(client, arguments[1:], output)
 	case "global_check":
+		// with the label of a check name and a port: the device that asks opens
+		// connections to them while the report is made
+		var device *deviceCheck
+		if len(arguments) > 2 && probe.ValidLabel(arguments[1]) {
+			if port, err := strconv.ParseUint(arguments[2], 10, 16); err == nil && port > 0 {
+				device = &deviceCheck{label: arguments[1], port: uint16(port), probe: client.Probe}
+			}
+		}
 		io.WriteString(output, globalCheck(ctx, env.Paths, settings, env.Version, env.SingBoxVersion, running(), func() (bool, bool) {
 			result, err := client.ProbeSelf()
 			return err == nil && result.DNS && result.Connection, err == nil
-		}))
+		}, device))
 		return 0
 	case "check_logs":
 		if len(arguments) > 2 && arguments[1] == "--since" {

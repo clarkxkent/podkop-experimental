@@ -43,6 +43,9 @@ type System interface {
 	LANAddress() string
 	ApplyRouting() error
 	RemoveRouting() error
+	// AllowBridgedTraffic keeps bridged packets out of the IP firewall hooks and names
+	// the switches it had to turn off (netcfg.AllowBridgedTraffic).
+	AllowBridgedTraffic() []string
 	// RoutingPresent tells whether the rule and the route of ApplyRouting are both there,
 	// FirewallPresent whether the table is.
 	RoutingPresent() (bool, error)
@@ -474,6 +477,9 @@ func (s *Supervisor) restoreRouting() string {
 		return "nothing runs"
 	}
 	var restored []string
+	if s.allowBridged() {
+		restored = append(restored, "bridged packets out of the IP firewall (br_netfilter)")
+	}
 	present, err := s.options.System.RoutingPresent()
 	if err != nil {
 		s.log("warn", "look at the routing: ", err)
@@ -599,11 +605,17 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 	// a download brings several rule sets one after another: the firewall is refilled
 	// once, a moment after the first, and nothing else waits meanwhile
 	var merge <-chan time.Time
+	bridged := time.NewTicker(bridgedCheckInterval)
+	defer bridged.Stop()
 	for !s.stuck {
 		select {
 		case <-ctx.Done():
 			s.Stop()
 			return s.stuckError()
+		case <-bridged.C:
+			if s.current != nil {
+				s.allowBridged()
+			}
 		case <-reload:
 			s.Apply()
 		case reply := <-s.requests:
@@ -630,6 +642,22 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 
 // how long the refill of the firewall sets waits for more rule sets to load
 const deriveMerge = 500 * time.Millisecond
+
+// bridgedCheckInterval is how often a running backend looks whether another program has
+// let bridged packets through the IP firewall hooks again (dockerd does at its start).
+const bridgedCheckInterval = 30 * time.Second
+
+// allowBridged keeps bridged packets out of the IP firewall hooks (System.
+// AllowBridgedTraffic) and logs each switch that had to be turned off: another program
+// turned it on, and it breaks the transparent proxy for the devices behind the LAN bridge.
+// It tells whether anything was turned off.
+func (s *Supervisor) allowBridged() bool {
+	changed := s.options.System.AllowBridgedTraffic()
+	for _, name := range changed {
+		s.log("warn", name, " was 1 (br_netfilter): set to 0")
+	}
+	return len(changed) > 0
+}
 
 // stuckError is what ends Run when sing-box did not close: nil when it did.
 func (s *Supervisor) stuckError() error {
@@ -838,6 +866,9 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	})
 	err = instance.Start()
 	if err != nil {
+		if taken := takenBy(err); taken != "" {
+			s.log("error", taken)
+		}
 		return nil, E.Cause(err, "start sing-box")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), s.options.ReadyTimeout)
@@ -952,6 +983,7 @@ func (s *Supervisor) Boot() Result {
 // DNS of the LAN last.
 func (s *Supervisor) surround(previousFirewall *firewall.Plan) error {
 	current := s.current
+	s.allowBridged()
 	err := s.options.System.ApplyRouting()
 	if err != nil {
 		return E.Cause(err, "set up the routing")

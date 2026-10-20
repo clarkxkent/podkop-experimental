@@ -1,9 +1,10 @@
 import { getFakeIpCheck } from './getFakeIpCheck';
 import { getIpCheck } from './getIpCheck';
-import { knockFakeIp } from './knockFakeIp';
+import { knockFakeIp, knockFakeIpRepeatedly } from './knockFakeIp';
 
 export const RemoteFakeIPMethods = {
   getFakeIpCheck,
   getIpCheck,
   knockFakeIp,
+  knockFakeIpRepeatedly,
 };

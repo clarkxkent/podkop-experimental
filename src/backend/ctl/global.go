@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/netip"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -44,7 +45,12 @@ func counted(value bool, text string) string {
 // defaults; the file of paths.Settings is shown as it is. Running tells whether the
 // backend runs. routerFakeIP asks the backend to check the router itself with a check
 // name: whether that worked, and whether the backend answered at all.
-func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, version string, singBoxVersion string, running bool, routerFakeIP func() (works bool, answered bool)) string {
+//
+// With the label of a check name and a port (device), the device that asks (the browser
+// of the page) opens connections to that name and port meanwhile: the report tells whether
+// its DNS question came to sing-box, whether its connection came through the transparent
+// proxy, and, when not, what the kernel did to its packets (a trace of them).
+func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, version string, singBoxVersion string, running bool, routerFakeIP func() (works bool, answered bool), device *deviceCheck) string {
 	var lines []string
 	add := func(text ...string) { lines = append(lines, text...) }
 
@@ -62,9 +68,17 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		tables          *diag.Firewall
 		works, answered bool
 		address         string
+		deviceLines     []string
+		client          netip.Addr
 		asked           sync.WaitGroup
 	)
-	for _, ask := range []func(){
+	listeners := diag.Listeners()
+	asks := []func(){
+		func() {
+			if device != nil {
+				deviceLines, client = device.run()
+			}
+		},
 		func() { system = diag.SystemInfo(ctx, version, singBoxVersion) },
 		func() {
 			dns = diag.CheckDNS(ctx, diag.DNSSettings{Type: settings.DNSType, Server: settings.DNSServer, Bootstrap: settings.BootstrapDNSServer}, dhcp)
@@ -72,7 +86,8 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		func() { tables = diag.CheckFirewall(ctx, nil) },
 		func() { works, answered = routerFakeIP() },
 		func() { address = diag.FakeIPAddress(ctx) },
-	} {
+	}
+	for _, ask := range asks {
 		asked.Add(1)
 		go func() {
 			defer asked.Done()
@@ -93,15 +108,13 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		add(flag(dns.BootstrapAnswers, "Bootstrap DNS: "+dns.Bootstrap))
 	}
 	add(flag(dns.ServerAnswers, "Main DNS: "+dns.Server+" ["+dns.Type+"]"), flag(dns.RouterAnswers, "DNS on router"))
-	switch {
-	case settings.DontTouchDHCP:
+	if settings.DontTouchDHCP {
 		add("⚠️ dont_touch_dhcp is enabled. 📄 DHCP config:")
 		add(blocks(string(dhcpContent), func(fields []string) bool { return fields[1] == "dnsmasq" })...)
-	case !dns.DHCPAsksBackend:
-		add("❌ DHCP configuration differs from template. 📄 DHCP config:")
-		add(blocks(string(dhcpContent), func(fields []string) bool { return fields[1] == "dnsmasq" })...)
-	default:
-		add("✅ /etc/config/dhcp")
+	}
+	// who answers the DNS of each interface the LAN comes in on, and where dnsmasq sends it
+	for _, lan := range diag.CheckLANDNS(settings.SourceNetworkInterfaces, listeners) {
+		add(lanDNSLines(lan, running)...)
 	}
 
 	add(rule, "📦 Sing-box status")
@@ -114,6 +127,10 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		flag(true, "Sing-box autostart disabled"),
 		flag(singBox.Running, "Sing-box process running"),
 		flag(singBox.Listening, "Sing-box listening ports"))
+	// another program on an address sing-box listens on keeps it from starting
+	for _, taken := range diag.BackendPorts(listeners) {
+		add("❌ " + taken)
+	}
 
 	add(rule, "🧱 NFT rules status")
 	add(flag(tables.Table, "Table exist"),
@@ -127,6 +144,20 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		}
 	} else {
 		add("✅ Additional marking rules found")
+	}
+	// where the kernel sends what the firewall marked: to the router itself, where the
+	// transparent proxy inbound is
+	if running {
+		for _, marked := range diag.CheckMarkedRoutes(settings.SourceNetworkInterfaces, client) {
+			add(markedRouteLine(marked))
+		}
+	}
+	if present, values := diag.BridgedTraffic(); present {
+		for _, name := range []string{"net.bridge.bridge-nf-call-iptables", "net.bridge.bridge-nf-call-ip6tables"} {
+			if value, known := values[name]; known {
+				add(mark(value == "0", "✅ ", "❌ ") + name + " = " + value + " (br_netfilter)")
+			}
+		}
 	}
 
 	add(rule, "📄 Podkop config")
@@ -178,7 +209,68 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	}
 	parsed, err := netip.ParseAddr(address)
 	add(mark(err == nil && dataplane.FakeIPPrefix.Contains(parsed), "✅ Sing-box works with FakeIP: ", "❌ Sing-box does NOT work with FakeIP: ") + address)
+	if device != nil {
+		add(rule, "🌐 This device")
+		add(deviceLines...)
+	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// lanDNSLines tells who answers DNS on an interface of the LAN. dnsmasq is as the backend
+// sets it up when it forwards every name to the DNS inbound only and reads no resolv file.
+func lanDNSLines(lan diag.LANDNS, running bool) []string {
+	var addresses []string
+	for _, address := range lan.Addresses {
+		addresses = append(addresses, address.String())
+	}
+	where := "DNS on " + lan.Interface
+	if len(addresses) == 0 {
+		return []string{"❌ " + where + ": the interface has no address"}
+	}
+	where += " (" + strings.Join(addresses, ", ") + ")"
+	if len(lan.Holders) == 0 {
+		return []string{"❌ " + where + ": nobody listens on port 53"}
+	}
+	var result []string
+	for _, holder := range lan.Holders {
+		if holder.Program != "dnsmasq" {
+			result = append(result, "⚠️ "+where+": "+holder.String())
+			continue
+		}
+		if !lan.Dnsmasq {
+			result = append(result, "⚠️ "+where+": "+holder.String()+", its configuration not found")
+			continue
+		}
+		forwards := "forwards to " + strings.Join(lan.Servers, ", ")
+		if len(lan.Servers) == 0 {
+			forwards = "forwards to the servers of its resolv file only"
+		} else if !lan.NoResolv {
+			forwards += " and to the servers of its resolv file"
+		} else {
+			forwards += ", no-resolv"
+		}
+		asks := len(lan.Servers) == 1 && lan.Servers[0] == dataplane.DNSAddress && lan.NoResolv
+		result = append(result, mark(asks, "✅ ", mark(running, "❌ ", "⚠️ "))+where+": "+holder.String()+", "+forwards)
+	}
+	return result
+}
+
+// markedRouteLine tells where the kernel sends a marked packet of an interface.
+func markedRouteLine(marked diag.MarkedRoute) string {
+	from := "Marked packets from " + marked.Interface + " (" + marked.Source.String() + ")"
+	switch {
+	case marked.Err != nil:
+		return "❌ " + from + ": " + marked.Err.Error()
+	case marked.Route.Local && marked.Route.Table == dataplane.RoutingTable:
+		return "✅ " + from + " go to the router (table " + strconv.Itoa(marked.Route.Table) + ")"
+	case marked.Route.Local:
+		return "✅ " + from + " go to the router (table " + strconv.Itoa(marked.Route.Table) + ", not " + strconv.Itoa(dataplane.RoutingTable) + ")"
+	}
+	via := marked.Route.Device
+	if marked.Route.Gateway.IsValid() {
+		via = marked.Route.Gateway.String() + " dev " + via
+	}
+	return "❌ " + from + " are routed via " + via + " (table " + strconv.Itoa(marked.Route.Table) + "), not to the router"
 }
 
 // blocks returns the lines of the sections of a settings file that a test of the "config"

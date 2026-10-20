@@ -80,8 +80,15 @@ export const PodkopShellMethods = {
       [],
       '/etc/init.d/podkop',
     ),
-  globalCheck: async () =>
-    callBaseMethod<unknown>(Podkop.AvailableMethods.GLOBAL_CHECK),
+  // with the label and the port of a check name this browser opens connections to while
+  // the report is made, the report tells what became of them (it waits up to 5 s for one)
+  globalCheck: async (label?: string, port?: number) =>
+    callBaseMethod<unknown>(
+      Podkop.AvailableMethods.GLOBAL_CHECK,
+      label && port ? [label, String(port)] : [],
+      '/usr/bin/podkop',
+      30000,
+    ),
   showSingBoxConfig: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
   checkLogsSince: async (cursor: string) =>

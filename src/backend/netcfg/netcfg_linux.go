@@ -257,15 +257,43 @@ func lanAddressOfNetifd() (netip.Addr, error) {
 	return netip.ParseAddr(status.Addresses[0].Address)
 }
 
+// BridgeSysctlDir holds the switches of br_netfilter. It is there whenever br_netfilter is
+// in the kernel, as a module or built in: lsmod lists only the module, so the shell
+// backend's look at lsmod misses a kernel that has it built in.
+var BridgeSysctlDir = "/proc/sys/net/bridge"
+
+// bridgeSwitches are the switches that pass bridged packets through the IP firewall hooks.
+var bridgeSwitches = []string{"bridge-nf-call-iptables", "bridge-nf-call-ip6tables"}
+
 // AllowBridgedTraffic turns off the passing of bridged packets through the IP firewall
-// hooks, when the kernel has that switched on: with it, packets between the ports of the
-// LAN bridge would meet the rules of the backend. The shell backend does the same.
-func AllowBridgedTraffic() {
-	for _, name := range []string{"bridge-nf-call-iptables", "bridge-nf-call-ip6tables"} {
-		path := "/proc/sys/net/bridge/" + name
+// hooks where the kernel has it on, and returns the names of the switches it turned off.
+// With it on, a packet that came in on a port of the LAN bridge and was taken by the
+// transparent proxy is lost after the routing (measured on OpenWrt 24.10, kernel 6.6:
+// neither the device check nor any proxied connection passes), and packets between the
+// ports of the bridge meet the rules of the backend. The shell backend turns it off too.
+func AllowBridgedTraffic() []string {
+	var changed []string
+	for _, name := range bridgeSwitches {
+		path := BridgeSysctlDir + "/" + name
 		content, err := os.ReadFile(path)
-		if err == nil && strings.TrimSpace(string(content)) == "1" {
-			_ = os.WriteFile(path, []byte("0\n"), 0o644)
+		if err == nil && strings.TrimSpace(string(content)) == "1" && os.WriteFile(path, []byte("0\n"), 0o644) == nil {
+			changed = append(changed, "net.bridge."+name)
 		}
 	}
+	return changed
+}
+
+// BridgedTraffic tells whether br_netfilter is in the kernel and, when it is, the value of
+// each switch that passes bridged packets through the IP firewall hooks, by name.
+func BridgedTraffic() (present bool, values map[string]string) {
+	values = make(map[string]string)
+	for _, name := range bridgeSwitches {
+		content, err := os.ReadFile(BridgeSysctlDir + "/" + name)
+		if err != nil {
+			continue
+		}
+		present = true
+		values["net.bridge."+name] = strings.TrimSpace(string(content))
+	}
+	return present, values
 }
