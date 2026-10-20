@@ -9,6 +9,13 @@ USE_PROCD=1
 START=95
 
 start_service() {
+	# The backend gives the router back when it stops. One that ended otherwise (power
+	# lost, a panic) while its autostart was off is not started again to do that, and
+	# dnsmasq would ask it for good: given back here, at boot. The command waits for a
+	# backend that runs and then refuses, so one started by hand is left alone.
+	if [ "$action" = boot ] && ! /etc/init.d/podkop enabled; then
+		/usr/bin/podkop release >/dev/null 2>&1
+	fi
 	case "$(uci -q get podkop.settings.guard)" in
 	0 | off | false | no | disabled) return 0 ;;
 	esac

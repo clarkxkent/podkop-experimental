@@ -243,6 +243,8 @@ raw_release() {
 	uci -q delete $S.podkop_noresolv
 	uci set $S.cachesize="${kept_cachesize:-150}"
 	uci -q delete $S.podkop_cachesize
+	# given back: a later release must not take the servers put back here for its own
+	uci -q delete $S.podkop_taken
 	uci commit dhcp
 	/etc/init.d/dnsmasq restart >/dev/null 2>&1
 	nft delete table inet PodkopTable 2>/dev/null

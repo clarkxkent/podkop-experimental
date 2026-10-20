@@ -111,6 +111,8 @@ define Package/podkop/install
 	$(INSTALL_BIN) ./files/etc/uci-defaults/99-podkop $(1)/etc/uci-defaults/99-podkop
 	$(INSTALL_DIR) $(1)/etc/hotplug.d/iface
 	$(INSTALL_DATA) ./files/etc/hotplug.d/iface/50-podkop $(1)/etc/hotplug.d/iface/50-podkop
+	$(INSTALL_DIR) $(1)/lib/upgrade
+	$(INSTALL_DATA) ./files/lib/upgrade/podkop.sh $(1)/lib/upgrade/podkop.sh
 endef
 
 $(eval $(call BuildPackage,podkop))

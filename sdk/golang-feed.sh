@@ -1,10 +1,11 @@
 #!/bin/sh
 # The Go of the SDK of OpenWrt 24.10 is too old for the backend (src/backend/go.mod asks for
 # Go 1.25.5): lang/golang of the packages feed is taken at a commit of openwrt-25.12
-# (Go 1.26.8), as podkop-engine builds sing-box. Run in the directory of the SDK.
+# (Go 1.26.9, which fixes the vulnerabilities of net/http, crypto/tls and net/textproto of
+# 1.26.8). Run in the directory of the SDK.
 set -e
 REPO=https://github.com/openwrt/packages.git
-COMMIT=f60a090afff932579d015045dd1eff9f744fa043
+COMMIT=54fab7fa4224193a121f49a9f39dafd9323a0b2d
 tmp=$(mktemp -d)
 git -C "$tmp" init -q
 git -C "$tmp" remote add origin "$REPO"
