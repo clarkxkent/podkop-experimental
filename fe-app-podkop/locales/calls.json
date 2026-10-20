@@ -3,28 +3,28 @@
     "call": "✔ Enabled",
     "key": "✔ Enabled",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:345"
+      "src/podkop/tabs/dashboard/initController.ts:357"
     ]
   },
   {
     "call": "✔ Running",
     "key": "✔ Running",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:356"
+      "src/podkop/tabs/dashboard/initController.ts:346"
     ]
   },
   {
     "call": "✘ Disabled",
     "key": "✘ Disabled",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:346"
+      "src/podkop/tabs/dashboard/initController.ts:358"
     ]
   },
   {
     "call": "✘ Stopped",
     "key": "✘ Stopped",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:357"
+      "src/podkop/tabs/dashboard/initController.ts:347"
     ]
   },
   {
@@ -38,7 +38,7 @@
     "call": "Additional marking rules found",
     "key": "Additional marking rules found",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:106"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:103"
     ]
   },
   {
@@ -70,6 +70,13 @@
     ]
   },
   {
+    "call": "Autostart",
+    "key": "Autostart",
+    "places": [
+      "src/podkop/tabs/dashboard/initController.ts:355"
+    ]
+  },
+  {
     "call": "Available actions",
     "key": "Available actions",
     "places": [
@@ -98,31 +105,45 @@
     ]
   },
   {
+    "call": "Browser DNS is not routed through podkop",
+    "key": "Browser DNS is not routed through podkop",
+    "places": [
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:53"
+    ]
+  },
+  {
+    "call": "Browser DNS is routed through podkop",
+    "key": "Browser DNS is routed through podkop",
+    "places": [
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:52"
+    ]
+  },
+  {
     "call": "Browser is not using FakeIP",
     "key": "Browser is not using FakeIP",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:58"
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:60"
     ]
   },
   {
     "call": "Browser is using FakeIP correctly",
     "key": "Browser is using FakeIP correctly",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:57"
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:59"
     ]
   },
   {
     "call": "Cache File Path",
     "key": "Cache File Path",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:359"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:349"
     ]
   },
   {
     "call": "Cache file path cannot be empty",
     "key": "Cache file path cannot be empty",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:373"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:360"
     ]
   },
   {
@@ -130,7 +151,7 @@
     "key": "Cannot receive checks result",
     "places": [
       "src/podkop/tabs/diagnostic/checks/runDnsCheck.ts:27",
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:28",
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:25",
       "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:27",
       "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:25"
     ]
@@ -140,7 +161,7 @@
     "key": "Checking, please wait",
     "places": [
       "src/podkop/tabs/diagnostic/checks/runDnsCheck.ts:15",
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:15",
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:13",
       "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:13",
       "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:15",
       "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:13"
@@ -186,13 +207,6 @@
     "key": "Community Lists",
     "places": [
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:364"
-    ]
-  },
-  {
-    "call": "Config File Path",
-    "key": "Config File Path",
-    "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:346"
     ]
   },
   {
@@ -294,6 +308,13 @@
     ]
   },
   {
+    "call": "Direct (without a proxy)",
+    "key": "Direct (without a proxy)",
+    "places": [
+      "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:119"
+    ]
+  },
+  {
     "call": "Disable autostart",
     "key": "Disable autostart",
     "places": [
@@ -304,14 +325,14 @@
     "call": "Disable QUIC",
     "key": "Disable QUIC",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:276"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:279"
     ]
   },
   {
     "call": "Disable the QUIC protocol to improve compatibility or fix issues with video streaming",
     "key": "Disable the QUIC protocol to improve compatibility or fix issues with video streaming",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:277"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:280"
     ]
   },
   {
@@ -394,7 +415,7 @@
     "call": "Dont Touch My DHCP!",
     "key": "Dont Touch My DHCP!",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:337"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:340"
     ]
   },
   {
@@ -430,22 +451,22 @@
     "call": "Download Lists via Proxy/VPN",
     "key": "Download Lists via Proxy/VPN",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:299"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:302"
     ]
   },
   {
     "call": "Download Lists via specific proxy section",
     "key": "Download Lists via specific proxy section",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:308"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:311"
     ]
   },
   {
     "call": "Downloading all lists via specific Proxy/VPN",
     "key": "Downloading all lists via specific Proxy/VPN",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:300",
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:309"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:303",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:312"
     ]
   },
   {
@@ -502,7 +523,7 @@
     "call": "Enable uTLS-fallback",
     "key": "Enable uTLS-fallback",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:266"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:269"
     ]
   },
   {
@@ -579,14 +600,14 @@
     "call": "Exclude NTP",
     "key": "Exclude NTP",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:413"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:400"
     ]
   },
   {
     "call": "Exclude NTP protocol traffic from the tunnel to prevent it from being routed through the proxy or VPN",
     "key": "Exclude NTP protocol traffic from the tunnel to prevent it from being routed through the proxy or VPN",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:414"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:401"
     ]
   },
   {
@@ -600,12 +621,12 @@
     "call": "Failed to execute!",
     "key": "Failed to execute!",
     "places": [
-      "src/podkop/tabs/diagnostic/initController.ts:227",
-      "src/podkop/tabs/diagnostic/initController.ts:231",
-      "src/podkop/tabs/diagnostic/initController.ts:261",
-      "src/podkop/tabs/diagnostic/initController.ts:265",
-      "src/podkop/tabs/diagnostic/initController.ts:302",
-      "src/podkop/tabs/diagnostic/initController.ts:306"
+      "src/podkop/tabs/diagnostic/initController.ts:233",
+      "src/podkop/tabs/diagnostic/initController.ts:237",
+      "src/podkop/tabs/diagnostic/initController.ts:268",
+      "src/podkop/tabs/diagnostic/initController.ts:272",
+      "src/podkop/tabs/diagnostic/initController.ts:309",
+      "src/podkop/tabs/diagnostic/initController.ts:313"
     ]
   },
   {
@@ -641,7 +662,7 @@
     "call": "Global check",
     "key": "Global check",
     "places": [
-      "src/podkop/tabs/diagnostic/initController.ts:222"
+      "src/podkop/tabs/diagnostic/initController.ts:228"
     ]
   },
   {
@@ -1000,7 +1021,7 @@
     "call": "List Update Frequency",
     "key": "List Update Frequency",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:287"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:290"
     ]
   },
   {
@@ -1021,7 +1042,7 @@
     "call": "Log Level",
     "key": "Log Level",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:395"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:382"
     ]
   },
   {
@@ -1070,14 +1091,14 @@
     "call": "No other marking rules found",
     "key": "No other marking rules found",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:105"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:102"
     ]
   },
   {
     "call": "Not implement yet",
     "key": "Not implement yet",
     "places": [
-      "src/podkop/tabs/diagnostic/partials/renderCheckSection.ts:189"
+      "src/podkop/tabs/diagnostic/partials/renderCheckSection.ts:179"
     ]
   },
   {
@@ -1086,7 +1107,8 @@
     "places": [
       "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:75",
       "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:81",
-      "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:100"
+      "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:100",
+      "src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:120"
     ]
   },
   {
@@ -1146,21 +1168,21 @@
     "call": "Path must be absolute (start with /)",
     "key": "Path must be absolute (start with /)",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:377"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:364"
     ]
   },
   {
     "call": "Path must contain at least one directory (like /tmp/cache.db)",
     "key": "Path must contain at least one directory (like /tmp/cache.db)",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:386"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:373"
     ]
   },
   {
     "call": "Path must end with cache.db",
     "key": "Path must end with cache.db",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:381"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:368"
     ]
   },
   {
@@ -1178,7 +1200,21 @@
     "call": "Podkop",
     "key": "Podkop",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:343"
+      "src/podkop/tabs/dashboard/initController.ts:344"
+    ]
+  },
+  {
+    "call": "Podkop is running",
+    "key": "Podkop is running",
+    "places": [
+      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:54"
+    ]
+  },
+  {
+    "call": "Podkop listens for the DNS of the LAN and the transparent proxy",
+    "key": "Podkop listens for the DNS of the LAN and the transparent proxy",
+    "places": [
+      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:59"
     ]
   },
   {
@@ -1192,7 +1228,7 @@
     "call": "Podkop will not modify your DHCP configuration",
     "key": "Podkop will not modify your DHCP configuration",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:338"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:341"
     ]
   },
   {
@@ -1200,20 +1236,6 @@
     "key": "Proxy Configuration URL",
     "places": [
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:36"
-    ]
-  },
-  {
-    "call": "Proxy traffic is not routed via FakeIP",
-    "key": "Proxy traffic is not routed via FakeIP",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:66"
-    ]
-  },
-  {
-    "call": "Proxy traffic is routed via FakeIP",
-    "key": "Proxy traffic is routed via FakeIP",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:65"
     ]
   },
   {
@@ -1252,66 +1274,66 @@
     ]
   },
   {
-    "call": "Router DNS is not routed through sing-box",
-    "key": "Router DNS is not routed through sing-box",
+    "call": "Router DNS is not routed through podkop",
+    "key": "Router DNS is not routed through podkop",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:51"
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:46"
     ]
   },
   {
-    "call": "Router DNS is routed through sing-box",
-    "key": "Router DNS is routed through sing-box",
+    "call": "Router DNS is routed through podkop",
+    "key": "Router DNS is routed through podkop",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:50"
+      "src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:45"
     ]
   },
   {
     "call": "Routing Excluded IPs",
     "key": "Routing Excluded IPs",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:424"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:411"
     ]
   },
   {
     "call": "Rules mangle counters",
     "key": "Rules mangle counters",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:79"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:76"
     ]
   },
   {
     "call": "Rules mangle exist",
     "key": "Rules mangle exist",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:74"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:71"
     ]
   },
   {
     "call": "Rules mangle output counters",
     "key": "Rules mangle output counters",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:89"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:86"
     ]
   },
   {
     "call": "Rules mangle output exist",
     "key": "Rules mangle output exist",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:84"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:81"
     ]
   },
   {
     "call": "Rules proxy counters",
     "key": "Rules proxy counters",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:99"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:96"
     ]
   },
   {
     "call": "Rules proxy exist",
     "key": "Rules proxy exist",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:94"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:91"
     ]
   },
   {
@@ -1367,7 +1389,7 @@
     "call": "Select how often the domain or subnet lists are updated automatically",
     "key": "Select how often the domain or subnet lists are updated automatically",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:288"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:291"
     ]
   },
   {
@@ -1393,17 +1415,10 @@
     ]
   },
   {
-    "call": "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing",
-    "key": "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing",
+    "call": "Select or enter path for the cache file: FakeIP addresses and downloaded lists. Change this ONLY if you know what you are doing",
+    "key": "Select or enter path for the cache file: FakeIP addresses and downloaded lists. Change this ONLY if you know what you are doing",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:360"
-    ]
-  },
-  {
-    "call": "Select path for sing-box config file. Change this ONLY if you know what you are doing",
-    "key": "Select path for sing-box config file. Change this ONLY if you know what you are doing",
-    "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:347"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:350"
     ]
   },
   {
@@ -1431,7 +1446,7 @@
     "call": "Select the log level for sing-box",
     "key": "Select the log level for sing-box",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:396"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:383"
     ]
   },
   {
@@ -1487,57 +1502,8 @@
     "call": "Show sing-box config",
     "key": "Show sing-box config",
     "places": [
-      "src/podkop/tabs/diagnostic/initController.ts:290",
+      "src/podkop/tabs/diagnostic/initController.ts:297",
       "src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:116"
-    ]
-  },
-  {
-    "call": "Sing-box",
-    "key": "Sing-box",
-    "places": [
-      "src/podkop/tabs/dashboard/initController.ts:354"
-    ]
-  },
-  {
-    "call": "Sing-box autostart disabled",
-    "key": "Sing-box autostart disabled",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:77"
-    ]
-  },
-  {
-    "call": "Sing-box installed",
-    "key": "Sing-box installed",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:62"
-    ]
-  },
-  {
-    "call": "Sing-box listening ports",
-    "key": "Sing-box listening ports",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:87"
-    ]
-  },
-  {
-    "call": "Sing-box process running",
-    "key": "Sing-box process running",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:82"
-    ]
-  },
-  {
-    "call": "Sing-box service exist",
-    "key": "Sing-box service exist",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:72"
-    ]
-  },
-  {
-    "call": "Sing-box version is compatible (newer than 1.12.4)",
-    "key": "Sing-box version is compatible (newer than 1.12.4)",
-    "places": [
-      "src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:67"
     ]
   },
   {
@@ -1551,7 +1517,7 @@
     "call": "Specify a local IP address to be excluded from routing",
     "key": "Specify a local IP address to be excluded from routing",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:425"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:412"
     ]
   },
   {
@@ -1622,14 +1588,14 @@
     "call": "Table exist",
     "key": "Table exist",
     "places": [
-      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:69"
+      "src/podkop/tabs/diagnostic/checks/runNftCheck.ts:66"
     ]
   },
   {
     "call": "Test latency",
     "key": "Test latency",
     "places": [
-      "src/podkop/tabs/dashboard/partials/renderSections.ts:108"
+      "src/podkop/tabs/dashboard/partials/renderSections.ts:104"
     ]
   },
   {
@@ -1890,7 +1856,7 @@
     "call": "View logs",
     "key": "View logs",
     "places": [
-      "src/podkop/tabs/diagnostic/initController.ts:256",
+      "src/podkop/tabs/diagnostic/initController.ts:263",
       "src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:107"
     ]
   },
@@ -1928,7 +1894,7 @@
     "call": "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints",
     "key": "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:267"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:270"
     ]
   },
   {

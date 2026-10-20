@@ -1201,7 +1201,7 @@ var DIAGNOSTICS_CHECKS_MAP = {
   },
   ["SINGBOX" /* SINGBOX */]: {
     order: 2,
-    title: getCheckTitle("Sing-box"),
+    title: getCheckTitle("Podkop"),
     code: "SINGBOX" /* SINGBOX */
   },
   ["NFT" /* NFT */]: {
@@ -1677,6 +1677,7 @@ function coreService() {
 }
 
 // src/podkop/services/socket.service.ts
+var CONNECT_TIMEOUT_MS = 1e4;
 var SocketManager = class _SocketManager {
   constructor() {
     this.sockets = /* @__PURE__ */ new Map();
@@ -1727,8 +1728,24 @@ var SocketManager = class _SocketManager {
     this.sockets.set(url, ws);
     this.connected.set(url, false);
     this.listeners.set(url, /* @__PURE__ */ new Set());
-    this.errorListeners.set(url, /* @__PURE__ */ new Set());
+    if (!this.errorListeners.has(url)) {
+      this.errorListeners.set(url, /* @__PURE__ */ new Set());
+    }
+    const connectTimer = setTimeout(() => {
+      if (!this.connected.get(url)) {
+        logger.error(
+          "[SOCKET]",
+          `No answer from ${url} in ${CONNECT_TIMEOUT_MS} ms`
+        );
+        this.triggerError(url, "Connection timed out");
+        try {
+          ws.close();
+        } catch (_err) {
+        }
+      }
+    }, CONNECT_TIMEOUT_MS);
     ws.addEventListener("open", () => {
+      clearTimeout(connectTimer);
       this.connected.set(url, true);
       logger.info("[SOCKET]", "Connected to", url);
     });
@@ -1745,6 +1762,7 @@ var SocketManager = class _SocketManager {
       }
     });
     ws.addEventListener("close", () => {
+      clearTimeout(connectTimer);
       this.connected.set(url, false);
       logger.warn("[SOCKET]", `Disconnected: ${url}`);
       this.triggerError(url, "Connection closed");
@@ -2350,18 +2368,19 @@ async function renderServicesInfoWidget() {
     failed: servicesInfoWidget.failed,
     title: _("Services info"),
     items: [
+      // the process of podkop, sing-box inside it, and whether the router starts it
       {
         key: _("Podkop"),
-        value: servicesInfoWidget.data.podkop ? _("\u2714 Enabled") : _("\u2718 Disabled"),
-        attributes: {
-          class: servicesInfoWidget.data.podkop ? "pdk_dashboard-page__widgets-section__item__row--success" : "pdk_dashboard-page__widgets-section__item__row--error"
-        }
-      },
-      {
-        key: _("Sing-box"),
         value: servicesInfoWidget.data.singbox ? _("\u2714 Running") : _("\u2718 Stopped"),
         attributes: {
           class: servicesInfoWidget.data.singbox ? "pdk_dashboard-page__widgets-section__item__row--success" : "pdk_dashboard-page__widgets-section__item__row--error"
+        }
+      },
+      {
+        key: _("Autostart"),
+        value: servicesInfoWidget.data.podkop ? _("\u2714 Enabled") : _("\u2718 Disabled"),
+        attributes: {
+          class: servicesInfoWidget.data.podkop ? "pdk_dashboard-page__widgets-section__item__row--success" : "pdk_dashboard-page__widgets-section__item__row--error"
         }
       }
     ]
@@ -2706,11 +2725,13 @@ async function runSingBoxCheck() {
       state: "error",
       items: []
     });
-    throw new Error("Sing-box checks failed");
+    throw new Error("Podkop checks failed");
   }
   const data = singBoxChecks.data;
-  const allGood = Boolean(data.sing_box_installed) && Boolean(data.sing_box_version_ok) && Boolean(data.sing_box_service_exist) && Boolean(data.sing_box_autostart_disabled) && Boolean(data.sing_box_process_running) && Boolean(data.sing_box_ports_listening);
-  const atLeastOneGood = Boolean(data.sing_box_installed) || Boolean(data.sing_box_version_ok) || Boolean(data.sing_box_service_exist) || Boolean(data.sing_box_autostart_disabled) || Boolean(data.sing_box_process_running) || Boolean(data.sing_box_ports_listening);
+  const running = Boolean(data.sing_box_process_running);
+  const listening = Boolean(data.sing_box_ports_listening);
+  const allGood = running && listening;
+  const atLeastOneGood = running || listening;
   const { state, description } = getMeta({ atLeastOneGood, allGood });
   updateCheckStore({
     order,
@@ -2720,39 +2741,21 @@ async function runSingBoxCheck() {
     state,
     items: [
       {
-        state: data.sing_box_installed ? "success" : "error",
-        key: _("Sing-box installed"),
+        state: running ? "success" : "error",
+        key: _("Podkop is running"),
         value: ""
       },
       {
-        state: data.sing_box_version_ok ? "success" : "error",
-        key: _("Sing-box version is compatible (newer than 1.12.4)"),
-        value: ""
-      },
-      {
-        state: data.sing_box_service_exist ? "success" : "error",
-        key: _("Sing-box service exist"),
-        value: ""
-      },
-      {
-        state: data.sing_box_autostart_disabled ? "success" : "error",
-        key: _("Sing-box autostart disabled"),
-        value: ""
-      },
-      {
-        state: data.sing_box_process_running ? "success" : "error",
-        key: _("Sing-box process running"),
-        value: ""
-      },
-      {
-        state: data.sing_box_ports_listening ? "success" : "error",
-        key: _("Sing-box listening ports"),
+        state: listening ? "success" : "error",
+        key: _(
+          "Podkop listens for the DNS of the LAN and the transparent proxy"
+        ),
         value: ""
       }
     ]
   });
-  if (!atLeastOneGood || !data.sing_box_process_running) {
-    throw new Error("Sing-box checks failed");
+  if (!running) {
+    throw new Error("Podkop checks failed");
   }
 }
 
@@ -2869,12 +2872,12 @@ async function runFakeIPCheck(label) {
     items: [
       {
         state: checks.router ? "success" : "warning",
-        key: checks.router ? _("Router DNS is routed through sing-box") : _("Router DNS is not routed through sing-box"),
+        key: checks.router ? _("Router DNS is routed through podkop") : _("Router DNS is not routed through podkop"),
         value: ""
       },
       {
         state: checks.browserDNS ? "success" : "error",
-        key: checks.browserDNS ? _("Browser DNS is routed through sing-box") : _("Browser DNS is not routed through sing-box"),
+        key: checks.browserDNS ? _("Browser DNS is routed through podkop") : _("Browser DNS is not routed through podkop"),
         value: ""
       },
       {
@@ -3989,6 +3992,13 @@ async function runSectionsCheck() {
       };
     })
   );
+  const direct = await PodkopShellMethods.getClashApiProxyLatency("direct-out");
+  const directWorks = direct.success && !direct.data.message;
+  items.push({
+    state: directWorks ? "success" : "error",
+    key: _("Direct (without a proxy)"),
+    value: directWorks ? `${direct.data.delay} ms` : _("Not responding")
+  });
   const allGood = items.every((item) => item.state === "success");
   const atLeastOneGood = items.some((item) => item.state === "success");
   const { state, description } = getMeta({ atLeastOneGood, allGood });
@@ -4408,8 +4418,8 @@ function renderDiagnosticSystemInfoWidget() {
         value: normalizeCompiledVersion(PODKOP_LUCI_APP_VERSION)
       },
       {
-        key: "Sing-box",
-        value: diagnosticsSystemInfo.sing_box_version
+        key: "Engine",
+        value: diagnosticsSystemInfo.engine || diagnosticsSystemInfo.sing_box_version
       },
       {
         key: "OS",

@@ -27,26 +27,18 @@ export async function runSingBoxCheck() {
       items: [],
     });
 
-    throw new Error('Sing-box checks failed');
+    throw new Error('Podkop checks failed');
   }
 
   const data = singBoxChecks.data;
 
-  const allGood =
-    Boolean(data.sing_box_installed) &&
-    Boolean(data.sing_box_version_ok) &&
-    Boolean(data.sing_box_service_exist) &&
-    Boolean(data.sing_box_autostart_disabled) &&
-    Boolean(data.sing_box_process_running) &&
-    Boolean(data.sing_box_ports_listening);
-
-  const atLeastOneGood =
-    Boolean(data.sing_box_installed) ||
-    Boolean(data.sing_box_version_ok) ||
-    Boolean(data.sing_box_service_exist) ||
-    Boolean(data.sing_box_autostart_disabled) ||
-    Boolean(data.sing_box_process_running) ||
-    Boolean(data.sing_box_ports_listening);
+  // podkop has sing-box inside: what is asked is whether it runs and listens where the DNS
+  // of the LAN and the firewall send to (installed, version, service and autostart of a
+  // separate sing-box mean nothing here)
+  const running = Boolean(data.sing_box_process_running);
+  const listening = Boolean(data.sing_box_ports_listening);
+  const allGood = running && listening;
+  const atLeastOneGood = running || listening;
 
   const { state, description } = getMeta({ atLeastOneGood, allGood });
 
@@ -58,39 +50,21 @@ export async function runSingBoxCheck() {
     state,
     items: [
       {
-        state: data.sing_box_installed ? 'success' : 'error',
-        key: _('Sing-box installed'),
+        state: running ? 'success' : 'error',
+        key: _('Podkop is running'),
         value: '',
       },
       {
-        state: data.sing_box_version_ok ? 'success' : 'error',
-        key: _('Sing-box version is compatible (newer than 1.12.4)'),
-        value: '',
-      },
-      {
-        state: data.sing_box_service_exist ? 'success' : 'error',
-        key: _('Sing-box service exist'),
-        value: '',
-      },
-      {
-        state: data.sing_box_autostart_disabled ? 'success' : 'error',
-        key: _('Sing-box autostart disabled'),
-        value: '',
-      },
-      {
-        state: data.sing_box_process_running ? 'success' : 'error',
-        key: _('Sing-box process running'),
-        value: '',
-      },
-      {
-        state: data.sing_box_ports_listening ? 'success' : 'error',
-        key: _('Sing-box listening ports'),
+        state: listening ? 'success' : 'error',
+        key: _(
+          'Podkop listens for the DNS of the LAN and the transparent proxy',
+        ),
         value: '',
       },
     ],
   });
 
-  if (!atLeastOneGood || !data.sing_box_process_running) {
-    throw new Error('Sing-box checks failed');
+  if (!running) {
+    throw new Error('Podkop checks failed');
   }
 }

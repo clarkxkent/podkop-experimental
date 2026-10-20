@@ -225,6 +225,8 @@ export namespace Podkop {
     podkop_latest_version: string;
     luci_app_version: string;
     sing_box_version: string;
+    // what the sing-box inside is: "sing-box 1.14.3, podkop-engine r15, slim (1d47804dc783)"
+    engine?: string;
     openwrt_version: string;
     device_model: string;
   }

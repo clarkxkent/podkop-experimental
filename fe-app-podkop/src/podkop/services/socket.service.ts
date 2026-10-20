@@ -4,6 +4,9 @@ import { logger } from './logger.service';
 type Listener = (data: any) => void;
 type ErrorListener = (error: Event | string) => void;
 
+// how long a websocket may take to open before the widgets that wait for it are told
+const CONNECT_TIMEOUT_MS = 10000;
+
 class SocketManager {
   private static instance: SocketManager;
   private sockets = new Map<string, WebSocket>();
@@ -65,9 +68,30 @@ class SocketManager {
     this.sockets.set(url, ws);
     this.connected.set(url, false);
     this.listeners.set(url, new Set());
-    this.errorListeners.set(url, new Set());
+    if (!this.errorListeners.has(url)) {
+      this.errorListeners.set(url, new Set());
+    }
+
+    // a connection whose packets are dropped on the way (a firewall that drops instead of
+    // refusing, an address the API does not listen on) stays "connecting" for minutes, and
+    // the widgets that wait for it stay empty: it is given up after a while
+    const connectTimer = setTimeout(() => {
+      if (!this.connected.get(url)) {
+        logger.error(
+          '[SOCKET]',
+          `No answer from ${url} in ${CONNECT_TIMEOUT_MS} ms`,
+        );
+        this.triggerError(url, 'Connection timed out');
+        try {
+          ws.close();
+        } catch (_err) {
+          // closed already
+        }
+      }
+    }, CONNECT_TIMEOUT_MS);
 
     ws.addEventListener('open', () => {
+      clearTimeout(connectTimer);
       this.connected.set(url, true);
       logger.info('[SOCKET]', 'Connected to', url);
     });
@@ -86,6 +110,7 @@ class SocketManager {
     });
 
     ws.addEventListener('close', () => {
+      clearTimeout(connectTimer);
       this.connected.set(url, false);
       logger.warn('[SOCKET]', `Disconnected: ${url}`);
       this.triggerError(url, 'Connection closed');

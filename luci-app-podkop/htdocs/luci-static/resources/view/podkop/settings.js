@@ -348,7 +348,7 @@ function createSettingsContent(section, singBoxFeatures = []) {
     "cache_path",
     _("Cache File Path"),
     _(
-      "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing",
+      "Select or enter path for the cache file: FakeIP addresses and downloaded lists. Change this ONLY if you know what you are doing",
     ),
   );
   o.value("/var/run/podkop/cache.db", "RAM (/var/run/podkop/cache.db)");

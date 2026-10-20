@@ -339,24 +339,25 @@ async function renderServicesInfoWidget() {
     failed: servicesInfoWidget.failed,
     title: _('Services info'),
     items: [
+      // the process of podkop, sing-box inside it, and whether the router starts it
       {
         key: _('Podkop'),
-        value: servicesInfoWidget.data.podkop
-          ? _('✔ Enabled')
-          : _('✘ Disabled'),
-        attributes: {
-          class: servicesInfoWidget.data.podkop
-            ? 'pdk_dashboard-page__widgets-section__item__row--success'
-            : 'pdk_dashboard-page__widgets-section__item__row--error',
-        },
-      },
-      {
-        key: _('Sing-box'),
         value: servicesInfoWidget.data.singbox
           ? _('✔ Running')
           : _('✘ Stopped'),
         attributes: {
           class: servicesInfoWidget.data.singbox
+            ? 'pdk_dashboard-page__widgets-section__item__row--success'
+            : 'pdk_dashboard-page__widgets-section__item__row--error',
+        },
+      },
+      {
+        key: _('Autostart'),
+        value: servicesInfoWidget.data.podkop
+          ? _('✔ Enabled')
+          : _('✘ Disabled'),
+        attributes: {
+          class: servicesInfoWidget.data.podkop
             ? 'pdk_dashboard-page__widgets-section__item__row--success'
             : 'pdk_dashboard-page__widgets-section__item__row--error',
         },

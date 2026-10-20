@@ -1,15 +1,15 @@
 # RU translations for PODKOP package.
 # Copyright (C) 2026 THE PODKOP'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PODKOP package.
-# divocatt, 2026.
+# Automatically generated, 2026.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-05-29 16:40+0300\n"
-"PO-Revision-Date: 2026-05-29 16:40+0300\n"
-"Last-Translator: divocatt\n"
+"POT-Creation-Date: 2026-10-20 17:50+0000\n"
+"PO-Revision-Date: 2026-10-20 17:50+0000\n"
+"Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -47,6 +47,9 @@ msgstr "Необходимо указать хотя бы один действ�
 msgid "At least one valid subnet or IP must be specified. Comments-only content is not allowed."
 msgstr "Необходимо указать хотя бы одну действительную подсеть или IP. Только комментарии недопустимы."
 
+msgid "Autostart"
+msgstr "Автозапуск"
+
 msgid "Available actions"
 msgstr "Доступные действия"
 
@@ -59,11 +62,11 @@ msgstr "Bootstrap DNS"
 msgid "Bootstrap DNS server"
 msgstr "Bootstrap DNS-сервер"
 
-msgid "Browser DNS is not routed through sing-box"
-msgstr "DNS браузера не проходит через sing-box"
+msgid "Browser DNS is not routed through podkop"
+msgstr "DNS браузера не проходит через podkop"
 
-msgid "Browser DNS is routed through sing-box"
-msgstr "DNS браузера проходит через sing-box"
+msgid "Browser DNS is routed through podkop"
+msgstr "DNS браузера проходит через podkop"
 
 msgid "Browser is not using FakeIP"
 msgstr "Браузер не использует FakeIP"
@@ -100,9 +103,6 @@ msgstr "Закрыть"
 
 msgid "Community Lists"
 msgstr "Списки сообщества"
-
-msgid "Config File Path"
-msgstr "Путь к файлу конфигурации"
 
 msgid "Configuration for Podkop service"
 msgstr "Настройки сервиса Podkop"
@@ -145,6 +145,9 @@ msgstr "DHCP содержит DNS сервер"
 
 msgid "Diagnostics"
 msgstr "Диагностика"
+
+msgid "Direct (without a proxy)"
+msgstr "Напрямую (без прокси)"
 
 msgid "Disable autostart"
 msgstr "Отключить автостарт"
@@ -515,6 +518,12 @@ msgstr "Ожидает запуска"
 msgid "Podkop"
 msgstr "Podkop"
 
+msgid "Podkop is running"
+msgstr "Podkop работает"
+
+msgid "Podkop listens for the DNS of the LAN and the transparent proxy"
+msgstr "Podkop принимает DNS-запросы локальной сети и соединения прозрачного прокси"
+
 msgid "Podkop Settings"
 msgstr "Настройки podkop"
 
@@ -523,12 +532,6 @@ msgstr "Podkop не будет изменять вашу конфигураци�
 
 msgid "Proxy Configuration URL"
 msgstr "URL конфигурации прокси"
-
-msgid "Proxy traffic is not routed via FakeIP"
-msgstr "Прокси-трафик не маршрутизируется через FakeIP"
-
-msgid "Proxy traffic is routed via FakeIP"
-msgstr "Прокси-трафик направляется через FakeIP"
 
 msgid "Regional options cannot be used together"
 msgstr "Нельзя использовать несколько региональных опций одновременно"
@@ -545,11 +548,11 @@ msgstr "Разрешение реальных IP-адресов"
 msgid "Restart podkop"
 msgstr "Перезапустить Podkop"
 
-msgid "Router DNS is not routed through sing-box"
-msgstr "DNS роутера не проходит через sing-box"
+msgid "Router DNS is not routed through podkop"
+msgstr "DNS роутера не проходит через podkop"
 
-msgid "Router DNS is routed through sing-box"
-msgstr "DNS роутера проходит через sing-box"
+msgid "Router DNS is routed through podkop"
+msgstr "DNS роутера проходит через podkop"
 
 msgid "Routing Excluded IPs"
 msgstr "Исключённые из маршрутизации IP-адреса"
@@ -605,11 +608,8 @@ msgstr "Выберите сетевой интерфейс для VPN подкл
 msgid "Select or enter DNS server address"
 msgstr "Выберите или введите адрес DNS-сервера"
 
-msgid "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing"
-msgstr "Выберите или введите путь к файлу кеша sing-box. Изменяйте это, ТОЛЬКО если вы знаете, что делаете"
-
-msgid "Select path for sing-box config file. Change this ONLY if you know what you are doing"
-msgstr "Выберите путь к файлу конфигурации sing-box. Изменяйте это, ТОЛЬКО если вы знаете, что делаете"
+msgid "Select or enter path for the cache file: FakeIP addresses and downloaded lists. Change this ONLY if you know what you are doing"
+msgstr "Выберите или введите путь к файлу кеша: адреса FakeIP и скачанные списки. Изменяйте это, ТОЛЬКО если вы знаете, что делаете"
 
 msgid "Select the DNS protocol type for the domain resolver"
 msgstr "Выберите тип протокола DNS для резолвера доменов"
@@ -646,27 +646,6 @@ msgstr "Настройки"
 
 msgid "Show sing-box config"
 msgstr "Показать sing-box конфигурацию"
-
-msgid "Sing-box"
-msgstr "Sing-box"
-
-msgid "Sing-box autostart disabled"
-msgstr "Автостарт sing-box отключен"
-
-msgid "Sing-box installed"
-msgstr "Sing-box установлен"
-
-msgid "Sing-box listening ports"
-msgstr "Sing-box слушает порты"
-
-msgid "Sing-box process running"
-msgstr "Процесс sing-box запущен"
-
-msgid "Sing-box service exist"
-msgstr "Сервис sing-box существует"
-
-msgid "Sing-box version is compatible (newer than 1.12.4)"
-msgstr "Версия Sing-box совместима (новее 1.12.4)"
 
 msgid "Source Network Interface"
 msgstr "Сетевой интерфейс источника"

@@ -430,8 +430,10 @@ function renderDiagnosticSystemInfoWidget() {
         value: normalizeCompiledVersion(PODKOP_LUCI_APP_VERSION),
       },
       {
-        key: 'Sing-box',
-        value: diagnosticsSystemInfo.sing_box_version,
+        key: 'Engine',
+        value:
+          diagnosticsSystemInfo.engine ||
+          diagnosticsSystemInfo.sing_box_version,
       },
       {
         key: 'OS',

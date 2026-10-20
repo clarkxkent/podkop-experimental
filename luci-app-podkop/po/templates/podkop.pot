@@ -16,19 +16,19 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: src/podkop/tabs/dashboard/initController.ts:345
+#: src/podkop/tabs/dashboard/initController.ts:357
 msgid "✔ Enabled"
 msgstr ""
 
-#: src/podkop/tabs/dashboard/initController.ts:356
+#: src/podkop/tabs/dashboard/initController.ts:346
 msgid "✔ Running"
 msgstr ""
 
-#: src/podkop/tabs/dashboard/initController.ts:346
+#: src/podkop/tabs/dashboard/initController.ts:358
 msgid "✘ Disabled"
 msgstr ""
 
-#: src/podkop/tabs/dashboard/initController.ts:357
+#: src/podkop/tabs/dashboard/initController.ts:347
 msgid "✘ Stopped"
 msgstr ""
 
@@ -36,7 +36,7 @@ msgstr ""
 msgid "Active Connections"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:106
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:103
 msgid "Additional marking rules found"
 msgstr ""
 
@@ -56,6 +56,10 @@ msgstr ""
 msgid "At least one valid subnet or IP must be specified. Comments-only content is not allowed."
 msgstr ""
 
+#: src/podkop/tabs/dashboard/initController.ts:355
+msgid "Autostart"
+msgstr ""
+
 #: src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:43
 msgid "Available actions"
 msgstr ""
@@ -72,39 +76,39 @@ msgstr ""
 msgid "Bootstrap DNS server"
 msgstr ""
 
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:53
+msgid "Browser DNS is not routed through podkop"
+msgstr ""
+
 #: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:52
-msgid "Browser DNS is not routed through sing-box"
+msgid "Browser DNS is routed through podkop"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:51
-msgid "Browser DNS is routed through sing-box"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:58
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:60
 msgid "Browser is not using FakeIP"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:57
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:59
 msgid "Browser is using FakeIP correctly"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:359
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:349
 msgid "Cache File Path"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:373
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:360
 msgid "Cache file path cannot be empty"
 msgstr ""
 
 #: src/podkop/tabs/diagnostic/checks/runDnsCheck.ts:27
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:28
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:25
 #: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:27
 #: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:25
 msgid "Cannot receive checks result"
 msgstr ""
 
 #: src/podkop/tabs/diagnostic/checks/runDnsCheck.ts:15
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:15
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:13
 #: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:13
 #: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:15
 #: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:13
@@ -133,10 +137,6 @@ msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:364
 msgid "Community Lists"
-msgstr ""
-
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:346
-msgid "Config File Path"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/podkop.js:30
@@ -195,15 +195,19 @@ msgstr ""
 msgid "Diagnostics"
 msgstr ""
 
+#: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:119
+msgid "Direct (without a proxy)"
+msgstr ""
+
 #: src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:79
 msgid "Disable autostart"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:276
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:279
 msgid "Disable QUIC"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:277
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:280
 msgid "Disable the QUIC protocol to improve compatibility or fix issues with video streaming"
 msgstr ""
 
@@ -253,7 +257,7 @@ msgstr ""
 msgid "Domain Resolver"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:337
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:340
 msgid "Dont Touch My DHCP!"
 msgstr ""
 
@@ -274,16 +278,16 @@ msgstr ""
 msgid "Download Check URL"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:299
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:302
 msgid "Download Lists via Proxy/VPN"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:308
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:311
 msgid "Download Lists via specific proxy section"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:300
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:309
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:303
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:312
 msgid "Downloading all lists via specific Proxy/VPN"
 msgstr ""
 
@@ -316,7 +320,7 @@ msgstr ""
 msgid "Enable the mixed proxy, allowing this section to route traffic through both HTTP and SOCKS proxies"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:266
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:269
 msgid "Enable uTLS-fallback"
 msgstr ""
 
@@ -360,11 +364,11 @@ msgstr ""
 msgid "Every 5 minutes"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:413
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:400
 msgid "Exclude NTP"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:414
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:401
 msgid "Exclude NTP protocol traffic from the tunnel to prevent it from being routed through the proxy or VPN"
 msgstr ""
 
@@ -372,12 +376,12 @@ msgstr ""
 msgid "Failed to copy!"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/initController.ts:227
-#: src/podkop/tabs/diagnostic/initController.ts:231
-#: src/podkop/tabs/diagnostic/initController.ts:261
-#: src/podkop/tabs/diagnostic/initController.ts:265
-#: src/podkop/tabs/diagnostic/initController.ts:302
-#: src/podkop/tabs/diagnostic/initController.ts:306
+#: src/podkop/tabs/diagnostic/initController.ts:233
+#: src/podkop/tabs/diagnostic/initController.ts:237
+#: src/podkop/tabs/diagnostic/initController.ts:268
+#: src/podkop/tabs/diagnostic/initController.ts:272
+#: src/podkop/tabs/diagnostic/initController.ts:309
+#: src/podkop/tabs/diagnostic/initController.ts:313
 msgid "Failed to execute!"
 msgstr ""
 
@@ -398,7 +402,7 @@ msgstr ""
 msgid "Get global check"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/initController.ts:222
+#: src/podkop/tabs/diagnostic/initController.ts:228
 msgid "Global check"
 msgstr ""
 
@@ -604,7 +608,7 @@ msgstr ""
 msgid "Latest"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:287
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:290
 msgid "List Update Frequency"
 msgstr ""
 
@@ -616,7 +620,7 @@ msgstr ""
 msgid "Local Subnet Lists"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:395
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:382
 msgid "Log Level"
 msgstr ""
 
@@ -644,17 +648,18 @@ msgstr ""
 msgid "Network Interface"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:105
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:102
 msgid "No other marking rules found"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/partials/renderCheckSection.ts:189
+#: src/podkop/tabs/diagnostic/partials/renderCheckSection.ts:179
 msgid "Not implement yet"
 msgstr ""
 
 #: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:75
 #: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:81
 #: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:100
+#: src/podkop/tabs/diagnostic/checks/runSectionsCheck.ts:120
 msgid "Not responding"
 msgstr ""
 
@@ -690,15 +695,15 @@ msgstr ""
 msgid "Path cannot be empty"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:377
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:364
 msgid "Path must be absolute (start with /)"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:386
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:373
 msgid "Path must contain at least one directory (like /tmp/cache.db)"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:381
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:368
 msgid "Path must end with cache.db"
 msgstr ""
 
@@ -710,28 +715,28 @@ msgstr ""
 msgid "Pending"
 msgstr ""
 
-#: src/podkop/tabs/dashboard/initController.ts:343
+#: src/podkop/tabs/dashboard/initController.ts:344
 msgid "Podkop"
+msgstr ""
+
+#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:54
+msgid "Podkop is running"
+msgstr ""
+
+#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:59
+msgid "Podkop listens for the DNS of the LAN and the transparent proxy"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/podkop.js:29
 msgid "Podkop Settings"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:338
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:341
 msgid "Podkop will not modify your DHCP configuration"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:36
 msgid "Proxy Configuration URL"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:66
-msgid "Proxy traffic is not routed via FakeIP"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:65
-msgid "Proxy traffic is routed via FakeIP"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:398
@@ -754,39 +759,39 @@ msgstr ""
 msgid "Restart podkop"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:51
-msgid "Router DNS is not routed through sing-box"
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:46
+msgid "Router DNS is not routed through podkop"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:50
-msgid "Router DNS is routed through sing-box"
+#: src/podkop/tabs/diagnostic/checks/runFakeIPCheck.ts:45
+msgid "Router DNS is routed through podkop"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:424
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:411
 msgid "Routing Excluded IPs"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:79
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:76
 msgid "Rules mangle counters"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:74
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:71
 msgid "Rules mangle exist"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:89
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:86
 msgid "Rules mangle output counters"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:84
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:81
 msgid "Rules mangle output exist"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:99
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:96
 msgid "Rules proxy counters"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:94
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:91
 msgid "Rules proxy exist"
 msgstr ""
 
@@ -818,7 +823,7 @@ msgstr ""
 msgid "Select DNS protocol to use"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:288
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:291
 msgid "Select how often the domain or subnet lists are updated automatically"
 msgstr ""
 
@@ -835,12 +840,8 @@ msgstr ""
 msgid "Select or enter DNS server address"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:360
-msgid "Select or enter path for sing-box cache file. Change this ONLY if you know what you are doing"
-msgstr ""
-
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:347
-msgid "Select path for sing-box config file. Change this ONLY if you know what you are doing"
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:350
+msgid "Select or enter path for the cache file: FakeIP addresses and downloaded lists. Change this ONLY if you know what you are doing"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/section.js:330
@@ -855,7 +856,7 @@ msgstr ""
 msgid "Select the list type for adding custom subnets"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:396
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:383
 msgid "Select the log level for sing-box"
 msgstr ""
 
@@ -887,44 +888,16 @@ msgstr ""
 msgid "Settings"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/initController.ts:290
+#: src/podkop/tabs/diagnostic/initController.ts:297
 #: src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:116
 msgid "Show sing-box config"
-msgstr ""
-
-#: src/podkop/tabs/dashboard/initController.ts:354
-msgid "Sing-box"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:77
-msgid "Sing-box autostart disabled"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:62
-msgid "Sing-box installed"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:87
-msgid "Sing-box listening ports"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:82
-msgid "Sing-box process running"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:72
-msgid "Sing-box service exist"
-msgstr ""
-
-#: src/podkop/tabs/diagnostic/checks/runSingBoxCheck.ts:67
-msgid "Sing-box version is compatible (newer than 1.12.4)"
 msgstr ""
 
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:89
 msgid "Source Network Interface"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:425
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:412
 msgid "Specify a local IP address to be excluded from routing"
 msgstr ""
 
@@ -965,11 +938,11 @@ msgstr ""
 msgid "System information"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:69
+#: src/podkop/tabs/diagnostic/checks/runNftCheck.ts:66
 msgid "Table exist"
 msgstr ""
 
-#: src/podkop/tabs/dashboard/partials/renderSections.ts:108
+#: src/podkop/tabs/dashboard/partials/renderSections.ts:104
 msgid "Test latency"
 msgstr ""
 
@@ -1128,7 +1101,7 @@ msgstr ""
 msgid "Validation errors:"
 msgstr ""
 
-#: src/podkop/tabs/diagnostic/initController.ts:256
+#: src/podkop/tabs/diagnostic/initController.ts:263
 #: src/podkop/tabs/diagnostic/partials/renderAvailableActions.ts:107
 msgid "View logs"
 msgstr ""
@@ -1151,7 +1124,7 @@ msgstr ""
 msgid "Warning: Russia inside can only be used with %s. %s already in Russia inside and have been removed from selection."
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:267
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/settings.js:270
 msgid "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints"
 msgstr ""
 

@@ -19,7 +19,7 @@ export const DIAGNOSTICS_CHECKS_MAP: Record<
   },
   [DIAGNOSTICS_CHECKS.SINGBOX]: {
     order: 2,
-    title: getCheckTitle('Sing-box'),
+    title: getCheckTitle('Podkop'),
     code: DIAGNOSTICS_CHECKS.SINGBOX,
   },
   [DIAGNOSTICS_CHECKS.NFT]: {

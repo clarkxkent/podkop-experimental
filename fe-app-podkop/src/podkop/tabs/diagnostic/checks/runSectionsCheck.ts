@@ -111,6 +111,15 @@ export async function runSectionsCheck() {
     }),
   )) as Array<IDiagnosticsChecksItem>;
 
+  // what goes without a proxy, through the WAN of the router: tested the same way
+  const direct = await PodkopShellMethods.getClashApiProxyLatency('direct-out');
+  const directWorks = direct.success && !direct.data.message;
+  items.push({
+    state: directWorks ? 'success' : 'error',
+    key: _('Direct (without a proxy)'),
+    value: directWorks ? `${direct.data.delay} ms` : _('Not responding'),
+  });
+
   const allGood = items.every((item) => item.state === 'success');
 
   const atLeastOneGood = items.some((item) => item.state === 'success');

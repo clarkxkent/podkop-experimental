@@ -42,15 +42,15 @@ export async function runFakeIPCheck(label: string) {
       {
         state: checks.router ? 'success' : 'warning',
         key: checks.router
-          ? _('Router DNS is routed through sing-box')
-          : _('Router DNS is not routed through sing-box'),
+          ? _('Router DNS is routed through podkop')
+          : _('Router DNS is not routed through podkop'),
         value: '',
       },
       {
         state: checks.browserDNS ? 'success' : 'error',
         key: checks.browserDNS
-          ? _('Browser DNS is routed through sing-box')
-          : _('Browser DNS is not routed through sing-box'),
+          ? _('Browser DNS is routed through podkop')
+          : _('Browser DNS is not routed through podkop'),
         value: '',
       },
       {
