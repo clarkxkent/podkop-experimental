@@ -224,8 +224,8 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 			"⚠️ The router's own connections do NOT go through podkop"))
 	}
 	parsed, err := netip.ParseAddr(address)
-	add(mark(err == nil && dataplane.FakeIPPrefix.Contains(parsed), "✅ Podkop answers with FakeIP addresses: ", "❌ Podkop does NOT answer with FakeIP addresses: ") +
-		dataplane.ReadinessName + " is " + mark(address != "", address, "not answered"))
+	add(mark(err == nil && dataplane.FakeIPPrefix.Contains(parsed), "✅ Podkop's DNS answers with FakeIP addresses", "❌ Podkop's DNS does NOT answer with FakeIP addresses") +
+		mark(address != "", " (a test name got "+address+")", " (a test name got no answer)"))
 	if running {
 		add(rule, "🌍 Outbounds")
 		add(outboundResults...)

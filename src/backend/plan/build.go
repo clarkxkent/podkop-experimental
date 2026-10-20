@@ -28,16 +28,13 @@ const (
 	tagBootstrapDNSServer = "bootstrap-dns-server"
 	tagFakeIPServer       = "fakeip-server"
 
-	domainCheckProxyIP = "ip.podkop.fyi"
-
 	urlCommunityLists = "https://github.com/itdoginfo/allow-domains/releases/latest/download"
 	// DefaultRuleSetDir is where the backend keeps the rule-set files it makes (the
 	// shell backend: /tmp/sing-box/rulesets).
-	DefaultRuleSetDir     = dataplane.RunDir + "/rulesets"
-	fingerprintsFallback  = "safari,randomized,edge,firefox,chrome"
-	versionSourceRuleSet  = 3
-	versionUDPOverTCP     = 2
-	portFakeIPTestService = 8443
+	DefaultRuleSetDir    = dataplane.RunDir + "/rulesets"
+	fingerprintsFallback = "safari,randomized,edge,firefox,chrome"
+	versionSourceRuleSet = 3
+	versionUDPOverTCP    = 2
 )
 
 // communityLists are the names of the community lists, as the shell backend of podkop
@@ -576,11 +573,11 @@ func (b *builder) buildDNS() (*object, error) {
 		&rule{fields: newObject("action", "reject", "query_type", "HTTPS")},
 		&rule{fields: newObject("action", "reject", "domain_suffix", "use-application-dns.net")},
 		b.fakeIPRule,
-		// The names the backend checks itself with have a rule apart from the lists: since
+		// The name the backend checks itself with has a rule apart from the lists: since
 		// sing-box 1.14 a rule set of several rules next to "domain" matches only together
-		// with it. The supervisor and the guard of the package tell by the first one that
-		// sing-box is up (dataplane.ReadinessName): the rule stays while they ask for it.
-		&rule{fields: newObject("action", "route", "server", tagFakeIPServer, "rewrite_ttl", ttl, "domain", []any{dataplane.ReadinessName, domainCheckProxyIP})},
+		// with it. The supervisor and the guard of the package tell by it that sing-box is
+		// up (dataplane.ReadinessName), with check names or without them.
+		&rule{fields: newObject("action", "route", "server", tagFakeIPServer, "rewrite_ttl", ttl, "domain", []any{dataplane.ReadinessName})},
 	)
 	if suffix := b.options.CheckNames.Suffix; suffix != "" {
 		b.dnsRules = append(b.dnsRules, &rule{fields: newObject("action", "route", "server", tagFakeIPServer, "rewrite_ttl", ttl, "domain_suffix", suffix)})
@@ -621,16 +618,6 @@ func (b *builder) buildRoute() (*object, error) {
 	if settings.DisableQUIC {
 		b.addRouteRule("", newObject("action", "reject", "inbound", tagTProxyInbound, "protocol", "quic"))
 	}
-	var first string
-	for index := range b.config.Sections {
-		if b.config.Sections[index].HasOutbound() {
-			first = b.config.Sections[index].Name
-			break
-		}
-	}
-	// compat: check-names
-	b.addRouteRule("", newObject("action", "route", "inbound", tagTProxyInbound, "outbound", outboundTag(first), "domain", domainCheckProxyIP))
-	b.addRouteRule("", newObject("action", "route-options", "domain", dataplane.ReadinessName, "override_port", portFakeIPTestService))
 	if names := b.options.CheckNames; names.Suffix != "" {
 		// Before every rule of a section and of a proxy inbound: a connection to a check
 		// name ends on this host whatever the lists say and whichever way it came in. It is

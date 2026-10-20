@@ -50,8 +50,10 @@ const (
 	// the FakeIP range tells that the DNS inbound, the DNS rules and the FakeIP store
 	// work. Every configuration has to answer it from FakeIP (plan keeps a DNS rule for
 	// it, and a test of plan holds it to that); without that every start would end in
-	// "does not answer" and the LAN would be given back its own DNS.
-	ReadinessName = "fakeip.podkop.fyi"
+	// "does not answer" and the LAN would be given back its own DNS. It is under the
+	// domain of the check names (probe.Suffix), which the backend answers from FakeIP as
+	// well, and it never leaves the router.
+	ReadinessName = "ready.fakeipchecker.podkop.net"
 
 	// RunDir keeps what the backend has while it runs, in RAM (/var/run is /tmp/run on
 	// OpenWrt): its state, the configuration that runs and the rule-set files. DataDir

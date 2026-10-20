@@ -7,13 +7,22 @@ import (
 	"net/netip"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/engine"
 
 	"github.com/stretchr/testify/require"
 )
+
+// The readiness name is under the suffix, so a configuration with check names answers it
+// from FakeIP whatever its own rule, and it is no check name a page could knock with.
+func TestReadinessName(t *testing.T) {
+	require.True(t, strings.HasSuffix(dataplane.ReadinessName, "."+Suffix), dataplane.ReadinessName)
+	require.Empty(t, labelOf(dataplane.ReadinessName))
+}
 
 func TestLabels(t *testing.T) {
 	label := NewLabel()

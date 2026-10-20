@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/model"
 
 	"github.com/stretchr/testify/require"
@@ -122,4 +123,41 @@ func TestFromShell(t *testing.T) {
 	require.Contains(t, text, `"path": "/var/run/podkop/rulesets/main-user-domains-ruleset.json"`)
 	require.Contains(t, text, `"path": "/usr/share/podkop/cache.db"`)
 	require.NotContains(t, text, "sing-box")
+
+	// the rules of the names of podkop 0.7's page checks go, and their DNS rule answers
+	// the readiness name (item 9); a rule of a list stays
+	shell = []byte(`{"dns":{"rules":[{"action":"route","server":"fakeip-server","rewrite_ttl":60,"domain":["fakeip.podkop.fyi","ip.podkop.fyi"]}]},` +
+		`"route":{"rules":[{"action":"route","inbound":"tproxy-in","outbound":"main-out","domain":"ip.podkop.fyi"},` +
+		`{"action":"route-options","domain":"fakeip.podkop.fyi","override_port":8443},` +
+		`{"action":"route","inbound":"tproxy-in","outbound":"main-out","domain":["ip.podkop.fyi"]}]}}`)
+	converted, err = FromShell(shell, Shell{Settings: &model.Config{}, Options: noFiles})
+	require.NoError(t, err)
+	require.Equal(t, `{
+  "dns": {
+    "rules": [
+      {
+        "action": "route",
+        "server": "fakeip-server",
+        "rewrite_ttl": 60,
+        "domain": [
+          "`+dataplane.ReadinessName+`"
+        ]
+      }
+    ]
+  },
+  "route": {
+    "rules": [
+      {
+        "action": "route",
+        "inbound": "tproxy-in",
+        "outbound": "main-out",
+        "domain": [
+          "ip.podkop.fyi"
+        ]
+      }
+    ],
+    "rule_set": []
+  }
+}
+`, string(converted.Config))
 }

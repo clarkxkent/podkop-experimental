@@ -28,7 +28,10 @@ func TestReadinessNameIsAnsweredFromFakeIP(t *testing.T) {
 		"a section that blocks": head + proxy + "\nconfig section 'blocked'\n\toption connection_type 'block'\n\toption user_domain_list_type 'dynamic'\n\tlist user_domains 'two.example'\n",
 		"an excluded domain":    head + proxy + "\nconfig section 'direct'\n\toption connection_type 'exclusion'\n\toption user_domain_list_type 'dynamic'\n\tlist user_domains '" + dataplane.ReadinessName + "'\n",
 	} {
-		for _, checkNames := range []CheckNames{{}, {Suffix: "check.invalid", DeadEndAddress: "127.0.0.1", DeadEndPort: 9}} {
+		// no check names, others, and those the readiness name is one of
+		_, suffix, _ := strings.Cut(dataplane.ReadinessName, ".")
+		for _, checkNames := range []CheckNames{{}, {Suffix: "check.invalid", DeadEndAddress: "127.0.0.1", DeadEndPort: 9},
+			{Suffix: suffix, DeadEndAddress: "127.0.0.1", DeadEndPort: 9}} {
 			parsed, err := uci.Parse([]byte(settings))
 			require.NoError(t, err, name)
 			config, err := model.Load(parsed)

@@ -30,7 +30,7 @@ func configuration(t *testing.T, dnsPort int, mixedPort int) []byte {
   "log": {"disabled": true},
   "dns": {
     "servers": [{"type": "fakeip", "tag": "fakeip-server", "inet4_range": "198.18.0.0/15"}, {"type": "udp", "tag": "dns-server", "server": "127.0.0.1", "server_port": 9}],
-    "rules": [{"action": "route", "server": "fakeip-server", "domain": ["fakeip.podkop.fyi"]}],
+    "rules": [{"action": "route", "server": "fakeip-server", "domain": ["ready.check.example"]}],
     "final": "dns-server"
   },
   "inbounds": [
@@ -56,7 +56,7 @@ func TestInstanceLifecycle(t *testing.T) {
 		require.NoError(t, instance.Start())
 		require.True(t, listening(fmt.Sprintf("127.0.0.1:%d", mixedPort)), "round %d: not listening after the start", round)
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		require.NoError(t, Probe(ctx, fmt.Sprintf("127.0.0.1:%d", dnsPort), "fakeip.podkop.fyi", fakeRange))
+		require.NoError(t, Probe(ctx, fmt.Sprintf("127.0.0.1:%d", dnsPort), "ready.check.example", fakeRange))
 		cancel()
 		_, found := instance.RuleSetContent("no-such-rule-set")
 		require.False(t, found)
@@ -79,7 +79,7 @@ func TestBuildBesideARunningInstance(t *testing.T) {
 	require.Error(t, candidate.Start())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	require.NoError(t, Probe(ctx, fmt.Sprintf("127.0.0.1:%d", dnsPort), "fakeip.podkop.fyi", netip.MustParsePrefix("198.18.0.0/15")))
+	require.NoError(t, Probe(ctx, fmt.Sprintf("127.0.0.1:%d", dnsPort), "ready.check.example", netip.MustParsePrefix("198.18.0.0/15")))
 	require.NoError(t, running.Close(10*time.Second))
 }
 
@@ -114,7 +114,7 @@ func TestNotes(t *testing.T) {
 func TestProbeGivesUp(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 300*time.Millisecond)
 	defer cancel()
-	err := Probe(ctx, fmt.Sprintf("127.0.0.1:%d", freePort(t)), "fakeip.podkop.fyi", netip.MustParsePrefix("198.18.0.0/15"))
+	err := Probe(ctx, fmt.Sprintf("127.0.0.1:%d", freePort(t)), "ready.check.example", netip.MustParsePrefix("198.18.0.0/15"))
 	require.Error(t, err)
 }
 

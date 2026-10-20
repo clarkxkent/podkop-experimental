@@ -2,8 +2,10 @@ package plan
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -45,6 +47,11 @@ import (
 //     /usr/share/sing-box under the same name in /var/run/podkop or /usr/share/podkop
 //     (model.CachePath); without cache_path it is /var/run/podkop/cache.db (the shell
 //     backend: /tmp/sing-box/cache.db).
+//  9. No rules for the names the checks of podkop 0.7's page ask an outside server with:
+//     the shell backend routes ip.podkop.fyi to the first section and sends
+//     fakeip.podkop.fyi to port 8443, and its DNS rule answers both from FakeIP. The page
+//     of this backend asks the backend instead. That DNS rule answers the readiness name
+//     (dataplane.ReadinessName) alone.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -80,6 +87,7 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 	}
 	converted := &Converted{Added: make(map[string][]byte)}
 	removeServiceProxy(document)
+	replaceCheckNames(document)
 	if dns, _ := document.get("dns"); dns != nil {
 		if dnsObject, isObject := dns.(*object); isObject {
 			dnsObject.remove("independent_cache")
@@ -319,6 +327,61 @@ func removeServiceProxy(document *object) {
 		keptRules = append(keptRules, entry)
 	}
 	routeObject.set("rules", keptRules)
+}
+
+// shellCheckNames are the names of the checks of podkop 0.7's page (item 9).
+var shellCheckNames = []string{"fakeip.podkop.fyi", "ip.podkop.fyi"}
+
+// textList returns a list of texts, nil for anything else.
+func textList(value any) []string {
+	list, _ := value.([]any)
+	var texts []string
+	for _, item := range list {
+		text, isText := item.(string)
+		if !isText {
+			return nil
+		}
+		texts = append(texts, text)
+	}
+	return texts
+}
+
+// replaceCheckNames removes the route rules of the names of the checks of podkop 0.7's
+// page, and has their DNS rule answer the readiness name (item 9).
+func replaceCheckNames(document *object) {
+	if dns, _ := document.get("dns"); dns != nil {
+		if dnsObject, isObject := dns.(*object); isObject {
+			rules, _ := dnsObject.get("rules")
+			list, _ := rules.([]any)
+			for _, entry := range list {
+				if rule, isObject := entry.(*object); isObject {
+					if domains, _ := rule.get("domain"); slices.Equal(textList(domains), shellCheckNames) {
+						rule.set("domain", []any{dataplane.ReadinessName})
+					}
+				}
+			}
+		}
+	}
+	route, _ := document.get("route")
+	routeObject, _ := route.(*object)
+	if routeObject == nil {
+		return
+	}
+	rules, _ := routeObject.get("rules")
+	list, isList := rules.([]any)
+	if !isList {
+		return
+	}
+	kept := list[:0:0]
+	for _, entry := range list {
+		if rule, isObject := entry.(*object); isObject {
+			if domain, _ := rule.get("domain"); slices.Contains(shellCheckNames, fmt.Sprint(domain)) {
+				continue
+			}
+		}
+		kept = append(kept, entry)
+	}
+	routeObject.set("rules", kept)
 }
 
 // replaceSpan puts entries in place of the rule sets of the tags, which stand one after

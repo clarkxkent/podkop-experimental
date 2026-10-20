@@ -39,7 +39,7 @@ PROBE_INTERVAL=20
 PROBE_TIMEOUT=3
 PROBE_FAILURES=3
 # ReadinessName and DNSAddress of dataplane (src/backend): the backend answers this name itself
-PROBE_NAME=fakeip.podkop.fyi
+PROBE_NAME=ready.fakeipchecker.podkop.net
 PROBE_SERVER=127.0.0.42
 STUCK=480
 
