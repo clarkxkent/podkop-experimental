@@ -10,9 +10,11 @@ export function knockFakeIp(): string {
   return label;
 }
 
-// Opens connections to a check name with a port of its own, at once and then about every
-// 400 ms until stop is called: global_check traces the packets of that port while it waits
-// for one of them, so the ones opened after its start are traced. The ports are those no
+// Opens connections to a check name with a port of its own while global_check runs, the
+// first a second after it is asked for and then about every 400 ms until stop is called.
+// global_check traces the DNS questions for that name and the packets to that port while
+// it waits for one of them; the delay has the first question come after the trace is
+// there, as a device may not ask again for a name it was refused. The ports are those no
 // browser refuses to connect to.
 export function knockFakeIpRepeatedly(): {
   label: string;
@@ -22,10 +24,20 @@ export function knockFakeIpRepeatedly(): {
   const label = newLabel();
   const port = 40000 + Math.floor(Math.random() * 10000);
   const url = `https://${label}.${FAKEIP_CHECK_SUFFIX}:${port}/`;
-  knock(url);
-  const interval = setInterval(() => knock(url), 400);
+  let interval: ReturnType<typeof setInterval> | undefined;
+  const start = setTimeout(() => {
+    knock(url);
+    interval = setInterval(() => knock(url), 400);
+  }, 1000);
 
-  return { label, port, stop: () => clearInterval(interval) };
+  return {
+    label,
+    port,
+    stop: () => {
+      clearTimeout(start);
+      clearInterval(interval);
+    },
+  };
 }
 
 function newLabel(): string {

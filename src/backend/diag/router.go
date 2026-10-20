@@ -25,18 +25,22 @@ func Listeners() []sockets.Listener {
 	return listeners
 }
 
-// BackendPorts names the sockets of other programs on the addresses the backend listens
+// BackendPorts names the programs whose sockets take the addresses the backend listens
 // on: the DNS inbound and the transparent proxy inbound, each over TCP and UDP. Such a
 // socket keeps sing-box from starting.
 func BackendPorts(listeners []sockets.Listener) []string {
 	var lines []string
 	for _, at := range []netip.AddrPort{dataplane.DNSServer, netip.AddrPortFrom(netip.MustParseAddr(dataplane.TProxyAddress), dataplane.TProxyPort)} {
+		var holders []sockets.Listener
 		for _, protocol := range []string{"tcp", "udp"} {
 			for _, holder := range sockets.Holding(listeners, protocol, at) {
 				if holder.Program != ownProgram {
-					lines = append(lines, at.String()+" ("+protocol+") is taken: "+holder.String())
+					holders = append(holders, holder)
 				}
 			}
+		}
+		if len(holders) > 0 {
+			lines = append(lines, at.String()+" is taken: "+sockets.Describe(holders))
 		}
 	}
 	return lines

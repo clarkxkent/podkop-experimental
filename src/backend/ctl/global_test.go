@@ -1,8 +1,11 @@
 package ctl
 
 import (
+	"net/netip"
 	"testing"
 
+	"github.com/itdoginfo/podkop/src/backend/diag"
+	"github.com/itdoginfo/podkop/src/backend/sockets"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,4 +29,27 @@ config interface 'wan6'
 	static := "config interface 'wan'\n\toption proto 'static'\n\toption ipaddr '198.51.100.2'\n\toption netmask '255.255.255.0'\n\toption gateway '198.51.100.1'\n\toption dns '1.1.1.1'\n"
 	require.Equal(t, []string{"config interface 'wan'", "\toption proto 'static'", "        option ipaddr '******'", "        option netmask '******'", "        option gateway '******'", "\toption dns '1.1.1.1'"}, wanBlock(static))
 	require.Equal(t, []string{"config dnsmasq", "\toption noresolv '1'"}, blocks("config dnsmasq\n\toption noresolv '1'\nconfig dhcp 'lan'\n\toption start '100'\n", func(fields []string) bool { return fields[1] == "dnsmasq" }))
+}
+
+func TestLANDNSLines(t *testing.T) {
+	t.Parallel()
+	addresses := []netip.Addr{netip.MustParseAddr("192.168.1.1"), netip.MustParseAddr("fd00::1")}
+	dnsmasq := []sockets.Listener{
+		{Protocol: "udp", Address: netip.MustParseAddrPort("192.168.1.1:53"), PID: 7600, Program: "dnsmasq"},
+		{Protocol: "udp", Address: netip.MustParseAddrPort("[fd00::1]:53"), PID: 7600, Program: "dnsmasq"},
+	}
+	// one line a process, with every address it listens on
+	require.Equal(t, []string{"✅ DNS on br-lan: dnsmasq (pid 7600) on 192.168.1.1:53 and [fd00::1]:53, forwards to 127.0.0.42, no-resolv"},
+		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses, Holders: dnsmasq, Dnsmasq: true, Servers: []string{"127.0.0.42"}, NoResolv: true}, true))
+	require.Equal(t, []string{"❌ DNS on br-lan: dnsmasq (pid 7600) on 192.168.1.1:53 and [fd00::1]:53, forwards to 127.0.0.1#5053 and to the servers of its resolv file"},
+		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses, Holders: dnsmasq, Dnsmasq: true, Servers: []string{"127.0.0.1#5053"}}, true))
+	// while the backend is stopped, dnsmasq is the router's own: nothing is wrong
+	require.Equal(t, []string{"⚠️ DNS on br-lan: dnsmasq (pid 7600) on 192.168.1.1:53 and [fd00::1]:53, forwards to the servers of its resolv file only"},
+		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses, Holders: dnsmasq, Dnsmasq: true}, false))
+	other := []sockets.Listener{{Protocol: "udp", Address: netip.MustParseAddrPort("0.0.0.0:53"), PID: 900, Program: "AdGuardHome"}}
+	require.Equal(t, []string{"⚠️ DNS on br-lan: AdGuardHome (pid 900) on 0.0.0.0:53"},
+		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses, Holders: other}, true))
+	require.Equal(t, []string{"❌ DNS on br-lan (192.168.1.1, fd00::1): nobody listens on port 53"},
+		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses}, true))
+	require.Equal(t, []string{"❌ DNS on wg0: the interface has no address"}, lanDNSLines(diag.LANDNS{Interface: "wg0"}, true))
 }

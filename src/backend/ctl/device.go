@@ -24,12 +24,12 @@ type deviceCheck struct {
 // one about every 400 ms until the report comes.
 const deviceWait = 5 * time.Second
 
-// run traces the TCP packets to the FakeIP range and the port of the check while it waits
-// for a connection of the device, and tells what came: its DNS question, its connection,
-// and when the connection did not come, what the kernel did to its packets. It returns the
-// address of the device when the connection came.
+// run traces the packets of the check while it waits for a connection of the device, and
+// tells what came: its DNS question, its connection, and when either did not come, what the
+// kernel did to its DNS questions or to the packets of its connections. It returns the
+// address of the device: the one its connection came from, or its traced packets did.
 func (d *deviceCheck) run() ([]string, netip.Addr) {
-	trace, traceErr := diag.StartTrace(d.port)
+	trace, traceErr := diag.StartTrace(d.port, d.label)
 	result, err := d.probe(d.label, deviceWait)
 	var traced []string
 	if trace != nil {
@@ -38,26 +38,36 @@ func (d *deviceCheck) run() ([]string, netip.Addr) {
 	if err != nil {
 		return []string{"❌ The backend did not answer: " + err.Error()}, netip.Addr{}
 	}
+	var hooks map[string]string
+	if traceErr == nil {
+		hooks, _ = firewall.ChainHooks()
+	}
+	// stories tells the traced packets of one kind, or why there are none
+	stories := func(questions bool, none string) []string {
+		if traceErr != nil {
+			return []string{"   they could not be traced: " + traceErr.Error()}
+		}
+		told := diag.TraceStories(traced, hooks, questions)
+		if len(told) == 0 {
+			return []string{"   " + none}
+		}
+		for index := range told {
+			told[index] = "   " + told[index]
+		}
+		return told
+	}
 	name := probe.Name(d.label)
 	if !result.DNS {
-		return []string{"❌ The DNS question of this device for " + name + " did not come to sing-box"}, netip.Addr{}
+		lines := []string{"❌ The DNS question of this device for " + name + " did not come to sing-box. What the kernel did to its DNS questions:"}
+		lines = append(lines, stories(true, "none of them passed the router over UDP port 53 while the check ran: the device resolves names some other way (DNS over HTTPS of the browser, say)")...)
+		return lines, diag.TraceSource(traced, hooks)
 	}
 	lines := []string{"✅ The DNS question of this device came to sing-box: " + name + " is " + result.Address + " (FakeIP)"}
-	client, _ := netip.ParseAddr(result.Client)
 	if result.Connection {
+		client, _ := netip.ParseAddr(result.Client)
 		return append(lines, "✅ Its connection came to sing-box through the transparent proxy, from "+result.Client), client
 	}
 	lines = append(lines, "❌ Its connections to "+result.Address+":"+strconv.Itoa(int(d.port))+" did not come to sing-box. What the kernel did to their packets:")
-	if traceErr != nil {
-		return append(lines, "   they could not be traced: "+traceErr.Error()), client
-	}
-	hooks, _ := firewall.ChainHooks()
-	stories := diag.TraceStories(traced, hooks)
-	if len(stories) == 0 {
-		lines = append(lines, "   none of them came to the router while the check ran")
-	}
-	for _, story := range stories {
-		lines = append(lines, "   "+story)
-	}
-	return lines, client
+	lines = append(lines, stories(false, "none of them came to the router while the check ran")...)
+	return lines, diag.TraceSource(traced, hooks)
 }

@@ -11,6 +11,7 @@ import (
 	"github.com/itdoginfo/podkop/src/backend/dataplane"
 	"github.com/itdoginfo/podkop/src/backend/diag"
 	"github.com/itdoginfo/podkop/src/backend/model"
+	"github.com/itdoginfo/podkop/src/backend/sockets"
 	"github.com/itdoginfo/podkop/src/backend/uci"
 )
 
@@ -216,29 +217,39 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// lanDNSLines tells who answers DNS on an interface of the LAN. dnsmasq is as the backend
-// sets it up when it forwards every name to the DNS inbound only and reads no resolv file.
+// lanDNSLines tells who answers DNS on an interface of the LAN, a line a process. dnsmasq is
+// as the backend sets it up when it forwards every name to the DNS inbound only and reads
+// no resolv file.
 func lanDNSLines(lan diag.LANDNS, running bool) []string {
-	var addresses []string
-	for _, address := range lan.Addresses {
-		addresses = append(addresses, address.String())
-	}
 	where := "DNS on " + lan.Interface
-	if len(addresses) == 0 {
+	if len(lan.Addresses) == 0 {
 		return []string{"❌ " + where + ": the interface has no address"}
 	}
-	where += " (" + strings.Join(addresses, ", ") + ")"
 	if len(lan.Holders) == 0 {
-		return []string{"❌ " + where + ": nobody listens on port 53"}
+		var addresses []string
+		for _, address := range lan.Addresses {
+			addresses = append(addresses, address.String())
+		}
+		return []string{"❌ " + where + " (" + strings.Join(addresses, ", ") + "): nobody listens on port 53"}
+	}
+	var order []int
+	processes := make(map[int][]sockets.Listener)
+	for _, holder := range lan.Holders {
+		if _, seen := processes[holder.PID]; !seen {
+			order = append(order, holder.PID)
+		}
+		processes[holder.PID] = append(processes[holder.PID], holder)
 	}
 	var result []string
-	for _, holder := range lan.Holders {
-		if holder.Program != "dnsmasq" {
-			result = append(result, "⚠️ "+where+": "+holder.String())
+	for _, pid := range order {
+		holders := processes[pid]
+		who := where + ": " + sockets.Describe(holders)
+		if holders[0].Program != "dnsmasq" {
+			result = append(result, "⚠️ "+who)
 			continue
 		}
 		if !lan.Dnsmasq {
-			result = append(result, "⚠️ "+where+": "+holder.String()+", its configuration not found")
+			result = append(result, "⚠️ "+who+", its configuration not found")
 			continue
 		}
 		forwards := "forwards to " + strings.Join(lan.Servers, ", ")
@@ -250,7 +261,7 @@ func lanDNSLines(lan diag.LANDNS, running bool) []string {
 			forwards += ", no-resolv"
 		}
 		asks := len(lan.Servers) == 1 && lan.Servers[0] == dataplane.DNSAddress && lan.NoResolv
-		result = append(result, mark(asks, "✅ ", mark(running, "❌ ", "⚠️ "))+where+": "+holder.String()+", "+forwards)
+		result = append(result, mark(asks, "✅ ", mark(running, "❌ ", "⚠️ "))+who+", "+forwards)
 	}
 	return result
 }

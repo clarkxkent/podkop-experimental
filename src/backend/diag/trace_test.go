@@ -1,6 +1,7 @@
 package diag
 
 import (
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -22,6 +23,9 @@ const (
 	packetACK = `iif "eth1" ether saddr 1a:a5:fb:fb:8e:ec ip saddr 192.168.78.10 ip daddr 198.18.0.4 ip protocol tcp tcp sport 50000 tcp dport 40001 tcp flags == ack tcp window 502`
 	ourMark   = `iifname @interfaces ip daddr 198.18.0.0/15 meta l4proto tcp meta mark set 0x00100000 counter packets 5 bytes 350 (verdict continue)`
 	ourProxy  = `meta mark & 0x00100000 == 0x00100000 meta l4proto tcp tproxy ip to 127.0.0.1:1602 counter packets 5 bytes 350 (verdict continue)`
+	// a DNS question for the check name, to the router and to a server past it
+	questionRouter = `iif "eth1" ether saddr 1a:a5:fb:fb:8e:ec ip saddr 192.168.78.10 ip daddr 192.168.78.1 ip dscp cs0 ip ecn not-ect ip ttl 64 ip id 4411 ip protocol udp ip length 82 udp sport 41234 udp dport 53 udp length 62 @th,64,96 0x7a3b01000001000000000000`
+	questionPast   = `iif "eth1" ether saddr 1a:a5:fb:fb:8e:ec ip saddr 192.168.78.10 ip daddr 8.8.8.8 ip dscp cs0 ip ecn not-ect ip ttl 64 ip id 4412 ip protocol udp ip length 82 udp sport 41235 udp dport 53 udp length 62 @th,64,96 0x7a3c01000001000000000000`
 )
 
 func traceLines(id string, entries ...string) []string {
@@ -117,14 +121,63 @@ func TestTraceStories(t *testing.T) {
 		[]string{"SYN (2): marked by podkop → taken by the transparent proxy rule of podkop → reached the router (hook input)"},
 	}} {
 		t.Run(test.name, func(t *testing.T) {
-			require.Equal(t, test.want, TraceStories(test.lines, traceHooks))
+			require.Equal(t, test.want, TraceStories(test.lines, traceHooks, false))
 		})
 	}
+}
+
+// The DNS questions of a check are told apart from the packets of its connection: what
+// became of them, and the addresses they were sent to.
+func TestTraceQuestions(t *testing.T) {
+	question := func(id string, packet string, entries ...string) []string {
+		return traceLines(id, append([]string{"inet PodkopTrace trace packet: " + packet,
+			"inet PodkopTrace trace rule udp dport 53 @th,160,128 0x14366530 meta nftrace set 1 (verdict continue)",
+			"inet fw4 raw_prerouting packet: " + packet, "inet PodkopTable mangle packet: " + packet}, entries...)...)
+	}
+	for _, test := range []struct {
+		name  string
+		lines []string
+		want  []string
+	}{{
+		"to the DNS server of the router",
+		join(question("q1", questionRouter, "inet fw4 input packet: "+questionRouter,
+			`inet fw4 accept_from_lan rule iifname "eth1" accept comment "!fw4: accept lan IPv4/IPv6 traffic" (verdict accept)`),
+			question("q2", questionRouter, "inet fw4 input packet: "+questionRouter)),
+		[]string{"to 192.168.78.1 (2): reached the router (hook input)"},
+	}, {
+		"a zone of fw4 that rejects input",
+		question("q3", questionRouter, "inet fw4 input packet: "+questionRouter,
+			"inet fw4 input_lan rule jump reject_from_lan (verdict jump reject_from_lan)",
+			`inet fw4 handle_reject rule reject comment "!fw4: Reject any other traffic" (verdict drop)`),
+		[]string{`to 192.168.78.1 (1): dropped by inet fw4 handle_reject: reject comment "!fw4: Reject any other traffic"`},
+	}, {
+		"sent to another server by a rule of fw4",
+		question("q4", questionRouter, "inet fw4 dstnat packet: "+questionRouter,
+			`inet fw4 dstnat_lan rule meta nfproto ipv4 udp dport 53 counter packets 3 bytes 180 redirect to :5353 comment "!fw4: Intercept-DNS" (verdict accept)`,
+			"inet fw4 input packet: "+questionRouter),
+		[]string{`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`},
+	}, {
+		"to a server past the router, while a connection of the check is traced too",
+		join(question("q5", questionPast, "inet fw4 forward packet: "+questionPast), start("q6", packetSYN, true),
+			traceLines("q6", "inet fw4 input packet: "+packetSYN)),
+		[]string{"to 8.8.8.8 (1): routed past the router (hook forward)"},
+	}} {
+		t.Run(test.name, func(t *testing.T) {
+			require.Equal(t, test.want, TraceStories(test.lines, traceHooks, true))
+		})
+	}
+	require.Empty(t, TraceStories(start("q7", packetSYN, true), traceHooks, true))
+	require.Equal(t, netip.MustParseAddr("192.168.78.10"), TraceSource(question("q8", questionPast), traceHooks))
+	require.False(t, TraceSource([]string{"garbage"}, traceHooks).IsValid())
 }
 
 func TestTCPFlags(t *testing.T) {
 	require.Equal(t, "syn", tcpFlags(packetSYN))
 	require.Equal(t, "fin | ack", tcpFlags("ip protocol tcp tcp sport 1 tcp dport 2 tcp flags == fin | ack tcp window 9"))
+	// nft 1.1.1 of OpenWrt 24.10 writes a set of several flags as a number
+	require.Equal(t, "psh | ack", tcpFlags("ip protocol tcp tcp sport 1 tcp dport 2 tcp flags == 0x18 tcp window 9"))
+	require.Equal(t, "fin | ack", tcpFlags("ip protocol tcp tcp sport 1 tcp dport 2 tcp flags == 0x11 tcp window 9"))
 	require.Equal(t, "tcp", tcpFlags("ip protocol udp udp sport 53"))
 	require.True(t, strings.HasPrefix(packetACK, "iif"))
+	require.Equal(t, netip.MustParseAddr("fd00::10"), packetAddress("iif \"eth1\" ip6 saddr fd00::10 ip6 daddr fd00::1 ip6 nexthdr udp", "saddr"))
 }

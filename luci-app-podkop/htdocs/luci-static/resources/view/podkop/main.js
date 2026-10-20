@@ -1081,9 +1081,19 @@ function knockFakeIpRepeatedly() {
   const label = newLabel();
   const port = 4e4 + Math.floor(Math.random() * 1e4);
   const url = `https://${label}.${FAKEIP_CHECK_SUFFIX}:${port}/`;
-  knock(url);
-  const interval = setInterval(() => knock(url), 400);
-  return { label, port, stop: () => clearInterval(interval) };
+  let interval;
+  const start = setTimeout(() => {
+    knock(url);
+    interval = setInterval(() => knock(url), 400);
+  }, 1e3);
+  return {
+    label,
+    port,
+    stop: () => {
+      clearTimeout(start);
+      clearInterval(interval);
+    }
+  };
 }
 function newLabel() {
   return Array.from(

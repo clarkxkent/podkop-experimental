@@ -20,11 +20,12 @@ const (
 	tracePriority = -400
 )
 
-// ArmTrace has the kernel trace the TCP packets to the FakeIP range and a port: those of a
-// check a device makes with a port of its own (global_check). "nft monitor trace" then
-// hears of every rule of every table they pass, with its verdict and the mark of the packet.
-// A trace table that is there already is replaced.
-func ArmTrace(port uint16) error {
+// ArmTrace has the kernel trace the packets of a check a device makes (global_check) with
+// the check name of a label and a port of its own: the TCP packets to the FakeIP range and
+// that port, and the DNS questions over UDP for that name, to any address. "nft monitor
+// trace" then hears of every rule of every table they pass, with its verdict and the mark
+// of the packet. A trace table that is there already is replaced.
+func ArmTrace(port uint16, label string) error {
 	conn, err := nftables.New()
 	if err != nil {
 		return E.Cause(err, "open netlink")
@@ -37,19 +38,42 @@ func ArmTrace(port uint16) error {
 	accept := nftables.ChainPolicyAccept
 	chain := conn.AddChain(&nftables.Chain{Name: traceChain, Table: table, Type: nftables.ChainTypeFilter,
 		Hooknum: nftables.ChainHookPrerouting, Priority: nftables.ChainPriorityRef(tracePriority), Policy: &accept})
-	var expressions []expr.Any
-	for _, part := range [][]expr.Any{ipv4(), addressWithin(offsetDestination, rangeFakeIP), protocol(unix.IPPROTO_TCP), destinationPort(port)} {
-		expressions = append(expressions, part...)
+	for _, match := range [][][]expr.Any{
+		{ipv4(), addressWithin(offsetDestination, rangeFakeIP), protocol(unix.IPPROTO_TCP), destinationPort(port)},
+		{protocol(unix.IPPROTO_UDP), destinationPort(53), questionFor(label)},
+	} {
+		var expressions []expr.Any
+		for _, part := range match {
+			expressions = append(expressions, part...)
+		}
+		expressions = append(expressions,
+			&expr.Immediate{Register: 1, Data: []byte{1}},
+			&expr.Meta{Key: expr.MetaKeyNFTRACE, SourceRegister: true, Register: 1})
+		conn.AddRule(&nftables.Rule{Table: table, Chain: chain, Exprs: expressions})
 	}
-	expressions = append(expressions,
-		&expr.Immediate{Register: 1, Data: []byte{1}},
-		&expr.Meta{Key: expr.MetaKeyNFTRACE, SourceRegister: true, Register: 1})
-	conn.AddRule(&nftables.Rule{Table: table, Chain: chain, Exprs: expressions})
 	err = conn.Flush()
 	if err != nil {
 		return E.Cause(err, "add the trace table")
 	}
 	return nil
+}
+
+// questionOffset is where the name a DNS message over UDP asks for begins, counted from the
+// UDP header: after that header (8 bytes) and the one of DNS (12).
+const questionOffset = 20
+
+// questionFor matches a DNS question for a name whose first label is label: the name is
+// written as the length of that label and its letters. A register holds 16 bytes; that
+// much of a check label tells it apart.
+func questionFor(label string) []expr.Any {
+	name := append([]byte{byte(len(label))}, label...)
+	if len(name) > 16 {
+		name = name[:16]
+	}
+	return []expr.Any{
+		&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseTransportHeader, Offset: questionOffset, Len: uint32(len(name))},
+		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: name},
+	}
 }
 
 // DisarmTrace removes the trace table. Its absence is no error.

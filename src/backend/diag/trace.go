@@ -2,6 +2,7 @@ package diag
 
 import (
 	"bufio"
+	"net/netip"
 	"os/exec"
 	"regexp"
 	"strconv"
@@ -27,10 +28,11 @@ type Trace struct {
 // few dozen lines.
 const traceLinesKept = 20000
 
-// StartTrace listens to the traces of the kernel and arms the trace of the TCP packets to
-// the FakeIP range and a port. The listener is there first: a packet traced before it would
-// be told to nobody.
-func StartTrace(port uint16) (*Trace, error) {
+// StartTrace listens to the traces of the kernel and arms the trace of the packets of a
+// check (firewall.ArmTrace): the TCP packets to the FakeIP range and a port, the DNS
+// questions for the check name of a label. The listener is there first: a packet traced
+// before it would be told to nobody.
+func StartTrace(port uint16, label string) (*Trace, error) {
 	path, err := exec.LookPath("nft")
 	if err != nil {
 		return nil, E.New("no nft program")
@@ -57,7 +59,7 @@ func StartTrace(port uint16) (*Trace, error) {
 			trace.access.Unlock()
 		}
 	}()
-	err = firewall.ArmTrace(port)
+	err = firewall.ArmTrace(port, label)
 	if err != nil {
 		_ = command.Process.Kill()
 		_ = command.Wait()
@@ -79,7 +81,11 @@ func (t *Trace) Stop() []string {
 
 // tracedPacket is what a trace tells of one packet of a check.
 type tracedPacket struct {
-	flags string
+	// question: a DNS question for the check name, not a TCP packet of its connection
+	question bool
+	flags    string
+	// source and destination are the addresses of the packet
+	source, destination netip.Addr
 	// hooks are the hooks of the base chains it passed, in order
 	hooks []string
 	// marked: the rule of podkop gave it the mark; proxied: the transparent proxy rule of
@@ -98,7 +104,11 @@ type traceEvent struct {
 	id, chain, kind, text, verdict string
 }
 
-var counters = regexp.MustCompile(` ?counter packets [0-9]+ bytes [0-9]+`)
+var (
+	counters = regexp.MustCompile(` ?counter packets [0-9]+ bytes [0-9]+`)
+	// what sends a packet elsewhere than its destination: a DNS question to another server
+	redirects = regexp.MustCompile(`\b(dnat|redirect|tproxy)\b`)
+)
 
 func parseTraceLine(line string) (traceEvent, bool) {
 	fields := strings.SplitN(line, " ", 7)
@@ -144,7 +154,8 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 			continue
 		}
 		if event.kind == "packet" && event.chain == traceChain {
-			packet := &tracedPacket{flags: tcpFlags(event.text)}
+			packet := &tracedPacket{question: strings.Contains(event.text+" ", " udp dport 53 "), flags: tcpFlags(event.text),
+				source: packetAddress(event.text, "saddr"), destination: packetAddress(event.text, "daddr")}
 			current[event.id] = packet
 			packets = append(packets, packet)
 			continue
@@ -161,6 +172,12 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 			}
 		case "rule":
 			switch {
+			case packet.question:
+				// the rules of podkop do not take DNS questions; what may is another
+				// table that sends them to a server of its own
+				if !ours && redirects.MatchString(event.text) {
+					packet.steps = append(packet.steps, "sent elsewhere by "+event.chain+": "+event.text)
+				}
 			case ours && strings.Contains(event.text, markOfPodkop) && !packet.marked:
 				packet.marked = true
 				packet.steps = append(packet.steps, "marked by podkop")
@@ -187,6 +204,7 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 }
 
 // tcpFlags reads the TCP flags of the fields of a traced packet: "syn", "ack", "psh | ack".
+// Some versions of nft write those of a set of several as a number (0x18).
 func tcpFlags(fields string) string {
 	_, after, found := strings.Cut(fields, "tcp flags == ")
 	if !found {
@@ -196,16 +214,48 @@ func tcpFlags(fields string) string {
 	if end := strings.Index(after, " tcp "); end >= 0 {
 		after = after[:end]
 	}
-	return strings.TrimSpace(after)
+	after = strings.TrimSpace(after)
+	value, err := strconv.ParseUint(strings.TrimPrefix(after, "0x"), 16, 8)
+	if !strings.HasPrefix(after, "0x") || err != nil {
+		return after
+	}
+	var names []string
+	for bit, name := range []string{"fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr"} {
+		if value&(1<<bit) != 0 {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, " | ")
+}
+
+// packetAddress reads an address of the fields of a traced packet: "ip saddr 192.168.1.10"
+// or "ip6 saddr fd00::10" for the field "saddr".
+func packetAddress(fields string, field string) netip.Addr {
+	for _, family := range []string{"ip ", "ip6 "} {
+		_, after, found := strings.Cut(fields, family+field+" ")
+		if !found {
+			continue
+		}
+		text, _, _ := strings.Cut(after, " ")
+		address, err := netip.ParseAddr(text)
+		if err == nil {
+			return address
+		}
+	}
+	return netip.Addr{}
 }
 
 // story tells what became of a packet, as facts in their order.
 func (p *tracedPacket) story() string {
 	var steps []string
-	if !p.marked {
+	if p.question {
+		steps = append(steps, p.steps...)
+	} else if !p.marked {
 		steps = append(steps, "not marked by podkop")
 	}
-	steps = append(steps, p.steps...)
+	if !p.question {
+		steps = append(steps, p.steps...)
+	}
 	if p.marked && !p.proxied {
 		steps = append(steps, "not taken by the transparent proxy rule of podkop")
 	}
@@ -231,16 +281,20 @@ func contains(list []string, value string) bool {
 	return false
 }
 
-// TraceStories tells what became of the packets of a trace: each different story once,
-// with the TCP flags of the packets it is the story of, the first few.
-func TraceStories(lines []string, hooks map[string]string) []string {
+// TraceStories tells what became of the packets of a trace, those of the connection of a
+// check or its DNS questions: each different story once, with the TCP flags (or the
+// addresses a question was sent to) of the packets it is the story of, the first few.
+func TraceStories(lines []string, hooks map[string]string, questions bool) []string {
 	type told struct {
-		flags []string
+		kinds []string
 		count int
 	}
 	stories := make(map[string]*told)
 	var order []string
 	for _, packet := range packetsOfTrace(lines, hooks) {
+		if packet.question != questions {
+			continue
+		}
 		story := packet.story()
 		if stories[story] == nil {
 			stories[story] = &told{}
@@ -248,8 +302,12 @@ func TraceStories(lines []string, hooks map[string]string) []string {
 		}
 		entry := stories[story]
 		entry.count++
-		if !contains(entry.flags, packet.flags) {
-			entry.flags = append(entry.flags, packet.flags)
+		kind := strings.ToUpper(packet.flags)
+		if questions {
+			kind = packet.destination.String()
+		}
+		if !contains(entry.kinds, kind) {
+			entry.kinds = append(entry.kinds, kind)
 		}
 	}
 	var result []string
@@ -259,7 +317,22 @@ func TraceStories(lines []string, hooks map[string]string) []string {
 			break
 		}
 		entry := stories[story]
-		result = append(result, strings.ToUpper(strings.Join(entry.flags, ", "))+" ("+strconv.Itoa(entry.count)+"): "+story)
+		kinds := strings.Join(entry.kinds, ", ")
+		if questions {
+			kinds = "to " + kinds
+		}
+		result = append(result, kinds+" ("+strconv.Itoa(entry.count)+"): "+story)
 	}
 	return result
+}
+
+// TraceSource is the address the traced packets of a check came from: the device, when its
+// connection did not come to sing-box and so did not tell it.
+func TraceSource(lines []string, hooks map[string]string) netip.Addr {
+	for _, packet := range packetsOfTrace(lines, hooks) {
+		if packet.source.IsValid() {
+			return packet.source
+		}
+	}
+	return netip.Addr{}
 }

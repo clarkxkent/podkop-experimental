@@ -12,6 +12,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -29,11 +30,36 @@ type Listener struct {
 
 // String names the listener as a person reads it: "dnsmasq (pid 7600) on 0.0.0.0:53".
 func (l Listener) String() string {
-	who := "a socket without a process"
-	if l.PID != 0 {
-		who = l.Program + " (pid " + strconv.Itoa(l.PID) + ")"
+	return l.who() + " on " + l.Address.String()
+}
+
+func (l Listener) who() string {
+	if l.PID == 0 {
+		return "a socket without a process"
 	}
-	return who + " on " + l.Address.String()
+	return l.Program + " (pid " + strconv.Itoa(l.PID) + ")"
+}
+
+// Describe names the processes that hold listeners, each once with the addresses it
+// listens on, whatever the protocol: "dnsmasq (pid 7600) on 0.0.0.0:53 and [::]:53".
+func Describe(listeners []Listener) string {
+	var order []string
+	addresses := make(map[string][]string)
+	for _, listener := range listeners {
+		who := listener.who()
+		if _, seen := addresses[who]; !seen {
+			order = append(order, who)
+		}
+		address := listener.Address.String()
+		if !slices.Contains(addresses[who], address) {
+			addresses[who] = append(addresses[who], address)
+		}
+	}
+	parts := make([]string, 0, len(order))
+	for _, who := range order {
+		parts = append(parts, who+" on "+strings.Join(addresses[who], " and "))
+	}
+	return strings.Join(parts, "; ")
 }
 
 // List returns the listeners of the system. Root is put before /proc ("/" on a router; a

@@ -76,6 +76,15 @@ func TestList(t *testing.T) {
 	udp := Holding(listeners, "udp", netip.MustParseAddrPort("127.0.0.42:53"))
 	require.Len(t, udp, 2)
 	require.Empty(t, Holding(listeners, "tcp", netip.MustParseAddrPort("127.0.0.1:1603")))
+	// a process once, with its addresses once each, whatever the protocol
+	dnsmasq := func(protocol string, address string) Listener {
+		return Listener{Protocol: protocol, Address: netip.MustParseAddrPort(address), PID: 7600, Program: "dnsmasq"}
+	}
+	require.Equal(t, "dnsmasq (pid 7600) on 0.0.0.0:53 and [::]:53",
+		Describe([]Listener{dnsmasq("tcp", "0.0.0.0:53"), dnsmasq("tcp", "[::]:53"), dnsmasq("udp", "0.0.0.0:53"), dnsmasq("udp", "[::]:53")}))
+	require.Equal(t, "dnsmasq (pid 7600) on 0.0.0.0:53; podkop (pid 4388) on 127.0.0.1:1602; a socket without a process on 127.0.0.1:9",
+		Describe([]Listener{tcp[0], {Protocol: "tcp", Address: netip.MustParseAddrPort("127.0.0.1:1602"), PID: 4388, Program: "podkop"}, tcp[0],
+			{Protocol: "udp", Address: netip.MustParseAddrPort("127.0.0.1:9")}}))
 }
 
 // The sockets of this test process are found with it, on a real /proc.

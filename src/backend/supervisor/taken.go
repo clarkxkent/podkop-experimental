@@ -32,9 +32,5 @@ func takenBy(err error) string {
 	if len(holding) == 0 {
 		return at.String() + " (" + protocol + ") is taken, by a socket not found in /proc/net"
 	}
-	names := make([]string, 0, len(holding))
-	for _, listener := range holding {
-		names = append(names, listener.String())
-	}
-	return at.String() + " (" + protocol + ") is taken: " + strings.Join(names, ", ")
+	return at.String() + " (" + protocol + ") is taken: " + sockets.Describe(holding)
 }
