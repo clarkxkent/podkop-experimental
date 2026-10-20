@@ -177,10 +177,12 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 			case packet.question:
 				// the rules of podkop do not take DNS questions; what may is another
 				// table that sends them to a server of its own. NAT is decided by the
-				// first packet of a flow: a later one is told by a rule that matches
-				// a flow whose destination was rewritten
+				// first packet of a flow: a later one is told by the rule of that
+				// table that matches a flow whose destination was rewritten (the one
+				// of podkop that leaves such flows alone is no news)
 				switch {
-				case !ours && redirects.MatchString(event.text):
+				case ours:
+				case redirects.MatchString(event.text):
 					packet.redirected = true
 					packet.steps = append(packet.steps, "sent elsewhere by "+event.chain+": "+event.text)
 				case strings.Contains(event.text, "ct status dnat") && !packet.redirected:

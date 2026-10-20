@@ -163,7 +163,8 @@ func TestTraceQuestions(t *testing.T) {
 		join(question("q9", questionRouter, "inet fw4 dstnat packet: "+questionRouter,
 			`inet fw4 dstnat_lan rule meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" (verdict accept)`,
 			"inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`),
-			question("q10", questionRouter, "inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`)),
+			question("q10", questionRouter, "inet PodkopTable mangle rule ct status dnat return (verdict return)",
+				"inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`)),
 		[]string{
 			`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`,
 			`to 192.168.78.1 (1): sent elsewhere as the first question of its flow was (inet fw4 input_lan: ct status dnat accept comment "!fw4: Accept port redirections") → reached the router (hook input)`,
