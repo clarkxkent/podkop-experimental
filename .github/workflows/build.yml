@@ -26,6 +26,9 @@ jobs:
       - id: version
         run: |
           VERSION=$(git describe --tags --exact-match 2>/dev/null || echo "0.$(date +%d%m%Y)")
+          # a tag is written v0.8.0; the builds take the number and add the letter where the
+          # package manager wants it (sdk/build.sh, Dockerfile-ipk)
+          VERSION=${VERSION#v}
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
   matrix:
