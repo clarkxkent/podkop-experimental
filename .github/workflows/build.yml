@@ -171,7 +171,10 @@ jobs:
       - name: Download the packages podkop
         uses: actions/download-artifact@v4
         with:
-          pattern: podkop-*
+          # podkop-ipk-<pkgarch> and podkop-apk-<pkgarch> only: "podkop-*" takes the build
+          # records of docker/build-push-action as well, named <owner>~<repository>~<id>.dockerbuild
+          # (podkop-net~...), which are no zip archives, and the download fails
+          pattern: podkop-?pk-*
           merge-multiple: true
           path: ./filtered-bin/release
 
