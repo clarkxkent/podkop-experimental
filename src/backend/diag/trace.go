@@ -81,9 +81,10 @@ func (t *Trace) Stop() []string {
 
 // tracedPacket is what a trace tells of one packet of a check.
 type tracedPacket struct {
-	// question: a DNS question for the check name, not a TCP packet of its connection
-	question bool
-	flags    string
+	// question: a DNS question for the check name, not a TCP packet of its connection;
+	// redirected: sent to another destination by NAT
+	question, redirected bool
+	flags                string
 	// source and destination are the addresses of the packet
 	source, destination netip.Addr
 	// hooks are the hooks of the base chains it passed, in order
@@ -106,8 +107,9 @@ type traceEvent struct {
 
 var (
 	counters = regexp.MustCompile(` ?counter packets [0-9]+ bytes [0-9]+`)
-	// what sends a packet elsewhere than its destination: a DNS question to another server
-	redirects = regexp.MustCompile(`\b(dnat|redirect|tproxy)\b`)
+	// a rule that sends a packet elsewhere than its destination: a DNS question to another
+	// server ("dnat ip to 192.168.1.2:53", "redirect to :5353", a bare "redirect")
+	redirects = regexp.MustCompile(`(^| )((dnat|tproxy)( ip6?)? to |redirect( to |$| comment ))`)
 )
 
 func parseTraceLine(line string) (traceEvent, bool) {
@@ -174,9 +176,16 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 			switch {
 			case packet.question:
 				// the rules of podkop do not take DNS questions; what may is another
-				// table that sends them to a server of its own
-				if !ours && redirects.MatchString(event.text) {
+				// table that sends them to a server of its own. NAT is decided by the
+				// first packet of a flow: a later one is told by a rule that matches
+				// a flow whose destination was rewritten
+				switch {
+				case !ours && redirects.MatchString(event.text):
+					packet.redirected = true
 					packet.steps = append(packet.steps, "sent elsewhere by "+event.chain+": "+event.text)
+				case strings.Contains(event.text, "ct status dnat") && !packet.redirected:
+					packet.redirected = true
+					packet.steps = append(packet.steps, "sent elsewhere as the first question of its flow was ("+event.chain+": "+event.text+")")
 				}
 			case ours && strings.Contains(event.text, markOfPodkop) && !packet.marked:
 				packet.marked = true

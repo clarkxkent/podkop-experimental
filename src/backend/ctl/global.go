@@ -76,7 +76,13 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	listeners := diag.Listeners()
 	asks := []func(){
 		func() {
-			if device != nil {
+			switch {
+			case device == nil:
+			case !running:
+				// the router answers the LAN with its own DNS meanwhile: a check of the
+				// device would tell nothing of podkop
+				deviceLines = []string{"❌ This device was not checked: sing-box does not run"}
+			default:
 				deviceLines, client = device.run()
 			}
 		},

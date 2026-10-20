@@ -157,6 +157,18 @@ func TestTraceQuestions(t *testing.T) {
 			"inet fw4 input packet: "+questionRouter),
 		[]string{`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`},
 	}, {
+		// as fw4 writes them: the redirect, then the rule of the zone that accepts what was
+		// redirected, which a later question of the same flow passes alone
+		"a later question of a flow sent to another server",
+		join(question("q9", questionRouter, "inet fw4 dstnat packet: "+questionRouter,
+			`inet fw4 dstnat_lan rule meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" (verdict accept)`,
+			"inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`),
+			question("q10", questionRouter, "inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`)),
+		[]string{
+			`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`,
+			`to 192.168.78.1 (1): sent elsewhere as the first question of its flow was (inet fw4 input_lan: ct status dnat accept comment "!fw4: Accept port redirections") → reached the router (hook input)`,
+		},
+	}, {
 		"to a server past the router, while a connection of the check is traced too",
 		join(question("q5", questionPast, "inet fw4 forward packet: "+questionPast), start("q6", packetSYN, true),
 			traceLines("q6", "inet fw4 input packet: "+packetSYN)),
@@ -169,6 +181,20 @@ func TestTraceQuestions(t *testing.T) {
 	require.Empty(t, TraceStories(start("q7", packetSYN, true), traceHooks, true))
 	require.Equal(t, netip.MustParseAddr("192.168.78.10"), TraceSource(question("q8", questionPast), traceHooks))
 	require.False(t, TraceSource([]string{"garbage"}, traceHooks).IsValid())
+}
+
+func TestRedirects(t *testing.T) {
+	for text, want := range map[string]bool{
+		`meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS"`: true,
+		`udp dport 53 redirect`:                                          true,
+		`udp dport 53 dnat ip to 192.168.1.2:53`:                         true,
+		`udp dport 53 dnat to 192.168.1.2`:                               true,
+		`meta l4proto udp tproxy ip6 to [::1]:7777`:                      true,
+		`ct status dnat accept comment "!fw4: Accept port redirections"`: false,
+		`jump redirect_lan`:                                              false,
+	} {
+		require.Equal(t, want, redirects.MatchString(text), text)
+	}
 }
 
 func TestTCPFlags(t *testing.T) {
