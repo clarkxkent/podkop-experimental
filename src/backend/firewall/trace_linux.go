@@ -1,6 +1,9 @@
 package firewall
 
 import (
+	"strconv"
+	"strings"
+
 	"github.com/sagernet/nftables"
 	"github.com/sagernet/nftables/expr"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -8,10 +11,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// TraceTable is the table of the trace of a check (ArmTrace). It is a table of its own: the
-// updates of the backend's table do not take the trace away while a check runs, and a trace
-// left by a check that ended early is found by its name.
+// TraceTable begins the name of the table of the trace of a check (ArmTrace), which ends
+// with the port of the check: each check has a table of its own, so two checks at once
+// trace each its own packets. The updates of the backend's table do not take a trace away
+// while a check runs, and a table a check left (its process killed) is found by the name.
 const TraceTable = "PodkopTrace"
+
+// TraceTableFor names the table of the trace of a check with a port.
+func TraceTableFor(port uint16) string {
+	return TraceTable + strconv.Itoa(int(port))
+}
 
 const (
 	traceChain = "trace"
@@ -30,8 +39,8 @@ func ArmTrace(port uint16, label string) error {
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
-	table := &nftables.Table{Family: nftables.TableFamilyINet, Name: TraceTable}
-	if exists, _ := traceTableExists(conn); exists {
+	table := &nftables.Table{Family: nftables.TableFamilyINet, Name: TraceTableFor(port)}
+	if names, _ := traceTables(conn); contains(names, table.Name) {
 		conn.DelTable(table)
 	}
 	conn.AddTable(table)
@@ -76,31 +85,61 @@ func questionFor(label string) []expr.Any {
 	}
 }
 
-// DisarmTrace removes the trace table. Its absence is no error.
-func DisarmTrace() error {
+// DisarmTrace removes the trace table of a check. Its absence is no error.
+func DisarmTrace(name string) error {
+	return removeTraceTables(func(table string) bool { return table == name })
+}
+
+// DisarmTraces removes the trace tables every check left: the backend calls it when it
+// starts, for those of checks whose process was killed.
+func DisarmTraces() error {
+	return removeTraceTables(func(string) bool { return true })
+}
+
+func removeTraceTables(pick func(string) bool) error {
 	conn, err := nftables.New()
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
-	exists, err := traceTableExists(conn)
-	if err != nil || !exists {
+	names, err := traceTables(conn)
+	if err != nil {
 		return err
 	}
-	conn.DelTable(&nftables.Table{Family: nftables.TableFamilyINet, Name: TraceTable})
+	removed := false
+	for _, name := range names {
+		if pick(name) {
+			conn.DelTable(&nftables.Table{Family: nftables.TableFamilyINet, Name: name})
+			removed = true
+		}
+	}
+	if !removed {
+		return nil
+	}
 	return conn.Flush()
 }
 
-func traceTableExists(conn *nftables.Conn) (bool, error) {
+// traceTables names the trace tables there are.
+func traceTables(conn *nftables.Conn) ([]string, error) {
 	tables, err := conn.ListTables()
 	if err != nil {
-		return false, E.Cause(err, "list the tables")
+		return nil, E.Cause(err, "list the tables")
 	}
+	var names []string
 	for _, table := range tables {
-		if table.Family == nftables.TableFamilyINet && table.Name == TraceTable {
-			return true, nil
+		if table.Family == nftables.TableFamilyINet && strings.HasPrefix(table.Name, TraceTable) {
+			names = append(names, table.Name)
 		}
 	}
-	return false, nil
+	return names, nil
+}
+
+func contains(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
 }
 
 // ChainHooks names the hook of every base chain of the system, by "family table chain" as

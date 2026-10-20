@@ -1,9 +1,13 @@
 package diag
 
 import (
+	"encoding/binary"
 	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/mdlayher/netlink"
+	"golang.org/x/sys/unix"
 
 	"github.com/stretchr/testify/require"
 )
@@ -207,4 +211,66 @@ func TestTCPFlags(t *testing.T) {
 	require.Equal(t, "tcp", tcpFlags("ip protocol udp udp sport 53"))
 	require.True(t, strings.HasPrefix(packetACK, "iif"))
 	require.Equal(t, netip.MustParseAddr("fd00::10"), packetAddress("iif \"eth1\" ip6 saddr fd00::10 ip6 daddr fd00::1 ip6 nexthdr udp", "saddr"))
+}
+
+// traceMessage writes a trace event as the kernel sends it (nft_trace_notify).
+func traceMessage(t *testing.T, table string, kind uint32, handle uint64, verdict int32, network []byte, transport []byte) netlink.Message {
+	encoder := netlink.NewAttributeEncoder()
+	encoder.ByteOrder = binary.BigEndian
+	encoder.String(attrTable, table)
+	encoder.String(attrChain, "trace")
+	encoder.Uint32(attrID, 0x1234abcd)
+	encoder.Uint32(attrType, kind)
+	if kind == traceTypeRule {
+		encoder.Uint64(attrRuleHandle, handle)
+	}
+	encoder.Nested(attrVerdict, func(nested *netlink.AttributeEncoder) error {
+		nested.ByteOrder = binary.BigEndian
+		nested.Uint32(verdictCode, uint32(verdict))
+		return nil
+	})
+	if network != nil {
+		encoder.Bytes(attrNetworkHeader, network)
+		encoder.Bytes(attrTransportHeader, transport)
+		encoder.Uint32(attrNFProto, 2)
+	}
+	data, err := encoder.Encode()
+	require.NoError(t, err)
+	return netlink.Message{Header: netlink.Header{Type: netlink.HeaderType(nfnlSubsysNFTables<<8 | nftMsgTrace)},
+		Data: append([]byte{unix.NFPROTO_INET, 0, 0, 0}, data...)}
+}
+
+// The events of the kernel read back as the lines of nft monitor trace: the packet with
+// its addresses, ports and flags, the rule by its text (or its handle), the verdict; the
+// events of the table of another check left out.
+func TestTraceText(t *testing.T) {
+	ipv4 := []byte{0x45, 0, 0, 60, 0, 0, 0x40, 0, 64, 6, 0, 0, 192, 168, 78, 10, 198, 18, 0, 4}
+	tcp := make([]byte, 20)
+	binary.BigEndian.PutUint16(tcp[0:], 50000)
+	binary.BigEndian.PutUint16(tcp[2:], 40001)
+	tcp[13] = 0x02
+	var events []traceEvent
+	for _, message := range []netlink.Message{
+		traceMessage(t, "PodkopTrace40001", traceTypeRule, 3, -1, ipv4, tcp),
+		traceMessage(t, "PodkopTrace40001", traceTypePolicy, 0, 1, nil, nil),
+		traceMessage(t, "PodkopTrace40002", traceTypeRule, 3, -1, ipv4, tcp),
+		{Header: netlink.Header{Type: 0x0a0e}, Data: []byte{1, 0, 0, 0}},
+	} {
+		event, ok := decodeTraceMessage(message)
+		if ok {
+			events = append(events, event)
+		}
+	}
+	require.Len(t, events, 3)
+	texts := map[string]map[uint64]string{"inet PodkopTrace40001 trace": {3: "ip daddr 198.18.0.0/15 tcp dport 40001 meta nftrace set 1"}}
+	require.Equal(t, []string{
+		"trace id 1234abcd inet PodkopTrace trace packet: ip saddr 192.168.78.10 ip daddr 198.18.0.4 ip protocol tcp tcp sport 50000 tcp dport 40001 tcp flags == syn",
+		"trace id 1234abcd inet PodkopTrace trace rule ip daddr 198.18.0.0/15 tcp dport 40001 meta nftrace set 1 (verdict continue)",
+		"trace id 1234abcd inet PodkopTrace trace policy accept",
+	}, traceText(events, "PodkopTrace40001", texts))
+	lines := traceText(events[:1], "PodkopTrace40001", nil)
+	require.Equal(t, "trace id 1234abcd inet PodkopTrace trace rule handle 3 (verdict continue)", lines[1])
+	require.Equal(t, "syn", tcpFlags(strings.TrimPrefix(lines[0], "trace id 1234abcd inet PodkopTrace trace packet: ")))
+	require.Equal(t, "jump input_lan", verdictName(-3, "input_lan"))
+	require.Equal(t, "drop", verdictName(0, ""))
 }

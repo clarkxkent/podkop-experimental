@@ -12,6 +12,7 @@ import (
 	"github.com/itdoginfo/podkop/src/backend/api"
 	"github.com/itdoginfo/podkop/src/backend/clock"
 	"github.com/itdoginfo/podkop/src/backend/dataplane"
+	"github.com/itdoginfo/podkop/src/backend/firewall"
 	"github.com/itdoginfo/podkop/src/backend/logbuf"
 	"github.com/itdoginfo/podkop/src/backend/probe"
 	"github.com/itdoginfo/podkop/src/backend/supervisor"
@@ -39,6 +40,8 @@ var commandDaemon = &cobra.Command{
 		}
 		defer lock.Close()
 		processSettings()
+		// the packet traces of checks whose process was killed before it removed them
+		_ = firewall.DisarmTraces()
 		ctx, cancel := context.WithCancel(context.Background())
 		signals := make(chan os.Signal, 4)
 		signal.Notify(signals, syscall.SIGHUP, syscall.SIGTERM, os.Interrupt)

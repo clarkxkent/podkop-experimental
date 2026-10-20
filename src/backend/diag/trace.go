@@ -1,82 +1,394 @@
 package diag
 
 import (
-	"bufio"
+	"context"
+	"encoding/binary"
+	"errors"
+	"fmt"
+	"net"
 	"net/netip"
 	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/itdoginfo/podkop/src/backend/dataplane"
 	"github.com/itdoginfo/podkop/src/backend/firewall"
+	"github.com/mdlayher/netlink"
 	E "github.com/sagernet/sing/common/exceptions"
+	"golang.org/x/sys/unix"
 )
 
 // Trace is the trace of the packets of a check a device makes (firewall.ArmTrace), heard
-// through "nft monitor trace". The nft program comes with firewall4 (nftables-json), so
-// every router podkop runs on has it.
+// from the kernel over netlink: the group of the traces of nf_tables. "nft monitor trace"
+// would tell the same, but it reads the whole ruleset with the elements of every set
+// before it listens: with a set of 100 000 subnets it takes 143 MB and 2 s, with 300 000
+// 425 MB and 13 s (OpenWrt 24.10, nft 1.1.1), more than a router may have. The events
+// name a rule by its handle; the text of the rules a packet met is read afterwards, chain
+// by chain (nft list chain reads no elements of named sets).
 type Trace struct {
-	command *exec.Cmd
-	access  sync.Mutex
-	lines   []string
-	done    chan struct{}
+	conn   *netlink.Conn
+	table  string
+	access sync.Mutex
+	events []traceEvent
+	// lost tells that the kernel dropped events: the buffer of the socket was full
+	lost bool
+	done chan struct{}
 }
 
-// traceLinesKept bounds what a trace keeps: a check makes a few packets a second, each a
-// few dozen lines.
-const traceLinesKept = 20000
+// traceEventsKept bounds what a trace keeps: a check makes a few packets a second, each a
+// few dozen events.
+const traceEventsKept = 20000
 
 // StartTrace listens to the traces of the kernel and arms the trace of the packets of a
 // check (firewall.ArmTrace): the TCP packets to the FakeIP range and a port, the DNS
 // questions for the check name of a label. The listener is there first: a packet traced
 // before it would be told to nobody.
 func StartTrace(port uint16, label string) (*Trace, error) {
-	path, err := exec.LookPath("nft")
+	conn, err := netlink.Dial(unix.NETLINK_NETFILTER, nil)
 	if err != nil {
-		return nil, E.New("no nft program")
+		return nil, E.Cause(err, "open netlink")
 	}
-	command := exec.Command(path, "monitor", "trace")
-	output, err := command.StdoutPipe()
+	err = conn.JoinGroup(unix.NFNLGRP_NFTRACE)
 	if err != nil {
-		return nil, err
+		conn.Close()
+		return nil, E.Cause(err, "listen to the traces of nf_tables")
 	}
-	err = command.Start()
-	if err != nil {
-		return nil, E.Cause(err, "start nft monitor trace")
-	}
-	trace := &Trace{command: command, done: make(chan struct{})}
-	go func() {
-		defer close(trace.done)
-		scanner := bufio.NewScanner(output)
-		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
-		for scanner.Scan() {
-			trace.access.Lock()
-			if len(trace.lines) < traceLinesKept {
-				trace.lines = append(trace.lines, scanner.Text())
-			}
-			trace.access.Unlock()
-		}
-	}()
+	// a burst of events must not be lost while the reader is busy
+	_ = conn.SetReadBuffer(1 << 20)
+	trace := &Trace{conn: conn, table: firewall.TraceTableFor(port), done: make(chan struct{})}
+	go trace.read()
 	err = firewall.ArmTrace(port, label)
 	if err != nil {
-		_ = command.Process.Kill()
-		_ = command.Wait()
+		conn.Close()
+		<-trace.done
 		return nil, err
 	}
 	return trace, nil
 }
 
-// Stop removes the trace table, ends the listener and returns what it heard.
+func (t *Trace) read() {
+	defer close(t.done)
+	for {
+		messages, err := t.conn.Receive()
+		if err != nil {
+			if errors.Is(err, unix.ENOBUFS) {
+				t.access.Lock()
+				t.lost = true
+				t.access.Unlock()
+				continue
+			}
+			// the socket was closed by Stop, or broke
+			return
+		}
+		for _, message := range messages {
+			event, ok := decodeTraceMessage(message)
+			if !ok {
+				continue
+			}
+			t.access.Lock()
+			if len(t.events) < traceEventsKept {
+				t.events = append(t.events, event)
+			}
+			t.access.Unlock()
+		}
+	}
+}
+
+// Stop removes the trace table, ends the listener and returns what it heard, as lines of
+// the form "nft monitor trace" writes (the text of each rule read from its chain). The
+// table of this check is named as the one of every check ("inet PodkopTrace trace");
+// what the tables of other checks traced meanwhile is left out.
 func (t *Trace) Stop() []string {
-	_ = firewall.DisarmTrace()
-	_ = t.command.Process.Kill()
-	_ = t.command.Wait()
+	_ = firewall.DisarmTrace(t.table)
+	t.conn.Close()
 	<-t.done
 	t.access.Lock()
-	defer t.access.Unlock()
-	return t.lines
+	events, lost := t.events, t.lost
+	t.access.Unlock()
+	lines := traceText(events, t.table, ruleTexts(events))
+	if lost {
+		lines = append(lines, "lost: the kernel dropped some events of the trace")
+	}
+	return lines
+}
+
+// traceEvent is one event of a trace as the kernel tells it (nft_trace_notify).
+type traceEvent struct {
+	id                 uint32
+	family             uint8
+	table, chain       string
+	kind               uint32
+	handle             uint64
+	verdict            int32
+	verdictChain       string
+	policy             uint32
+	hasPolicy          bool
+	nfproto            uint32
+	iif                uint32
+	network, transport []byte
+}
+
+// the attributes of a trace (enum nft_trace_attributes), its types and the message
+const (
+	attrTable           = unix.NFTA_TRACE_TABLE
+	attrChain           = unix.NFTA_TRACE_CHAIN
+	attrRuleHandle      = unix.NFTA_TRACE_RULE_HANDLE
+	attrType            = unix.NFTA_TRACE_TYPE
+	attrVerdict         = unix.NFTA_TRACE_VERDICT
+	attrID              = unix.NFTA_TRACE_ID
+	attrNetworkHeader   = unix.NFTA_TRACE_NETWORK_HEADER
+	attrTransportHeader = unix.NFTA_TRACE_TRANSPORT_HEADER
+	attrIIF             = unix.NFTA_TRACE_IIF
+	attrNFProto         = unix.NFTA_TRACE_NFPROTO
+	attrPolicy          = unix.NFTA_TRACE_POLICY
+
+	verdictCode  = unix.NFTA_VERDICT_CODE
+	verdictChain = unix.NFTA_VERDICT_CHAIN
+
+	traceTypePolicy = unix.NFT_TRACETYPE_POLICY
+	traceTypeReturn = unix.NFT_TRACETYPE_RETURN
+	traceTypeRule   = unix.NFT_TRACETYPE_RULE
+
+	nfnlSubsysNFTables = unix.NFNL_SUBSYS_NFTABLES
+	nftMsgTrace        = unix.NFT_MSG_TRACE
+)
+
+func decodeTraceMessage(message netlink.Message) (traceEvent, bool) {
+	if message.Header.Type != netlink.HeaderType(nfnlSubsysNFTables<<8|nftMsgTrace) || len(message.Data) < 4 {
+		return traceEvent{}, false
+	}
+	event := traceEvent{family: message.Data[0]}
+	decoder, err := netlink.NewAttributeDecoder(message.Data[4:])
+	if err != nil {
+		return traceEvent{}, false
+	}
+	decoder.ByteOrder = binary.BigEndian
+	for decoder.Next() {
+		switch decoder.Type() {
+		case attrTable:
+			event.table = decoder.String()
+		case attrChain:
+			event.chain = decoder.String()
+		case attrRuleHandle:
+			event.handle = decoder.Uint64()
+		case attrType:
+			event.kind = decoder.Uint32()
+		case attrVerdict:
+			decoder.Nested(func(nested *netlink.AttributeDecoder) error {
+				nested.ByteOrder = binary.BigEndian
+				for nested.Next() {
+					switch nested.Type() {
+					case verdictCode:
+						event.verdict = int32(nested.Uint32())
+					case verdictChain:
+						event.verdictChain = nested.String()
+					}
+				}
+				return nil
+			})
+		case attrID:
+			event.id = decoder.Uint32()
+		case attrNetworkHeader:
+			event.network = decoder.Bytes()
+		case attrTransportHeader:
+			event.transport = decoder.Bytes()
+		case attrIIF:
+			event.iif = decoder.Uint32()
+		case attrNFProto:
+			event.nfproto = decoder.Uint32()
+		case attrPolicy:
+			event.policy, event.hasPolicy = decoder.Uint32(), true
+		}
+	}
+	if decoder.Err() != nil || event.table == "" || event.chain == "" {
+		return traceEvent{}, false
+	}
+	return event, true
+}
+
+func familyName(family uint8) string {
+	switch family {
+	case unix.NFPROTO_INET:
+		return "inet"
+	case unix.NFPROTO_IPV4:
+		return "ip"
+	case unix.NFPROTO_IPV6:
+		return "ip6"
+	case unix.NFPROTO_ARP:
+		return "arp"
+	case unix.NFPROTO_BRIDGE:
+		return "bridge"
+	case unix.NFPROTO_NETDEV:
+		return "netdev"
+	}
+	return strconv.Itoa(int(family))
+}
+
+func verdictName(code int32, chain string) string {
+	switch code {
+	case 0:
+		return "drop"
+	case 1:
+		return "accept"
+	case 2:
+		return "stolen"
+	case 3:
+		return "queue"
+	case 4:
+		return "repeat"
+	case -1:
+		return "continue"
+	case -2:
+		return "break"
+	case -3:
+		return "jump " + chain
+	case -4:
+		return "goto " + chain
+	case -5:
+		return "return"
+	}
+	return strconv.Itoa(int(code))
+}
+
+// ruleTexts reads the rules of the chains the events name a rule of: "family table chain"
+// → handle → text, as nft writes them. A chain that cannot be read in the time left is
+// left out: its rules are named by their handle.
+func ruleTexts(events []traceEvent) map[string]map[uint64]string {
+	// the report waits for this: a few chains, each read in a fraction of a second
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	texts := make(map[string]map[uint64]string)
+	for _, event := range events {
+		if event.kind != traceTypeRule {
+			continue
+		}
+		key := familyName(event.family) + " " + event.table + " " + event.chain
+		if _, read := texts[key]; read {
+			continue
+		}
+		texts[key] = readChain(ctx, familyName(event.family), event.table, event.chain)
+	}
+	return texts
+}
+
+func readChain(ctx context.Context, family, table, chain string) map[uint64]string {
+	rules := make(map[uint64]string)
+	output, err := exec.CommandContext(ctx, "nft", "-a", "list", "chain", family, table, chain).Output()
+	if err != nil {
+		return rules
+	}
+	for _, line := range strings.Split(string(output), "\n") {
+		line = strings.TrimSpace(line)
+		text, number, found := strings.Cut(line, " # handle ")
+		if !found || strings.HasSuffix(text, "{") {
+			continue
+		}
+		handle, err := strconv.ParseUint(number, 10, 64)
+		if err == nil {
+			rules[handle] = text
+		}
+	}
+	return rules
+}
+
+// traceText writes the events as "nft monitor trace" does: "trace id <id> <family>
+// <table> <chain> " and then "packet: <fields>" where the kernel told the headers of the
+// packet (the first event of each base chain), "rule <text> (verdict <verdict>)",
+// "verdict <verdict>" or "policy <verdict>". The table of this check is written as
+// firewall.TraceTable; the events of the tables of other checks are left out.
+func traceText(events []traceEvent, own string, texts map[string]map[uint64]string) []string {
+	var lines []string
+	interfaces := make(map[uint32]string)
+	for _, event := range events {
+		table := event.table
+		if strings.HasPrefix(table, firewall.TraceTable) {
+			if table != own {
+				continue
+			}
+			table = firewall.TraceTable
+		}
+		chain := familyName(event.family) + " " + event.table + " " + event.chain
+		prefix := fmt.Sprintf("trace id %08x %s %s %s ", event.id, familyName(event.family), table, event.chain)
+		if len(event.network) > 0 {
+			lines = append(lines, prefix+"packet: "+packetFields(event, interfaces))
+		}
+		switch event.kind {
+		case traceTypeRule:
+			text, known := texts[chain][event.handle]
+			if !known {
+				text = "handle " + strconv.FormatUint(event.handle, 10)
+			}
+			lines = append(lines, prefix+"rule "+text+" (verdict "+verdictName(event.verdict, event.verdictChain)+")")
+		case traceTypeReturn:
+			lines = append(lines, prefix+"verdict "+verdictName(event.verdict, event.verdictChain))
+		case traceTypePolicy:
+			policy := "accept"
+			if event.hasPolicy && event.policy == 0 {
+				policy = "drop"
+			}
+			lines = append(lines, prefix+"policy "+policy)
+		}
+	}
+	return lines
+}
+
+// packetFields writes what the parsing of a trace reads of a packet, as nft writes it:
+// the input device, the addresses, and the ports and flags of TCP or UDP.
+func packetFields(event traceEvent, interfaces map[uint32]string) string {
+	var fields []string
+	if event.iif != 0 {
+		name, known := interfaces[event.iif]
+		if !known {
+			if device, err := net.InterfaceByIndex(int(event.iif)); err == nil {
+				name = device.Name
+			} else {
+				name = strconv.Itoa(int(event.iif))
+			}
+			interfaces[event.iif] = name
+		}
+		fields = append(fields, `iif "`+name+`"`)
+	}
+	header := event.network
+	var protocol byte
+	switch {
+	case len(header) >= 20 && header[0]>>4 == 4:
+		source, _ := netip.AddrFromSlice(header[12:16])
+		destination, _ := netip.AddrFromSlice(header[16:20])
+		protocol = header[9]
+		fields = append(fields, "ip saddr "+source.String(), "ip daddr "+destination.String())
+	case len(header) >= 40 && header[0]>>4 == 6:
+		source, _ := netip.AddrFromSlice(header[8:24])
+		destination, _ := netip.AddrFromSlice(header[24:40])
+		protocol = header[6]
+		fields = append(fields, "ip6 saddr "+source.String(), "ip6 daddr "+destination.String())
+	}
+	transport := event.transport
+	switch {
+	case protocol == unix.IPPROTO_TCP && len(transport) >= 14:
+		fields = append(fields, "ip protocol tcp",
+			"tcp sport "+strconv.Itoa(int(binary.BigEndian.Uint16(transport[0:]))),
+			"tcp dport "+strconv.Itoa(int(binary.BigEndian.Uint16(transport[2:]))),
+			"tcp flags == "+tcpFlagNames(transport[13]))
+	case protocol == unix.IPPROTO_UDP && len(transport) >= 8:
+		fields = append(fields, "ip protocol udp",
+			"udp sport "+strconv.Itoa(int(binary.BigEndian.Uint16(transport[0:]))),
+			"udp dport "+strconv.Itoa(int(binary.BigEndian.Uint16(transport[2:]))),
+			"udp length "+strconv.Itoa(int(binary.BigEndian.Uint16(transport[4:]))))
+	}
+	return strings.Join(fields, " ")
+}
+
+func tcpFlagNames(value byte) string {
+	var names []string
+	for bit, name := range []string{"fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr"} {
+		if value&(1<<bit) != 0 {
+			names = append(names, name)
+		}
+	}
+	return strings.Join(names, " | ")
 }
 
 // tracedPacket is what a trace tells of one packet of a check.
@@ -98,10 +410,10 @@ type tracedPacket struct {
 	dropped string
 }
 
-// traceEvent is one line of nft monitor trace: "trace id <id> <family> <table> <chain>
+// traceLine is one line of nft monitor trace: "trace id <id> <family> <table> <chain>
 // packet: <fields>", "... rule <rule> (verdict <verdict>)", "... verdict <verdict> ...",
 // "... policy <verdict> ...".
-type traceEvent struct {
+type traceLine struct {
 	id, chain, kind, text, verdict string
 }
 
@@ -112,12 +424,12 @@ var (
 	redirects = regexp.MustCompile(`(^| )((dnat|tproxy)( ip6?)? to |redirect( to |$| comment ))`)
 )
 
-func parseTraceLine(line string) (traceEvent, bool) {
+func parseTraceLine(line string) (traceLine, bool) {
 	fields := strings.SplitN(line, " ", 7)
 	if len(fields) < 7 || fields[0] != "trace" || fields[1] != "id" {
-		return traceEvent{}, false
+		return traceLine{}, false
 	}
-	event := traceEvent{id: fields[2], chain: fields[3] + " " + fields[4] + " " + fields[5]}
+	event := traceLine{id: fields[2], chain: fields[3] + " " + fields[4] + " " + fields[5]}
 	rest := fields[6]
 	switch {
 	case strings.HasPrefix(rest, "packet: "):
@@ -136,7 +448,7 @@ func parseTraceLine(line string) (traceEvent, bool) {
 		event.kind = kind
 		event.verdict, _, _ = strings.Cut(after, " ")
 	default:
-		return traceEvent{}, false
+		return traceLine{}, false
 	}
 	return event, true
 }
@@ -230,13 +542,7 @@ func tcpFlags(fields string) string {
 	if !strings.HasPrefix(after, "0x") || err != nil {
 		return after
 	}
-	var names []string
-	for bit, name := range []string{"fin", "syn", "rst", "psh", "ack", "urg", "ecn", "cwr"} {
-		if value&(1<<bit) != 0 {
-			names = append(names, name)
-		}
-	}
-	return strings.Join(names, " | ")
+	return tcpFlagNames(byte(value))
 }
 
 // packetAddress reads an address of the fields of a traced packet: "ip saddr 192.168.1.10"
