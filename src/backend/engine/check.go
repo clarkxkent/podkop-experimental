@@ -17,8 +17,11 @@ import (
 	"github.com/sagernet/sing/service"
 )
 
-// buildTimeout bounds the building of an instance: milliseconds as a rule.
-var buildTimeout = 20 * time.Second
+// buildTimeout bounds the building of an instance: milliseconds as a rule, but sing-box
+// reads the local lists while it builds, and a big list in JSON that its fast reader leaves
+// to the decoder takes seconds on a slow router. A bound for a build that hangs, not one a
+// valid list may reach.
+var buildTimeout = 60 * time.Second
 
 // notes collects what sing-box would report as deprecated while it builds and starts: the
 // manager of a run prints such a note, and for one about to be removed ends the process.

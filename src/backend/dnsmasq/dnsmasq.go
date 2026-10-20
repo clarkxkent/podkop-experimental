@@ -67,9 +67,10 @@ func (Router) Exists(path string) bool {
 
 // state is what the first dnsmasq of the settings has.
 type state struct {
-	servers   []string
-	noResolv  string
-	cacheSize string
+	servers    []string
+	noResolv   string
+	cacheSize  string
+	resolvFile string
 	// what was kept of the settings before the backend took dnsmasq over
 	keptServers   []string
 	keptNoResolv  string
@@ -93,9 +94,10 @@ func read(system System) (*state, error) {
 	}
 	first := sections[0]
 	return &state{
-		servers:   strings.Fields(first.Get("server")),
-		noResolv:  first.Get("noresolv"),
-		cacheSize: first.Get("cachesize"),
+		servers:    strings.Fields(first.Get("server")),
+		noResolv:   first.Get("noresolv"),
+		cacheSize:  first.Get("cachesize"),
+		resolvFile: first.Get("resolvfile"),
 		// compat: dnsmasq-backup-keys
 		keptServers:   strings.Fields(first.Get("podkop_server")),
 		keptNoResolv:  first.Get("podkop_noresolv"),
@@ -129,6 +131,9 @@ func Ours(system System) (bool, error) {
 // are kept under other names, and it is restarted. A dnsmasq that asks the backend
 // already is left alone, without a restart: the shell backend restarts it on every start,
 // which takes the DNS of the LAN away for three seconds each time.
+// A dnsmasq taken over before and changed since (a server added by hand while the backend
+// ran) keeps what was kept the first time: its "noresolv" and its cache size now are the
+// backend's own, and the servers added are kept beside the others.
 // It tells whether anything was changed.
 func TakeOver(system System) (bool, error) {
 	current, err := read(system)
@@ -136,26 +141,39 @@ func TakeOver(system System) (bool, error) {
 		return false, err
 	}
 	if current.ours() {
-		return false, nil
+		if current.taken() {
+			return false, nil
+		}
+		// set to ask the backend with nothing kept and no marker (the shell backend keeps
+		// only the options that were set): marked, or nothing would ever give it back
+		err = system.Batch("set " + section + "." + marker + "='1'\ncommit dhcp\n")
+		return false, err
 	}
+	// taken over before and still asking the backend: what was kept is the original
+	again := current.taken() && contains(current.servers, address)
 	var script strings.Builder
-	hadServers := false
+	if current.taken() && !again {
+		// given back by hand, or by the guard, since: what was kept is stale
+		script.WriteString("delete " + section + ".podkop_server\n")
+		script.WriteString("delete " + section + ".podkop_noresolv\n")
+		script.WriteString("delete " + section + ".podkop_cachesize\n")
+		current.keptServers = nil
+	}
 	for _, server := range current.servers {
-		hadServers = true
-		if server != address {
-			script.WriteString("add_list " + section + ".podkop_server=" + quote(server) + "\n")
+		if server != address && !contains(current.keptServers, server) {
+			script.WriteString("add_list " + section + ".podkop_server=" + Quote(server) + "\n")
 		}
 	}
-	if hadServers {
+	if len(current.servers) > 0 {
 		script.WriteString("delete " + section + ".server\n")
 	}
-	if current.noResolv != "" {
-		script.WriteString("set " + section + ".podkop_noresolv=" + quote(current.noResolv) + "\n")
+	if current.noResolv != "" && !again {
+		script.WriteString("set " + section + ".podkop_noresolv=" + Quote(current.noResolv) + "\n")
 	}
-	if current.cacheSize != "" {
-		script.WriteString("set " + section + ".podkop_cachesize=" + quote(current.cacheSize) + "\n")
+	if current.cacheSize != "" && !again {
+		script.WriteString("set " + section + ".podkop_cachesize=" + Quote(current.cacheSize) + "\n")
 	}
-	script.WriteString("add_list " + section + ".server=" + quote(address) + "\n")
+	script.WriteString("add_list " + section + ".server=" + Quote(address) + "\n")
 	script.WriteString("set " + section + ".noresolv='1'\n")
 	script.WriteString("set " + section + ".cachesize='0'\n")
 	script.WriteString("set " + section + "." + marker + "='1'\n")
@@ -189,25 +207,36 @@ func Restore(system System) (bool, error) {
 	if current.keptCacheSize == "" {
 		script.WriteString("set " + section + ".cachesize='150'\n")
 	} else {
-		script.WriteString("set " + section + ".cachesize=" + quote(current.keptCacheSize) + "\n")
+		script.WriteString("set " + section + ".cachesize=" + Quote(current.keptCacheSize) + "\n")
 		script.WriteString("delete " + section + ".podkop_cachesize\n")
 	}
 	if current.keptNoResolv == "" {
 		script.WriteString("set " + section + ".noresolv='0'\n")
 	} else {
-		script.WriteString("set " + section + ".noresolv=" + quote(current.keptNoResolv) + "\n")
+		script.WriteString("set " + section + ".noresolv=" + Quote(current.keptNoResolv) + "\n")
 		script.WriteString("delete " + section + ".podkop_noresolv\n")
+	}
+	// the servers kept, and those added by hand while the backend ran
+	servers := current.keptServers
+	for _, server := range current.servers {
+		if server != address && !contains(servers, server) {
+			servers = append(servers, server)
+		}
 	}
 	if len(current.servers) > 0 {
 		script.WriteString("delete " + section + ".server\n")
 	}
+	for _, server := range servers {
+		script.WriteString("add_list " + section + ".server=" + Quote(server) + "\n")
+	}
 	if len(current.keptServers) > 0 {
-		for _, server := range current.keptServers {
-			script.WriteString("add_list " + section + ".server=" + quote(server) + "\n")
-		}
 		script.WriteString("delete " + section + ".podkop_server\n")
-	} else if system.Exists(resolvFile) {
-		script.WriteString("set " + section + ".resolvfile=" + quote(resolvFile) + "\n")
+	}
+	if !general(servers) && system.Exists(resolvFile) {
+		// a resolv file set by hand stays
+		if current.resolvFile == "" {
+			script.WriteString("set " + section + ".resolvfile=" + Quote(resolvFile) + "\n")
+		}
 		if isOne(current.keptNoResolv) {
 			// no servers to ask and told not to read the resolvers: it would ask nobody
 			script.WriteString("set " + section + ".noresolv='0'\n")
@@ -221,12 +250,32 @@ func Restore(system System) (bool, error) {
 	return true, system.Restart()
 }
 
+// general tells whether a server of a list is asked for every name: "server=/domain/address"
+// is for the names of a domain only.
+func general(servers []string) bool {
+	for _, server := range servers {
+		if !strings.HasPrefix(server, "/") {
+			return true
+		}
+	}
+	return false
+}
+
+func contains(list []string, value string) bool {
+	for _, item := range list {
+		if item == value {
+			return true
+		}
+	}
+	return false
+}
+
 func isOne(text string) bool {
 	text = strings.TrimLeft(strings.TrimSpace(text), "+0")
 	return text == "1"
 }
 
-// quote writes a value for the uci program.
-func quote(value string) string {
+// Quote writes a value for a line of "uci batch".
+func Quote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
 }

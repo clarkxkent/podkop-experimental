@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net/netip"
 	"os"
@@ -418,6 +419,18 @@ func wantRanges(t *testing.T, prefixes []netip.Prefix) []netipx.IPRange {
 }
 
 // sameRanges takes no ranges as no ranges, nil or not.
+// rangesOfSpans writes spans as ranges of addresses, for a comparison.
+func rangesOfSpans(spans []span) []netipx.IPRange {
+	var result []netipx.IPRange
+	for _, item := range spans {
+		var from, to [4]byte
+		binary.BigEndian.PutUint32(from[:], item[0])
+		binary.BigEndian.PutUint32(to[:], item[1])
+		result = append(result, netipx.IPRangeFrom(netip.AddrFrom4(from), netip.AddrFrom4(to)))
+	}
+	return result
+}
+
 func sameRanges(t *testing.T, want []netipx.IPRange, got []netipx.IPRange, message ...any) {
 	if len(want) == 0 && len(got) == 0 {
 		return
@@ -430,7 +443,7 @@ func sameRanges(t *testing.T, want []netipx.IPRange, got []netipx.IPRange, messa
 func TestMergeAsASetBuilder(t *testing.T) {
 	for _, count := range []int{0, 1, 2, 10, 1000, 20000} {
 		list := subnets(count)
-		sameRanges(t, wantRanges(t, list), merge(list), "%d prefixes", count)
+		sameRanges(t, wantRanges(t, list), rangesOfSpans(merge(list)), "%d prefixes", count)
 	}
 	for _, list := range [][]netip.Prefix{
 		prefixes("0.0.0.0/0"),
@@ -439,7 +452,7 @@ func TestMergeAsASetBuilder(t *testing.T) {
 		prefixes("1.1.1.0/24", "1.1.2.0/24", "1.1.4.0/24", "1.1.1.128/25", "2001:db8::/32", "1.1.3.0/24"),
 		prefixes("::ffff:1.2.3.4/128", "9.9.9.9/32", "9.9.9.9/32"),
 	} {
-		sameRanges(t, wantRanges(t, list), merge(list), "%v", list)
+		sameRanges(t, wantRanges(t, list), rangesOfSpans(merge(list)), "%v", list)
 	}
 	// what differs of two lists, by one walk, is what differs of the two sets
 	before, after := merge(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24")), merge(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24"))

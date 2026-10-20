@@ -304,7 +304,8 @@ func (c Client) Lists() ([]ListState, error) {
 func (c Client) Probe(label string, wait time.Duration) (*ProbeResult, error) {
 	result := new(ProbeResult)
 	path := "/probe?label=" + url.QueryEscape(label) + "&wait=" + strconv.FormatInt(wait.Milliseconds(), 10)
-	err := c.call(http.MethodGet, path, wait+15*time.Second, result)
+	// LuCI gives up a call after 20 s: global_check waits for this beside its other checks
+	err := c.call(http.MethodGet, path, wait+8*time.Second, result)
 	if err != nil {
 		return nil, err
 	}

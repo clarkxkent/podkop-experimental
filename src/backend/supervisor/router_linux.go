@@ -2,11 +2,13 @@ package supervisor
 
 import (
 	"os"
+	"strings"
 
 	"github.com/itdoginfo/podkop/src/backend/dnsmasq"
 	"github.com/itdoginfo/podkop/src/backend/firewall"
 	"github.com/itdoginfo/podkop/src/backend/netcfg"
 	"github.com/itdoginfo/podkop/src/backend/uci"
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // Router is the System of an OpenWrt router.
@@ -31,7 +33,12 @@ func (Router) RoutingPresent() (bool, error) { return netcfg.Present() }
 func (Router) FirewallPresent() (bool, error) { return firewall.Exists() }
 
 func (Router) SetClashSecret(key string) error {
-	return dnsmasq.Router{}.Batch("set podkop.settings.yacd_secret_key='" + key + "'\ncommit podkop\n")
+	// a line of uci batch a command: the key is quoted, and a key that would end the
+	// line is refused
+	if strings.ContainsAny(key, "\r\n") {
+		return E.New("the key of the Clash API has a line break")
+	}
+	return dnsmasq.Router{}.Batch("set podkop.settings.yacd_secret_key=" + dnsmasq.Quote(key) + "\ncommit podkop\n")
 }
 
 func (Router) UpdateFirewall(previous *firewall.Plan, next *firewall.Plan) error {

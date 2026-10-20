@@ -91,10 +91,26 @@ type Plan struct {
 // an update has them from when it was the next one.
 type merged struct {
 	done   bool
-	ranges []netipx.IPRange
+	ranges []span
 }
 
-func (m *merged) of(prefixes []netip.Prefix) []netipx.IPRange {
+// span is a range of IPv4 addresses, both ends included, as two numbers: eight bytes and
+// no pointer, where a netipx.IPRange takes forty-eight (on a 64-bit router) and is scanned
+// by the collector. A plan keeps those of every list it marks for the life of a run.
+type span [2]uint32
+
+func spansOf(ranges []netipx.IPRange) []span {
+	result := make([]span, 0, len(ranges))
+	for _, item := range ranges {
+		if item.From().Is4() {
+			from, to := item.From().As4(), item.To().As4()
+			result = append(result, span{binary.BigEndian.Uint32(from[:]), binary.BigEndian.Uint32(to[:])})
+		}
+	}
+	return result
+}
+
+func (m *merged) of(prefixes []netip.Prefix) []span {
 	if !m.done {
 		m.ranges, m.done = merge(prefixes), true
 	}
@@ -165,12 +181,12 @@ const fillLot = 10000
 // transaction, so that a change of a few items is a few elements however big the set
 // is, and a packet sees the old set or the new one. A change of more than fillLot ranges,
 // or a set the kernel does not have as the previous ranges say, is filled anew.
-func updateSet(name string, before []netipx.IPRange, after []netipx.IPRange) error {
+func updateSet(name string, before []span, after []span) error {
 	if slices.Equal(before, after) {
 		return nil
 	}
-	gone, came := rangesDiffer(before, after)
-	if len(gone)+len(came) <= fillLot {
+	gone, came, few := rangesDifferUpTo(before, after, fillLot)
+	if few {
 		conn, err := nftables.New()
 		if err != nil {
 			return E.Cause(err, "open netlink")
@@ -193,8 +209,19 @@ func updateSet(name string, before []netipx.IPRange, after []netipx.IPRange) err
 // rangesDiffer returns the ranges of before that after does not have, and those of
 // after that before does not have. Both are in order and do not overlap, as merge makes
 // them: one walk through the two.
-func rangesDiffer(before []netipx.IPRange, after []netipx.IPRange) (gone []netipx.IPRange, came []netipx.IPRange) {
+func rangesDiffer(before []span, after []span) (gone []span, came []span) {
+	gone, came, _ = rangesDifferUpTo(before, after, -1)
+	return gone, came
+}
+
+// rangesDifferUpTo is rangesDiffer that gives up once more than limit ranges differ (a
+// negative limit: never), and then returns none: the set is filled anew, and a big list
+// changed whole is not held a third time meanwhile.
+func rangesDifferUpTo(before []span, after []span, limit int) (gone []span, came []span, few bool) {
 	for i, j := 0, 0; i < len(before) || j < len(after); {
+		if limit >= 0 && len(gone)+len(came) > limit {
+			return nil, nil, false
+		}
 		switch {
 		case j == len(after):
 			gone = append(gone, before[i])
@@ -206,7 +233,7 @@ func rangesDiffer(before []netipx.IPRange, after []netipx.IPRange) (gone []netip
 			i++
 			j++
 		default:
-			order := before[i].From().Compare(after[j].From())
+			order := cmp.Compare(before[i][0], after[j][0])
 			if order <= 0 {
 				gone = append(gone, before[i])
 				i++
@@ -217,7 +244,10 @@ func rangesDiffer(before []netipx.IPRange, after []netipx.IPRange) (gone []netip
 			}
 		}
 	}
-	return gone, came
+	if limit >= 0 && len(gone)+len(came) > limit {
+		return nil, nil, false
+	}
+	return gone, came, true
 }
 
 // merge makes ranges of the IPv4 prefixes, in order: overlapping and adjacent ones become
@@ -225,8 +255,8 @@ func rangesDiffer(before []netipx.IPRange, after []netipx.IPRange) (gone []netip
 // offers ("auto-merge") is done by that program, not by the kernel. The prefixes become
 // pairs of numbers sorted in place: a list of a hundred thousand subnets is merged in a
 // few megabytes, where a set builder allocated a hundred.
-func merge(prefixes []netip.Prefix) []netipx.IPRange {
-	spans := make([][2]uint32, 0, len(prefixes))
+func merge(prefixes []netip.Prefix) []span {
+	spans := make([]span, 0, len(prefixes))
 	for _, prefix := range prefixes {
 		if !prefix.Addr().Is4() {
 			continue
@@ -234,29 +264,23 @@ func merge(prefixes []netip.Prefix) []netipx.IPRange {
 		prefix = prefix.Masked()
 		address := prefix.Addr().As4()
 		from := binary.BigEndian.Uint32(address[:])
-		spans = append(spans, [2]uint32{from, from | uint32(uint64(1)<<(32-prefix.Bits())-1)})
+		spans = append(spans, span{from, from | uint32(uint64(1)<<(32-prefix.Bits())-1)})
 	}
-	slices.SortFunc(spans, func(left [2]uint32, right [2]uint32) int { return cmp.Compare(left[0], right[0]) })
+	slices.SortFunc(spans, func(left span, right span) int { return cmp.Compare(left[0], right[0]) })
 	// merged in place: what is written is behind what is read
 	kept := spans[:0]
-	for _, span := range spans {
-		if last := len(kept) - 1; last >= 0 && (kept[last][1] == math.MaxUint32 || span[0] <= kept[last][1]+1) {
-			kept[last][1] = max(kept[last][1], span[1])
+	for _, item := range spans {
+		if last := len(kept) - 1; last >= 0 && (kept[last][1] == math.MaxUint32 || item[0] <= kept[last][1]+1) {
+			kept[last][1] = max(kept[last][1], item[1])
 			continue
 		}
-		kept = append(kept, span)
+		kept = append(kept, item)
 	}
 	if len(kept) == 0 {
 		return nil
 	}
-	ranges := make([]netipx.IPRange, len(kept))
-	for index, span := range kept {
-		var from, to [4]byte
-		binary.BigEndian.PutUint32(from[:], span[0])
-		binary.BigEndian.PutUint32(to[:], span[1])
-		ranges[index] = netipx.IPRangeFrom(netip.AddrFrom4(from), netip.AddrFrom4(to))
-	}
-	return ranges
+	// the slice of the prefixes' length is let go: a list of many /32s merges into few
+	return slices.Clip(kept)
 }
 
 // Apply makes the table anew, in one transaction: what a previous run left is replaced
@@ -281,16 +305,16 @@ func Apply(plan *Plan) error {
 	if err != nil {
 		return err
 	}
-	localRangesMerged := local.Ranges()
+	localRangesMerged := spansOf(local.Ranges())
 	nextID := uint32(idInterfaces)
 	// what a set of more than fillLot ranges holds beyond them, added after the table is
 	// there
 	type rest struct {
 		set    *nftables.Set
-		ranges []netipx.IPRange
+		ranges []span
 	}
 	var later []rest
-	addSet := func(name string, id uint32, ranges []netipx.IPRange) error {
+	addSet := func(name string, id uint32, ranges []span) error {
 		set := &nftables.Set{Table: table, ID: id, Name: name, Interval: true, AutoMerge: true, KeyType: nftables.TypeIPAddr}
 		err := conn.AddSet(set, nil)
 		if err != nil {
@@ -465,25 +489,26 @@ func ReplaceSet(name string, prefixes []netip.Prefix, lot int) (int, error) {
 	return len(ranges), replaceRanges(name, ranges, lot)
 }
 
-func replaceRanges(name string, ranges []netipx.IPRange, lot int) error {
-	elements := intervals(ranges)
+func replaceRanges(name string, ranges []span, lot int) error {
 	conn, err := nftables.New()
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
 	set := &nftables.Set{Table: &nftables.Table{Name: tableName, Family: nftables.TableFamilyINet}, Name: name, Interval: true, AutoMerge: true, KeyType: nftables.TypeIPAddr}
 	conn.FlushSet(set)
-	for len(elements) > 0 {
-		count := len(elements)
+	// the elements of a lot are made as it is sent: those of a whole list at once take a
+	// few hundred bytes a range, tens of megabytes for a big list
+	for len(ranges) > 0 {
+		count := len(ranges)
 		if lot > 0 {
-			count = min(2*lot, count)
+			count = min(lot, count)
 		}
-		err = addElements(conn, set, elements[:count])
+		err = addElements(conn, set, intervals(ranges[:count]))
 		if err != nil {
 			return err
 		}
-		elements = elements[count:]
-		if len(elements) > 0 {
+		ranges = ranges[count:]
+		if len(ranges) > 0 {
 			err = conn.Flush()
 			if err != nil {
 				return E.Cause(err, "fill the set ", name)
@@ -531,16 +556,13 @@ const elementsPerMessage = 1000
 
 // intervals writes ranges the way the kernel keeps an interval set: the first address of
 // a range, and the address after its last one marked as an end.
-func intervals(ranges []netipx.IPRange) []nftables.SetElement {
+func intervals(ranges []span) []nftables.SetElement {
 	elements := make([]nftables.SetElement, 0, 2*len(ranges))
 	for _, item := range ranges {
-		if !item.From().Is4() {
-			continue
-		}
-		elements = append(elements, nftables.SetElement{Key: item.From().AsSlice()})
+		elements = append(elements, nftables.SetElement{Key: binaryutil.BigEndian.PutUint32(item[0])})
 		// nothing follows 255.255.255.255: such a range has no end element
-		if end := item.To().Next(); end.IsValid() {
-			elements = append(elements, nftables.SetElement{Key: end.AsSlice(), IntervalEnd: true})
+		if item[1] != math.MaxUint32 {
+			elements = append(elements, nftables.SetElement{Key: binaryutil.BigEndian.PutUint32(item[1] + 1), IntervalEnd: true})
 		}
 	}
 	return elements

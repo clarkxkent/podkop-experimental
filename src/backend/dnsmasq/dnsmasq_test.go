@@ -59,8 +59,53 @@ func TestTakeOver(t *testing.T) {
 	require.Empty(t, system.scripts)
 	require.Zero(t, system.restarts)
 
+	// it asks the backend with nothing kept and no marker: marked, not restarted
+	system = &router{settings: "config dnsmasq\n\tlist server '127.0.0.42'\n\toption noresolv '1'\n\toption cachesize '0'\n"}
+	changed, err = TakeOver(system)
+	require.NoError(t, err)
+	require.False(t, changed)
+	require.Equal(t, []string{"set dhcp.@dnsmasq[0].podkop_taken='1'", "commit dhcp"}, lines(system.scripts[0]))
+	require.Zero(t, system.restarts)
+
+	// marked and kept, but given back by hand since (no 127.0.0.42): what was kept is
+	// stale, what it has now is kept
+	system = &router{settings: "config dnsmasq\n\tlist server '1.1.1.1'\n\toption cachesize '500'\n\tlist podkop_server '8.8.8.8'\n\toption podkop_cachesize '1000'\n\toption podkop_taken '1'\n"}
+	_, err = TakeOver(system)
+	require.NoError(t, err)
+	require.Equal(t, []string{
+		"delete dhcp.@dnsmasq[0].podkop_server",
+		"delete dhcp.@dnsmasq[0].podkop_noresolv",
+		"delete dhcp.@dnsmasq[0].podkop_cachesize",
+		"add_list dhcp.@dnsmasq[0].podkop_server='1.1.1.1'",
+		"delete dhcp.@dnsmasq[0].server",
+		"set dhcp.@dnsmasq[0].podkop_cachesize='500'",
+		"add_list dhcp.@dnsmasq[0].server='127.0.0.42'",
+		"set dhcp.@dnsmasq[0].noresolv='1'",
+		"set dhcp.@dnsmasq[0].cachesize='0'",
+		"set dhcp.@dnsmasq[0].podkop_taken='1'",
+		"commit dhcp",
+	}, lines(system.scripts[0]))
+
 	_, err = TakeOver(&router{settings: "config dhcp 'lan'\n"})
 	require.Error(t, err)
+
+	// taken over before, then a forwarding added by hand while the backend ran: what was
+	// kept the first time stays (not the backend's own noresolv and cache size), the
+	// forwarding is kept beside the servers kept
+	system = &router{settings: "config dnsmasq\n\tlist server '127.0.0.42'\n\tlist server '/corp.lan/192.168.1.5'\n\toption noresolv '1'\n\toption cachesize '0'\n" +
+		"\tlist podkop_server '8.8.8.8'\n\toption podkop_cachesize '1000'\n\toption podkop_taken '1'\n"}
+	changed, err = TakeOver(system)
+	require.NoError(t, err)
+	require.True(t, changed)
+	require.Equal(t, []string{
+		"add_list dhcp.@dnsmasq[0].podkop_server='/corp.lan/192.168.1.5'",
+		"delete dhcp.@dnsmasq[0].server",
+		"add_list dhcp.@dnsmasq[0].server='127.0.0.42'",
+		"set dhcp.@dnsmasq[0].noresolv='1'",
+		"set dhcp.@dnsmasq[0].cachesize='0'",
+		"set dhcp.@dnsmasq[0].podkop_taken='1'",
+		"commit dhcp",
+	}, lines(system.scripts[0]))
 }
 
 func TestRestore(t *testing.T) {
@@ -104,6 +149,15 @@ func TestRestore(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, lines(system.scripts[0]), "set dhcp.@dnsmasq[0].noresolv='0'")
 
+	// a forwarding added by hand while the backend ran stays; with no server for every
+	// name kept, the resolvers are read, and a resolv file set by hand stays
+	system = &router{resolvFile: true, settings: "config dnsmasq\n\tlist server '127.0.0.42'\n\tlist server '/corp.lan/192.168.1.5'\n\toption noresolv '1'\n\toption cachesize '0'\n" +
+		"\toption podkop_cachesize '1000'\n\toption podkop_taken '1'\n\toption resolvfile '/etc/resolv.mine'\n"}
+	_, err = Restore(system)
+	require.NoError(t, err)
+	require.Equal(t, []string{"delete dhcp.@dnsmasq[0].podkop_taken", "set dhcp.@dnsmasq[0].cachesize='1000'", "delete dhcp.@dnsmasq[0].podkop_cachesize",
+		"set dhcp.@dnsmasq[0].noresolv='0'", "delete dhcp.@dnsmasq[0].server", "add_list dhcp.@dnsmasq[0].server='/corp.lan/192.168.1.5'", "commit dhcp"}, lines(system.scripts[0]))
+
 	// a dnsmasq the backend never touched is left alone
 	system = &router{settings: "config dnsmasq\n\tlist server '8.8.8.8'\n\toption cachesize '1000'\n"}
 	changed, err = Restore(system)
@@ -115,5 +169,5 @@ func TestRestore(t *testing.T) {
 
 func TestQuote(t *testing.T) {
 	t.Parallel()
-	require.Equal(t, `'/it'\''s/1.2.3.4'`, quote("/it's/1.2.3.4"))
+	require.Equal(t, `'/it'\''s/1.2.3.4'`, Quote("/it's/1.2.3.4"))
 }

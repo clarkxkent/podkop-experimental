@@ -58,8 +58,13 @@ func (b *Buffer) Write(source string, level string, message string) {
 		drop++
 	}
 	if drop > 0 {
-		// the lines move to a slice of their own: the dropped ones are not held by the old one
-		b.lines = append([]Line(nil), b.lines[drop:]...)
+		// The dropped lines let their messages go and the slice moves past them. append
+		// copies the lines held into a new array only when the old one is full: a copy of
+		// the buffer each time a part of it has been written over, not one for every line
+		// (a full buffer holds a few thousand lines, and a proxy that is down writes one a
+		// connection).
+		clear(b.lines[:drop])
+		b.lines = b.lines[drop:]
 	}
 }
 

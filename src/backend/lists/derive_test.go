@@ -81,7 +81,8 @@ func TestDerive(t *testing.T) {
 		require.Equal(t, []firewall.PortRange{{From: 50000, To: 65535}}, byPorts["podkop_subnets_udp_2"].Ports)
 		require.Equal(t, []string{"192.0.2.0/24", "34.0.0.0/14", "5.200.14.128/25", "66.22.192.0/18"}, texts(byPorts["podkop_subnets_udp_2"].Prefixes))
 		require.Equal(t, byte(6), byPorts["podkop_subnets_tcp_3"].Protocol)
-		require.Equal(t, []firewall.PortRange{{From: 0, To: 1023}, {From: 443, To: 443}, {From: 8443, To: 8443}, {From: 9000, To: 65535}}, byPorts["podkop_subnets_tcp_3"].Ports)
+		// 443 is within 0-1023: one range, as the interval set of nftables takes them
+		require.Equal(t, []firewall.PortRange{{From: 0, To: 1023}, {From: 8443, To: 8443}, {From: 9000, To: 65535}}, byPorts["podkop_subnets_tcp_3"].Ports)
 	}
 
 	// a list written as text: its IPv4 addresses go to the common set

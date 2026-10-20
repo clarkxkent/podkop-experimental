@@ -73,7 +73,6 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		client          netip.Addr
 		asked           sync.WaitGroup
 	)
-	listeners := diag.Listeners()
 	asks := []func(){
 		func() {
 			switch {
@@ -102,6 +101,9 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		}()
 	}
 	asked.Wait()
+	// read once the asks are done, not before them: the trace of the device check is armed
+	// first, a scan of every process of the router is slow on a slow one
+	listeners := diag.Listeners()
 
 	add("📡 Global check run!", rule, "🛠️ System info")
 	add("🕳️ Podkop:        "+system.PodkopVersion+" (latest: "+system.PodkopLatestVersion+")",
@@ -168,7 +170,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	}
 
 	add(rule, "📄 Podkop config")
-	add(strings.TrimSuffix(diag.MaskSettings(settingsContent), "\n"))
+	add(cutSettings(strings.TrimSuffix(diag.MaskSettings(settingsContent), "\n")))
 
 	add(rule, "📄 WAN config")
 	networkContent, _ := os.ReadFile(paths.Network)
@@ -221,6 +223,23 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		add(deviceLines...)
 	}
 	return strings.Join(lines, "\n") + "\n"
+}
+
+// settingsShown bounds the settings in the report. rpcd passes on no output larger than
+// about 256 KiB, and the page then shows no report at all: a list of ten thousand names
+// pasted into the settings would take the whole report with it.
+const settingsShown = 96 << 10
+
+// cutSettings keeps the settings up to settingsShown, cut at the end of a line.
+func cutSettings(text string) string {
+	if len(text) <= settingsShown {
+		return text
+	}
+	cut := strings.LastIndexByte(text[:settingsShown], '\n')
+	if cut < 0 {
+		cut = settingsShown
+	}
+	return text[:cut] + "\n… " + strconv.Itoa(len(text)-cut) + " bytes more of the settings are left out"
 }
 
 // lanDNSLines tells who answers DNS on an interface of the LAN, a line a process. dnsmasq is

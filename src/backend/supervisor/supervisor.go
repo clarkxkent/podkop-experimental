@@ -495,10 +495,16 @@ func (s *Supervisor) restoreRouting() string {
 	if err != nil {
 		s.log("warn", "look at the firewall table: ", err)
 	} else if !present {
-		err = s.options.System.UpdateFirewall(nil, current.firewall)
+		// the plan of the table, or one made now when setting it up had failed
+		plan := current.firewall
+		if plan == nil {
+			plan = s.firewallPlan(current)
+		}
+		err = s.options.System.UpdateFirewall(nil, plan)
 		if err != nil {
 			s.log("error", "put the firewall table back: ", err)
 		} else {
+			current.firewall = plan
 			restored = append(restored, "the firewall table")
 		}
 	}
@@ -932,6 +938,12 @@ func (s *Supervisor) keepConfig(name string, content []byte) {
 // supervisor is stuck: Run returns engine.ErrStuck, and the process that runs it ends,
 // so that the service manager starts another. It tells whether the instance closed.
 func (s *Supervisor) close(instance Instance) bool {
+	// sing-box sets the memory limit of Go for the process while it runs and lifts it when
+	// it closes; the next one sets it again only when it starts. The limit it had stays
+	// meanwhile: the build of the next one reads its local lists, the biggest allocation
+	// of an apply. A negative value only reads the limit.
+	limit := debug.SetMemoryLimit(-1)
+	defer debug.SetMemoryLimit(limit)
 	err := instance.Close(engine.StopTimeout)
 	if err == engine.ErrStuck {
 		s.log("error", "sing-box does not close: giving the router back; the process has to end")
@@ -988,11 +1000,14 @@ func (s *Supervisor) surround(previousFirewall *firewall.Plan) error {
 	if err != nil {
 		return E.Cause(err, "set up the routing")
 	}
-	current.firewall = s.firewallPlan(current)
-	err = s.options.System.UpdateFirewall(previousFirewall, current.firewall)
+	// the plan is kept once the kernel has it: one that failed leaves none, and the next
+	// update sets the whole table up
+	plan := s.firewallPlan(current)
+	err = s.options.System.UpdateFirewall(previousFirewall, plan)
 	if err != nil {
 		return E.Cause(err, "set up the firewall")
 	}
+	current.firewall = plan
 	if current.result.Dataplane.TakeDNS {
 		changed, err := s.options.System.TakeOverDNS()
 		if err != nil {
@@ -1107,6 +1122,8 @@ func (s *Supervisor) refreshFirewall() {
 	err := s.options.System.UpdateFirewall(current.firewall, next)
 	if err != nil {
 		s.log("error", "update the firewall sets: ", err)
+		// a set may be half filled: the next update sets the whole table up
+		current.firewall = nil
 		return
 	}
 	current.firewall = next
@@ -1230,6 +1247,9 @@ func (s *Supervisor) Release() {
 // table, the routing. Each is no error when it is not there. Nothing runs after it.
 func (s *Supervisor) release() {
 	s.retireConfig()
+	// what was read of the lists for the firewall goes with the firewall table: with
+	// nothing running it would hold the addresses of every list until the next start
+	s.derived, s.read = nil, nil
 	changed, err := s.options.System.RestoreDNS()
 	if err != nil {
 		s.log("error", "give the DNS of the LAN back: ", err)

@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"net/netip"
+	"strings"
 	"testing"
 
 	"github.com/itdoginfo/podkop/src/backend/diag"
@@ -52,4 +53,14 @@ func TestLANDNSLines(t *testing.T) {
 	require.Equal(t, []string{"❌ DNS on br-lan (192.168.1.1, fd00::1): nobody listens on port 53"},
 		lanDNSLines(diag.LANDNS{Interface: "br-lan", Addresses: addresses}, true))
 	require.Equal(t, []string{"❌ DNS on wg0: the interface has no address"}, lanDNSLines(diag.LANDNS{Interface: "wg0"}, true))
+}
+
+func TestCutSettings(t *testing.T) {
+	t.Parallel()
+	require.Equal(t, "config settings 'settings'", cutSettings("config settings 'settings'"))
+	long := "config settings 'settings'\n\toption user_domains_text '" + strings.Repeat("name.example\n", 20000) + "'"
+	cut := cutSettings(long)
+	require.Less(t, len(cut), settingsShown+100)
+	require.True(t, strings.HasPrefix(cut, "config settings 'settings'\n"))
+	require.Contains(t, cut, "bytes more of the settings are left out")
 }

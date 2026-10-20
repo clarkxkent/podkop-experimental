@@ -197,5 +197,16 @@ func portsOnly(fields *option.DefaultHeadlessRule) (string, []PortRange, bool) {
 		ports = append(ports, PortRange{From: uint16(from), To: uint16(to)})
 	}
 	sort.Slice(ports, func(left int, right int) bool { return ports[left].From < ports[right].From })
-	return network, ports, true
+	// ports that overlap or touch are one range: the interval set of nftables refuses
+	// elements that overlap, and with them the whole update of the table
+	merged := ports[:1]
+	for _, next := range ports[1:] {
+		last := &merged[len(merged)-1]
+		if uint32(next.From) <= uint32(last.To)+1 {
+			last.To = max(last.To, next.To)
+			continue
+		}
+		merged = append(merged, next)
+	}
+	return network, merged, true
 }
