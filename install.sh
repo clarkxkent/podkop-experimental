@@ -1,7 +1,8 @@
 #!/bin/sh
 # shellcheck shell=dash
 
-REPO="https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+# podkop-exp: the Go backend of podkop, published apart from itdoginfo/podkop
+REPO="https://api.github.com/repos/podkop-net/podkop-experimental/releases/latest"
 DOWNLOAD_DIR="/tmp/podkop"
 COUNT=3
 
@@ -66,7 +67,7 @@ update_config() {
     printf "\033[48;5;196m\033[1m║ ! Обнаружена старая версия podkop.                                   ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ Если продолжите обновление, вам потребуется настроить Podkop заново. ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ Старая конфигурация будет сохранена в /etc/config/podkop-070         ║\033[0m\n"
-    printf "\033[48;5;196m\033[1m║ Подробности: https://github.com/itdoginfo/podkop                     ║\033[0m\n"
+    printf "\033[48;5;196m\033[1m║ Подробности: https://github.com/podkop-net/podkop-experimental       ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ Точно хотите продолжить?                                             ║\033[0m\n"
     printf "\033[48;5;196m\033[1m╚══════════════════════════════════════════════════════════════════════╝\033[0m\n"
 
@@ -76,7 +77,7 @@ update_config() {
     printf "\033[48;5;196m\033[1m║ ! Detected old podkop version.                                       ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ If you continue the update, you will need to RECONFIGURE podkop.     ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ Your old configuration will be saved to /etc/config/podkop-070       ║\033[0m\n"
-    printf "\033[48;5;196m\033[1m║ Details: https://github.com/itdoginfo/podkop                         ║\033[0m\n"
+    printf "\033[48;5;196m\033[1m║ Details: https://github.com/podkop-net/podkop-experimental           ║\033[0m\n"
     printf "\033[48;5;196m\033[1m║ Are you sure you want to continue?                                   ║\033[0m\n"
     printf "\033[48;5;196m\033[1m╚══════════════════════════════════════════════════════════════════════╝\033[0m\n"
 
@@ -88,7 +89,7 @@ update_config() {
 
             yes|y|Y)
                 mv /etc/config/podkop /etc/config/podkop-070
-                wget -O /etc/config/podkop https://raw.githubusercontent.com/itdoginfo/podkop/refs/heads/main/podkop/files/etc/config/podkop
+                wget -O /etc/config/podkop https://raw.githubusercontent.com/podkop-net/podkop-experimental/refs/heads/main/podkop/files/etc/config/podkop
                 msg "Podkop config has been reset to default. Your old config saved in /etc/config/podkop-070"
                 break
                 ;;
@@ -107,14 +108,16 @@ main() {
 
     pkg_list_update || { echo "Packages list update failed"; exit 1; }
 
-    if [ -f "/etc/init.d/podkop" ]; then
-        msg "Podkop is already installed. Upgrading..."
+    if pkg_is_installed podkop-exp; then
+        msg "podkop-exp is already installed. Upgrading..."
+    elif [ -f "/etc/init.d/podkop" ]; then
+        msg "podkop is installed: it is replaced by podkop-exp, its settings stay"
     else
-        msg "Installing podkop..."
+        msg "Installing podkop-exp..."
     fi
 
     if command -v curl >/dev/null 2>&1; then
-        check_response=$(curl -s "https://api.github.com/repos/itdoginfo/podkop/releases/latest")
+        check_response=$(curl -s "$REPO")
 
         if echo "$check_response" | grep -q 'API rate limit '; then
             msg "You've reached the GitHub rate limit. Repeat in five minutes."
@@ -129,8 +132,8 @@ main() {
         pkg_ext=ipk
     fi
     grep_url_pattern="https://[^\"[:space:]]*\.$pkg_ext"
-    # podkop is built for each architecture (the name of a package ends with the one of the
-    # router, "_" written as "-"); the packages of LuCI are the same for all
+    # podkop-exp is built for each architecture (the name of a package ends with the one of
+    # the router, "_" written as "-"); the packages of LuCI are the same for all
     arch=$(pkg_arch | tr '_' '-')
     if [ -z "$arch" ]; then
         msg "Unknown package architecture"
@@ -141,7 +144,7 @@ main() {
     wget -qO- "$REPO" | grep -o "$grep_url_pattern" | while read -r url; do
         filename=$(basename "$url")
         case "$filename" in
-            podkop-*-"$arch"."$pkg_ext" | luci-*) ;;
+            podkop-exp-*-"$arch"."$pkg_ext" | luci-app-podkop-exp-* | luci-i18n-podkop-exp-*) ;;
             *) continue ;;
         esac
         filepath="$DOWNLOAD_DIR/$filename"
@@ -170,16 +173,18 @@ main() {
         msg "No packages were downloaded successfully"
         exit 1
     fi
-    if ! ls "$DOWNLOAD_DIR"/podkop-*-"$arch"."$pkg_ext" >/dev/null 2>&1; then
-        msg "No podkop package for the architecture $arch in the release"
+    if ! ls "$DOWNLOAD_DIR"/podkop-exp-*-"$arch"."$pkg_ext" >/dev/null 2>&1; then
+        msg "No podkop-exp package for the architecture $arch in the release"
         exit 1
     fi
 
     retire_sing_box
+    retire_podkop
 
-    for pkg in podkop luci-app-podkop; do
+    for pkg in podkop-exp luci-app-podkop-exp; do
         file=""
-        for f in "$DOWNLOAD_DIR"/"$pkg"*; do
+        # the version follows the name: podkop-exp-v0.8.0-r1-..., luci-app-podkop-exp-v0.8.0-r1-all...
+        for f in "$DOWNLOAD_DIR"/"$pkg"-[v0-9]*; do
             if [ -f "$f" ]; then
                 file=$(basename "$f")
                 break
@@ -187,25 +192,30 @@ main() {
         done
         if [ -n "$file" ]; then
             msg "Installing $file..."
-            if [ "$pkg" = "podkop" ] && [ "$PKG_IS_APK" -eq 1 ]; then
+            if [ "$pkg" = "podkop-exp" ] && [ "$PKG_IS_APK" -eq 1 ]; then
                 # shellcheck disable=SC2086
                 apk add --allow-untrusted "$DOWNLOAD_DIR/$file" $APK_CHANGES
             else
                 pkg_install "$DOWNLOAD_DIR/$file"
-            fi
+            fi || {
+                # the page would come without its backend
+                msg "The install of $file failed"
+                [ "$pkg" = "podkop-exp" ] && exit 1
+            }
             sleep 3
         fi
     done
 
     ru=""
-    for f in "$DOWNLOAD_DIR"/luci-i18n-podkop-ru*; do
+    for f in "$DOWNLOAD_DIR"/luci-i18n-podkop-exp-ru*; do
         if [ -f "$f" ]; then
             ru=$(basename "$f")
             break
         fi
     done
     if [ -n "$ru" ]; then
-        if pkg_is_installed luci-i18n-podkop-ru; then
+        # the translation of podkop's page (luci-i18n-podkop-ru) has the same files
+        if pkg_is_installed luci-i18n-podkop; then
                 msg "Upgrading Russian translation..."
                 pkg_remove luci-i18n-podkop*
                 pkg_install "$DOWNLOAD_DIR/$ru"
@@ -271,17 +281,14 @@ check_system() {
             version=$(echo "$version" | sed 's/^v//')
             local major
             local minor
-            local patch
             major=$(echo "$version" | cut -d. -f1)
             minor=$(echo "$version" | cut -d. -f2)
-            patch=$(echo "$version" | cut -d. -f3)
 
-            # Compare version: must be >= 0.7.0
-            if [ "$major" -gt 0 ] ||
-                [ "$major" -eq 0 ] && [ "$minor" -gt 7 ] ||
-                [ "$major" -eq 0 ] && [ "$minor" -eq 7 ] && [ "$patch" -ge 0 ]; then
+            # Compare version: must be >= 0.7.0. Grouped: "a || b && c" is "(a || b) && c"
+            # in sh, and took every 0.8 for older than 0.7. The patch is not compared:
+            # "0-dev" is no number.
+            if [ "$major" -gt 0 ] 2>/dev/null || { [ "$major" -eq 0 ] 2>/dev/null && [ "$minor" -ge 7 ] 2>/dev/null; }; then
                 msg "Podkop version >= 0.7.0"
-                break
             else
                 msg "Podkop version < 0.7.0"
                 update_config
@@ -331,13 +338,16 @@ pkg_arch() {
 }
 
 # podkop 0.7 ran the sing-box of a package of its own: sing-box, sing-box-tiny or
-# podkop-engine(-full). This podkop has sing-box inside and uses none of them, nor their
-# settings or files. podkop-engine serves podkop 0.7 alone and goes with it; a sing-box
-# package may stay for other uses, so the user is asked. Called once the packages are
-# downloaded: while podkop 0.7 runs, the router resolves names through sing-box.
+# podkop-engine(-full). podkop-exp has sing-box inside and uses none of them, nor their
+# settings or files. podkop-engine serves podkop 0.7 alone and goes with it. A sing-box
+# package is asked about only when it is podkop 0.7's: podkop 0.7 is there (its backend is
+# a shell script) and no other package needs it (homeproxy, passwall); one another package
+# needs stays without a question. Called once the packages are downloaded: while podkop
+# 0.7 runs, the router resolves names through sing-box.
 APK_CHANGES=""
 retire_sing_box() {
-    local pkg engines="" boxes="" kept="" remove answer old_config
+    local pkg engines="" boxes="" kept="" remove answer old_config others shell_podkop=""
+    [ "$(head -c 2 /usr/bin/podkop 2>/dev/null)" = "#!" ] && shell_podkop=1
     for pkg in podkop-engine podkop-engine-full sing-box sing-box-tiny; do
         if [ "$PKG_IS_APK" -eq 1 ]; then
             apk list --installed 2>/dev/null | grep -q "^$pkg-[0-9]" || continue
@@ -346,19 +356,28 @@ retire_sing_box() {
         fi
         case $pkg in
         podkop-engine*) engines="$engines $pkg" ;;
-        *) boxes="$boxes $pkg" ;;
+        *)
+            [ -n "$shell_podkop" ] || continue
+            others=$(needed_by "$pkg" | tr '\n' ' ')
+            if [ -n "$others" ]; then
+                msg "$pkg stays: ${others}need it"
+                kept="$kept $pkg"
+            else
+                boxes="$boxes $pkg"
+            fi
+            ;;
         esac
     done
-    [ -z "$engines$boxes" ] && return
+    [ -z "$engines$boxes$kept" ] && return
 
     # where podkop 0.7 wrote the configuration of that sing-box, proxy links and all
     old_config=$(uci -q get podkop.settings.config_path)
     remove="$engines"
     if [ -n "$boxes" ]; then
-        msg "podkop has sing-box inside now and does not use the package$boxes. Remove it? (Y/n)"
+        msg "podkop-exp has sing-box inside and does not use the package$boxes. Remove it? (Y/n)"
         read -r -p '' answer || answer=""
         case $answer in
-        n|N|no|No) kept="$boxes" ;;
+        n|N|no|No) kept="$kept$boxes" ;;
         *) remove="$remove$boxes" ;;
         esac
     fi
@@ -388,9 +407,9 @@ retire_sing_box() {
         done
         return
     fi
-    # apk changes the packages in the transaction that installs podkop: a package podkop
-    # 0.7 depends on cannot be removed before. A sing-box that stays is asked for there:
-    # nothing needs it any more, and apk removes what nothing needs.
+    # apk changes the packages in the transaction that installs podkop-exp: a package
+    # podkop 0.7 depends on cannot be removed before. A sing-box that stays is asked for
+    # there: nothing needs it any more, and apk removes what nothing needs.
     for pkg in $remove; do
         APK_CHANGES="$APK_CHANGES !$pkg"
     done
@@ -399,4 +418,43 @@ retire_sing_box() {
     done
 }
 
-main
+# the packages besides podkop's own that need a package, a name a line
+needed_by() {
+    if [ "$PKG_IS_APK" -eq 1 ]; then
+        # "<pkg>-<version> is required by:" and then the packages, with their versions
+        apk info -r "$1" 2>/dev/null | sed '1d' | grep -v -e '^$' -e '^podkop-[v0-9]' -e '^luci-app-podkop-[v0-9]'
+    else
+        # "<pkg> <version> depends on <name>"
+        opkg whatdepends "$1" 2>/dev/null | awk '/ depends on / {print $1}' | grep -v -x -e podkop -e luci-app-podkop
+    fi
+}
+
+# podkop (itdoginfo/podkop: 0.7 with its shell backend, or the Go backend under that name)
+# is replaced by podkop-exp: the same service, settings and files, and its page by the
+# page of podkop-exp. The settings stay: /etc/config/podkop changed is kept by opkg and
+# apk when the package goes, and one opkg took is put back before podkop-exp comes.
+retire_podkop() {
+    local pkg old=""
+    for pkg in podkop luci-app-podkop luci-i18n-podkop-ru; do
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            apk list --installed 2>/dev/null | grep -q "^$pkg-[v0-9]" || continue
+        else
+            opkg list-installed | grep -q "^$pkg - " || continue
+        fi
+        old="$old $pkg"
+    done
+    [ -z "$old" ] && return
+    msg "Replacing with podkop-exp:$old"
+    [ -x /etc/init.d/podkop ] && service podkop stop
+    if [ "$PKG_IS_APK" -eq 0 ]; then
+        cp /etc/config/podkop "$DOWNLOAD_DIR/podkop.config" 2>/dev/null
+        # shellcheck disable=SC2086
+        opkg remove --force-depends $old
+        [ -f /etc/config/podkop ] || cp "$DOWNLOAD_DIR/podkop.config" /etc/config/podkop 2>/dev/null
+        return
+    fi
+    # apk: in the transaction that installs podkop-exp, whose files they share
+    for pkg in $old; do
+        APK_CHANGES="$APK_CHANGES !$pkg"
+    done
+}
