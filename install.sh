@@ -175,7 +175,7 @@ main() {
         exit 1
     fi
 
-    replace_sing_box
+    retire_sing_box
 
     for pkg in podkop luci-app-podkop; do
         file=""
@@ -189,7 +189,7 @@ main() {
             msg "Installing $file..."
             if [ "$pkg" = "podkop" ] && [ "$PKG_IS_APK" -eq 1 ]; then
                 # shellcheck disable=SC2086
-                apk add --allow-untrusted "$DOWNLOAD_DIR/$file" $APK_CONFLICTS
+                apk add --allow-untrusted "$DOWNLOAD_DIR/$file" $APK_CHANGES
             else
                 pkg_install "$DOWNLOAD_DIR/$file"
             fi
@@ -292,26 +292,33 @@ check_system() {
         fi
     fi
 
-    if pkg_is_installed https-dns-proxy; then
-        msg "Conflicting package detected: https-dns-proxy. Remove?"
-
-        while true; do
-                read -r -p '' DNSPROXY
-                case $DNSPROXY in
-
-                yes|y|Y)
-                    pkg_remove luci-app-https-dns-proxy
-                    pkg_remove https-dns-proxy
-                    pkg_remove luci-i18n-https-dns-proxy*
-                    break
-                    ;;
-                *)
-                    msg "Exit"
-                    exit 1
-                    ;;
+    # what takes the forwarding of dnsmasq over as soon as it is installed: the CONFLICTS of
+    # the package, which apk does not read
+    local conflict answer
+    for conflict in https-dns-proxy nextdns luci-app-xray; do
+        pkg_is_installed "$conflict" || continue
+        msg "Conflicting package detected: $conflict. Remove?"
+        read -r -p '' answer || answer=""
+        case $answer in
+        yes|y|Y)
+            case $conflict in
+            luci-app-xray)
+                pkg_remove luci-app-xray
+                pkg_remove luci-i18n-xray*
+                ;;
+            *)
+                pkg_remove "luci-app-$conflict"
+                pkg_remove "$conflict"
+                pkg_remove "luci-i18n-$conflict*"
+                ;;
+            esac
+            ;;
+        *)
+            msg "Exit"
+            exit 1
+            ;;
         esac
     done
-    fi
 }
 
 pkg_arch() {
@@ -323,38 +330,72 @@ pkg_arch() {
     fi
 }
 
-# Since 0.8 podkop carries sing-box: /usr/bin/sing-box is podkop. A sing-box installed as a
-# package of its own conflicts with it and is replaced. Called once the packages are
+# podkop 0.7 ran the sing-box of a package of its own: sing-box, sing-box-tiny or
+# podkop-engine(-full). This podkop has sing-box inside and uses none of them, nor their
+# settings or files. podkop-engine serves podkop 0.7 alone and goes with it; a sing-box
+# package may stay for other uses, so the user is asked. Called once the packages are
 # downloaded: while podkop 0.7 runs, the router resolves names through sing-box.
-APK_CONFLICTS=""
-replace_sing_box() {
-    local pkg found=""
-    for pkg in sing-box sing-box-tiny podkop-engine podkop-engine-full; do
+APK_CHANGES=""
+retire_sing_box() {
+    local pkg engines="" boxes="" kept="" remove answer old_config
+    for pkg in podkop-engine podkop-engine-full sing-box sing-box-tiny; do
         if [ "$PKG_IS_APK" -eq 1 ]; then
-            apk list --installed 2>/dev/null | grep -q "^$pkg-[0-9]" && found="$found $pkg"
+            apk list --installed 2>/dev/null | grep -q "^$pkg-[0-9]" || continue
         else
-            opkg list-installed | grep -q "^$pkg - " && found="$found $pkg"
+            opkg list-installed | grep -q "^$pkg - " || continue
         fi
+        case $pkg in
+        podkop-engine*) engines="$engines $pkg" ;;
+        *) boxes="$boxes $pkg" ;;
+        esac
     done
-    [ -z "$found" ] && return
+    [ -z "$engines$boxes" ] && return
 
-    msg "podkop includes sing-box now, the package replaces:$found"
+    # where podkop 0.7 wrote the configuration of that sing-box, proxy links and all
+    old_config=$(uci -q get podkop.settings.config_path)
+    remove="$engines"
+    if [ -n "$boxes" ]; then
+        msg "podkop has sing-box inside now and does not use the package$boxes. Remove it? (Y/n)"
+        read -r -p '' answer || answer=""
+        case $answer in
+        n|N|no|No) kept="$boxes" ;;
+        *) remove="$remove$boxes" ;;
+        esac
+    fi
     [ -x /etc/init.d/podkop ] && service podkop stop
+    if [ -n "$kept" ]; then
+        # podkop 0.7 had the service of that sing-box run its configuration (enabled, the
+        # conffile at its config_path, only the autostart off): the next upgrade of the
+        # package would start a second sing-box on it. The service is turned off; nothing
+        # else of sing-box is changed.
+        if [ -n "$old_config" ] && [ "$(uci -q get sing-box.main.conffile)" = "$old_config" ]; then
+            uci -q set sing-box.main.enabled=0 && uci -q commit sing-box
+            /etc/init.d/sing-box stop 2>/dev/null
+            msg "sing-box stays; its service, which ran the configuration of podkop 0.7, is turned off"
+        fi
+    elif [ -n "$old_config" ]; then
+        rm -f "$old_config"
+    fi
+    [ -n "$remove" ] && msg "Removing:$remove"
     if [ "$PKG_IS_APK" -eq 0 ]; then
         # shellcheck disable=SC2086
-        opkg remove --force-depends $found
+        [ -n "$remove" ] && opkg remove --force-depends $remove
+        # a sing-box that stays was installed for podkop 0.7: opkg removes a package it
+        # installed as a dependency ("Auto-Installed") once the upgrade of podkop leaves
+        # nothing that needs it. The mark goes, as if the user had asked for the package.
+        for pkg in $kept; do
+            sed -i "/^Package: $pkg\$/,/^\$/{/^Auto-Installed: yes\$/d}" /usr/lib/opkg/status
+        done
         return
     fi
-    # apk replaces them in the transaction that installs podkop: a package podkop 0.7 depends
-    # on cannot be removed before. sing-box is a name podkop provides, so it cannot be one of
-    # the conflicts: it only leaves the list of the packages asked for (the world), and goes
-    # when nothing depends on it.
-    for pkg in $found; do
-        if [ "$pkg" = "sing-box" ]; then
-            grep -q "^sing-box\([^a-z0-9-]\|$\)" /etc/apk/world 2> /dev/null && apk del sing-box
-        else
-            APK_CONFLICTS="$APK_CONFLICTS !$pkg"
-        fi
+    # apk changes the packages in the transaction that installs podkop: a package podkop
+    # 0.7 depends on cannot be removed before. A sing-box that stays is asked for there:
+    # nothing needs it any more, and apk removes what nothing needs.
+    for pkg in $remove; do
+        APK_CHANGES="$APK_CHANGES !$pkg"
+    done
+    for pkg in $kept; do
+        APK_CHANGES="$APK_CHANGES $pkg"
     done
 }
 
