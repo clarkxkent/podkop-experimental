@@ -4,10 +4,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/dnsmasq"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
-	"github.com/itdoginfo/podkop/src/backend/netcfg"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/dnsmasq"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 

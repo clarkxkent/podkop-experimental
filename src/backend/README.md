@@ -58,7 +58,7 @@ TAGS=with_quic,with_utls,with_clash_api,podkop_slim,badlinkname,tfogo_checklinkn
 go vet -tags $TAGS ./...
 go test -tags $TAGS -ldflags=-checklinkname=0 -race ./...
 CGO_ENABLED=0 go build -trimpath -tags $TAGS \
-  -ldflags "-s -w -checklinkname=0 -X github.com/itdoginfo/podkop/src/backend.Version=0.8.0" \
+  -ldflags "-s -w -checklinkname=0 -X github.com/podkop-net/podkop-experimental/src/backend.Version=0.8.0" \
   -o podkop ./cmd/podkop
 ```
 

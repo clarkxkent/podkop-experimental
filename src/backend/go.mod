@@ -1,4 +1,4 @@
-module github.com/itdoginfo/podkop/src/backend
+module github.com/podkop-net/podkop-experimental/src/backend
 
 go 1.26.0
 

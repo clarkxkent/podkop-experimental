@@ -10,7 +10,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 
 	mDNS "github.com/miekg/dns"
 	"github.com/stretchr/testify/require"

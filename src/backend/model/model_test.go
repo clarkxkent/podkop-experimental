@@ -3,7 +3,7 @@ package model
 import (
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 
 	"github.com/stretchr/testify/require"
 )

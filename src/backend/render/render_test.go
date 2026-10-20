@@ -15,10 +15,10 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/engine"
-	"github.com/itdoginfo/podkop/src/backend/model"
-	"github.com/itdoginfo/podkop/src/backend/plan"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/engine"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 )
 
 // testdata/cases.tar.gz holds settings files with what the shell backend of podkop wrote

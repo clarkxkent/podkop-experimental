@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/stretchr/testify/require"
 )
 

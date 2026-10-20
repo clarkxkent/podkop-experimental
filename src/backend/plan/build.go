@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 

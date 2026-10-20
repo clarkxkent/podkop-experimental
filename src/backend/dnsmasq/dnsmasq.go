@@ -9,8 +9,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 

@@ -16,8 +16,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	"github.com/sagernet/netlink"
 	E "github.com/sagernet/sing/common/exceptions"
 

@@ -19,11 +19,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
-	"github.com/itdoginfo/podkop/src/backend/plan"
-	"github.com/itdoginfo/podkop/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 
 	mDNS "github.com/miekg/dns"
 	"github.com/stretchr/testify/require"

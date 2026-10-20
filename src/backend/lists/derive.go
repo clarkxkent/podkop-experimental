@@ -8,8 +8,8 @@ import (
 	"net/netip"
 	"sort"
 
-	"github.com/itdoginfo/podkop/src/backend/engine"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/engine"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	E "github.com/sagernet/sing/common/exceptions"
 
 	"golang.org/x/sys/unix"

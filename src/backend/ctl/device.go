@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/diag"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
-	"github.com/itdoginfo/podkop/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 )
 
 // deviceCheck is the check of the device that asks for global_check (the browser of the

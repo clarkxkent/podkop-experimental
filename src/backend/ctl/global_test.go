@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/diag"
-	"github.com/itdoginfo/podkop/src/backend/sockets"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/stretchr/testify/require"
 )
 

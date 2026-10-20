@@ -1,6 +1,6 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=podkop
+PKG_NAME:=podkop-exp
 
 PKG_VERSION := $(if $(PODKOP_VERSION),$(PODKOP_VERSION),0.$(shell date +%d%m%Y))
 
@@ -19,7 +19,7 @@ PKG_BUILD_FLAGS:=no-mips16
 # copied into it (src/backend) where the package is built alone.
 BACKEND_DIR:=$(firstword $(wildcard $(CURDIR)/src/backend $(CURDIR)/../src/backend))
 
-GO_PKG:=github.com/itdoginfo/podkop/src/backend
+GO_PKG:=github.com/podkop-net/podkop-experimental/src/backend
 GO_PKG_BUILD_PKG:=$(GO_PKG)/cmd/podkop
 # the tags podkop-engine is built with; the commands of the lab (tag lab) are not in the
 # package
@@ -35,29 +35,30 @@ GO_PKG_LDFLAGS_X:=$(GO_PKG).Version=$(PKG_VERSION) \
 include $(INCLUDE_DIR)/package.mk
 include $(TOPDIR)/feeds/packages/lang/golang/golang-package.mk
 
-define Package/podkop
+define Package/podkop-exp
 	SECTION:=net
 	CATEGORY:=Network
-	TITLE:=Domain routing app
+	TITLE:=Domain routing app, the backend in Go (experimental)
 	URL:=https://podkop.net
 	DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle +kmod-nft-tproxy
+	# podkop is the package of itdoginfo/podkop: the same service, settings and files.
 	# https-dns-proxy, nextdns and luci-app-xray take the forwarding of dnsmasq as soon as
 	# they are installed. podkop-engine is the sing-box of podkop 0.7 and nothing else.
 	# A sing-box package does not conflict: this package has no /usr/bin/sing-box and
 	# touches neither the settings nor the files of one. opkg alone reads these names
 	# (apk packages of OpenWrt have no conflicts): the backend tells what took dnsmasq or
 	# the marks over at run time (podkop global_check).
-	CONFLICTS:=https-dns-proxy nextdns luci-app-xray podkop-engine podkop-engine-full
+	CONFLICTS:=podkop https-dns-proxy nextdns luci-app-xray podkop-engine podkop-engine-full
 endef
 
-define Package/podkop/description
+define Package/podkop-exp/description
 	Domain routing. Use of VLESS, Shadowsocks technologies.
 	One program: the backend of podkop with sing-box (podkop-engine) inside it, as a
 	library. It is not a sing-box for other programs: a sing-box package may be installed
 	beside it.
 endef
 
-define Package/podkop/conffiles
+define Package/podkop-exp/conffiles
 /etc/config/podkop
 endef
 
@@ -72,7 +73,7 @@ endef
 # it after; the restart is harmless there. The guard is new: on an upgrade from podkop 0.7
 # nothing would enable it (only a fresh install enables services), so it is enabled here
 # unless the settings turn it off.
-define Package/podkop/postinst
+define Package/podkop-exp/postinst
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 if [ "$${PKG_UPGRADE}" = "1" ]; then
@@ -86,7 +87,7 @@ exit 0
 endef
 
 # The stop gives back the DNS of the LAN, the firewall table and the routing.
-define Package/podkop/prerm
+define Package/podkop-exp/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 /etc/init.d/podkop-guard stop
@@ -95,7 +96,7 @@ grep -q "105 podkop" /etc/iproute2/rt_tables 2> /dev/null && sed -i "/105 podkop
 exit 0
 endef
 
-define Package/podkop/install
+define Package/podkop-exp/install
 	$(INSTALL_DIR) $(1)/usr/bin
 	$(INSTALL_BIN) $(GO_PKG_BUILD_BIN_DIR)/podkop $(1)/usr/bin/podkop
 
@@ -115,4 +116,4 @@ define Package/podkop/install
 	$(INSTALL_DATA) ./files/lib/upgrade/podkop.sh $(1)/lib/upgrade/podkop.sh
 endef
 
-$(eval $(call BuildPackage,podkop))
+$(eval $(call BuildPackage,podkop-exp))

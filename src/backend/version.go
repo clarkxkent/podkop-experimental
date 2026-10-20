@@ -5,5 +5,5 @@ package podkop
 
 // Version is the version of the backend, which the user interface shows as the version of
 // podkop; the version of sing-box is apart (constant.Version). A build sets it with
-// -X github.com/itdoginfo/podkop/src/backend.Version=...
+// -X github.com/podkop-net/podkop-experimental/src/backend.Version=...
 var Version = "0.8.0-dev"

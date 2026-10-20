@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
-	"github.com/itdoginfo/podkop/src/backend/plan"
-	checkname "github.com/itdoginfo/podkop/src/backend/probe"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	checkname "github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 
 	mDNS "github.com/miekg/dns"
 )
@@ -173,7 +173,8 @@ type System struct {
 	DeviceModel         string
 }
 
-const latestReleaseURL = "https://api.github.com/repos/itdoginfo/podkop/releases/latest"
+// the releases of podkop-exp; podkop of itdoginfo/podkop is another package
+const latestReleaseURL = "https://api.github.com/repos/podkop-net/podkop-experimental/releases/latest"
 
 var (
 	tagName        = regexp.MustCompile(`"tag_name":\s*"([^"]*)"`)

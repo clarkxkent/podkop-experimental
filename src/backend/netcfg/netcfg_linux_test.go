@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 )
 
 // The tests change the routing of their network namespace and compare with the ip

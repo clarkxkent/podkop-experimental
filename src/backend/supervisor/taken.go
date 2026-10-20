@@ -7,7 +7,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/itdoginfo/podkop/src/backend/sockets"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 )
 
 // socketsRoot is where /proc is looked for; a test may point it elsewhere.

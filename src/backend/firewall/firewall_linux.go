@@ -16,7 +16,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/sagernet/nftables"
 	"github.com/sagernet/nftables/binaryutil"
 	"github.com/sagernet/nftables/expr"

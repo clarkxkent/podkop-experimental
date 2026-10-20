@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
 
 	"github.com/stretchr/testify/require"
 )

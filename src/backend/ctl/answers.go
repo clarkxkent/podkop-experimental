@@ -1,6 +1,6 @@
 package ctl
 
-import "github.com/itdoginfo/podkop/src/backend/diag"
+import "github.com/podkop-net/podkop-experimental/src/backend/diag"
 
 // compat: page-answers
 // The answers of the checks in the shapes the shell backend printed: the names and the

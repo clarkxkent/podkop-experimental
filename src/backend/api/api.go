@@ -15,7 +15,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/logbuf"
+	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 

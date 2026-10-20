@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/diag"
-	"github.com/itdoginfo/podkop/src/backend/logbuf"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
 
 	"github.com/stretchr/testify/require"
 )

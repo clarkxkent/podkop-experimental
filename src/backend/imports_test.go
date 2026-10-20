@@ -19,7 +19,7 @@ import (
 func TestOneDoorToSingBox(t *testing.T) {
 	const (
 		singBox  = "github.com/sagernet/sing-box/"
-		backend  = "github.com/itdoginfo/podkop/src/backend"
+		backend  = "github.com/podkop-net/podkop-experimental/src/backend"
 		singTun  = "github.com/sagernet/sing-tun"
 		theDoor  = "engine"
 		ownFiles = ".go"

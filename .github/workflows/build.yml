@@ -129,8 +129,8 @@ jobs:
           VERSION="${{ needs.preparation.outputs.version }}"
 
           mkdir -p ./filtered-bin/${{ matrix.package_type }}
-          cp ./bin/${{ matrix.package_type }}/luci-i18n-podkop-ru-*.${{ matrix.package_type }} "./filtered-bin/${{ matrix.package_type }}/luci-i18n-podkop-ru-${VERSION}.${{ matrix.package_type }}"
-          cp ./bin/${{ matrix.package_type }}/luci-app-podkop-*.${{ matrix.package_type }} ./filtered-bin/${{ matrix.package_type }}/
+          cp ./bin/${{ matrix.package_type }}/luci-i18n-podkop-exp-ru-*.${{ matrix.package_type }} "./filtered-bin/${{ matrix.package_type }}/luci-i18n-podkop-exp-ru-${VERSION}.${{ matrix.package_type }}"
+          cp ./bin/${{ matrix.package_type }}/luci-app-podkop-exp-*.${{ matrix.package_type }} ./filtered-bin/${{ matrix.package_type }}/
 
       - name: Remove Docker container
         run: docker rm ${{ matrix.package_type }}

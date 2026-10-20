@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/engine"
-	"github.com/itdoginfo/podkop/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/engine"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 
 	"github.com/stretchr/testify/require"
 )

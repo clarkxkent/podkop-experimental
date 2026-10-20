@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/model"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 
 	"github.com/stretchr/testify/require"
 )

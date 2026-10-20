@@ -1,11 +1,11 @@
 #!/bin/sh
-# Builds the package podkop for one architecture inside an image openwrt/sdk (the CI job
+# Builds the package podkop-exp for one architecture inside an image openwrt/sdk (the CI job
 # "podkop" runs it for each architecture of the matrix, sdk/gen-matrix.py):
 #
 #   docker run --rm --user root -e PODKOP_VERSION=0.8.0 -v <repo>:/src:ro -v <out>:/out \
 #     [-v <cache>:/builder/dl] openwrt/sdk:<target>-<subtarget>-v<release> sh /src/sdk/build.sh
 #
-# Output: /out/podkop-<version>-r<N>-<pkgarch>.<ipk|apk>, "_" of the architecture written as
+# Output: /out/podkop-exp-<version>-r<N>-<pkgarch>.<ipk|apk>, "_" of the architecture written as
 # "-" (the names of the release, which install.sh looks for), and /out/build.log.
 set -eu
 SRC=${SRC:-/src}
@@ -39,9 +39,9 @@ cp -a "$SRC/src/backend" package/feeds/utilities/podkop/src/backend
 
 rm -f .config
 make defconfig > /dev/null 2>&1
-echo 'CONFIG_PACKAGE_podkop=m' >> .config
+echo 'CONFIG_PACKAGE_podkop-exp=m' >> .config
 make defconfig > /dev/null 2>&1
-grep -q '^CONFIG_PACKAGE_podkop=m' .config || { echo "podkop is not selected: a dependency is missing in the feeds" >&2; exit 1; }
+grep -q '^CONFIG_PACKAGE_podkop-exp=m' .config || { echo "podkop-exp is not selected: a dependency is missing in the feeds" >&2; exit 1; }
 pkgarch=$(sed -n 's/^CONFIG_TARGET_ARCH_PACKAGES="\(.*\)"$/\1/p' .config)
 dashed=$(echo "$pkgarch" | tr '_' '-')
 
@@ -57,7 +57,7 @@ if ! PODKOP_VERSION=$version make package/podkop/compile -j"$(nproc)" V=s > "$OU
 	exit 1
 fi
 found=0
-find bin/packages \( -name 'podkop[-_]*.ipk' -o -name 'podkop[-_]*.apk' \) > /tmp/podkop-packages
+find bin/packages \( -name 'podkop-exp[-_]*.ipk' -o -name 'podkop-exp[-_]*.apk' \) > /tmp/podkop-packages
 while read -r f; do
 	name=$(basename "$f")
 	ext=${name##*.}
@@ -69,4 +69,4 @@ while read -r f; do
 	ls -l "$OUT/$name"
 	found=$((found + 1))
 done < /tmp/podkop-packages
-[ $found -eq 1 ] || { echo "expected one package podkop, found $found" >&2; exit 1; }
+[ $found -eq 1 ] || { echo "expected one package podkop-exp, found $found" >&2; exit 1; }

@@ -9,13 +9,13 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/clock"
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
-	"github.com/itdoginfo/podkop/src/backend/logbuf"
-	"github.com/itdoginfo/podkop/src/backend/probe"
-	"github.com/itdoginfo/podkop/src/backend/supervisor"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/clock"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
+	"github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/supervisor"
 
 	"github.com/spf13/cobra"
 )

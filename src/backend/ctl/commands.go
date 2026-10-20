@@ -14,13 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/diag"
-	"github.com/itdoginfo/podkop/src/backend/model"
-	"github.com/itdoginfo/podkop/src/backend/plan"
-	"github.com/itdoginfo/podkop/src/backend/probe"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 )
 
 // Environment is what the commands need to know of where they run.

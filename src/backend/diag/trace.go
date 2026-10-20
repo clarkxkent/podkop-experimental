@@ -14,9 +14,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
 	"github.com/mdlayher/netlink"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	E "github.com/sagernet/sing/common/exceptions"
 	"golang.org/x/sys/unix"
 )

@@ -5,10 +5,10 @@ package main
 import (
 	"os"
 
-	"github.com/itdoginfo/podkop/src/backend"
-	"github.com/itdoginfo/podkop/src/backend/api"
-	"github.com/itdoginfo/podkop/src/backend/ctl"
-	"github.com/itdoginfo/podkop/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend"
+	"github.com/podkop-net/podkop-experimental/src/backend/api"
+	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
 	C "github.com/sagernet/sing-box/constant"
 
 	"github.com/spf13/cobra"

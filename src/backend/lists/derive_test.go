@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/itdoginfo/podkop/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"

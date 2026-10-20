@@ -11,12 +11,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/itdoginfo/podkop/src/backend/ctl"
-	"github.com/itdoginfo/podkop/src/backend/diag"
-	"github.com/itdoginfo/podkop/src/backend/dnsmasq"
-	"github.com/itdoginfo/podkop/src/backend/plan"
-	"github.com/itdoginfo/podkop/src/backend/render"
-	"github.com/itdoginfo/podkop/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
+	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/dnsmasq"
+	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/render"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	"github.com/sagernet/sing-box/common/sharelink"
 	E "github.com/sagernet/sing/common/exceptions"
 

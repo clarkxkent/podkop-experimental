@@ -8,9 +8,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/netcfg"
-	"github.com/itdoginfo/podkop/src/backend/sockets"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 )
 
 // ownProgram is the name the backend's process has (/proc/<pid>/comm).

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/itdoginfo/podkop/src/backend/dataplane"
-	"github.com/itdoginfo/podkop/src/backend/firewall"
+	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	E "github.com/sagernet/sing/common/exceptions"
 
 	"github.com/spf13/cobra"

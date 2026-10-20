@@ -1,13 +1,15 @@
 include $(TOPDIR)/rules.mk
 
-PKG_NAME:=luci-app-podkop
+# the page of podkop-exp; its translations are luci-i18n-podkop-exp-*
+LUCI_NAME:=luci-app-podkop-exp
+PKG_NAME:=luci-app-podkop-exp
 
 PKG_VERSION := $(if $(PODKOP_VERSION),$(PODKOP_VERSION),0.$(shell date +%d%m%Y))
 
 PKG_RELEASE:=1
 
-LUCI_TITLE:=LuCI podkop app
-LUCI_DEPENDS:=+luci-base +podkop
+LUCI_TITLE:=LuCI podkop app (podkop-exp)
+LUCI_DEPENDS:=+luci-base +podkop-exp
 LUCI_PKGARCH:=all
 LUCI_LANG.ru:=Русский (Russian)
 LUCI_LANG.en:=English

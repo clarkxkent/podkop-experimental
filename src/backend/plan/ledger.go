@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/itdoginfo/podkop/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
