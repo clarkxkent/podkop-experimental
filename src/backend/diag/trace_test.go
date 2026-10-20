@@ -220,7 +220,11 @@ func TestTraceVerdict(t *testing.T) {
 	require.Equal(t, "podkop's transparent proxy takes them, but the routing does not deliver them to the router: see the line 'Marked packets' above", TraceVerdict(lost, traceHooks, false, sources))
 	// DNS questions to a server past the router, or to the router
 	past := traceLines("v5", "inet PodkopTrace trace packet: "+questionPast, "inet fw4 forward packet: "+questionPast)
-	require.Equal(t, "the device asks the DNS server 8.8.8.8, not the router: the router passes its questions on to that server, and podkop never sees them", TraceVerdict(past, traceHooks, true, sources))
+	require.Equal(t, "the device 192.168.78.10 asks the DNS server 8.8.8.8, not the router: the router passes its questions on to that server, and podkop never sees them", TraceVerdict(past, traceHooks, true, sources))
+	// the interface the router sends them out by, as the kernel tells it in the hook forward
+	pastOut := traceLines("v7", "inet PodkopTrace trace packet: "+questionPast, "inet fw4 forward packet: "+questionPast+` oif "wan"`)
+	require.Equal(t, "the device 192.168.78.10 asks the DNS server 8.8.8.8, not the router: the router passes its questions on to that server (out on wan), and podkop never sees them", TraceVerdict(pastOut, traceHooks, true, sources))
+	require.Equal(t, []string{"to 8.8.8.8 (1): forwarded through the router, out on wan"}, TraceStories(pastOut, traceHooks, true))
 	router := traceLines("v6", "inet PodkopTrace trace packet: "+questionRouter, "inet fw4 input packet: "+questionRouter)
 	require.Equal(t, "they reach the router (192.168.78.1), but its DNS server does not pass them to podkop: see the lines 'DNS on' above", TraceVerdict(router, traceHooks, true, sources))
 	require.Empty(t, TraceVerdict(nil, traceHooks, true, sources))

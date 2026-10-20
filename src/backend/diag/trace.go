@@ -127,7 +127,7 @@ type traceEvent struct {
 	policy             uint32
 	hasPolicy          bool
 	nfproto            uint32
-	iif                uint32
+	iif, oif           uint32
 	network, transport []byte
 }
 
@@ -142,6 +142,7 @@ const (
 	attrNetworkHeader   = unix.NFTA_TRACE_NETWORK_HEADER
 	attrTransportHeader = unix.NFTA_TRACE_TRANSPORT_HEADER
 	attrIIF             = unix.NFTA_TRACE_IIF
+	attrOIF             = unix.NFTA_TRACE_OIF
 	attrNFProto         = unix.NFTA_TRACE_NFPROTO
 	attrPolicy          = unix.NFTA_TRACE_POLICY
 
@@ -197,6 +198,8 @@ func decodeTraceMessage(message netlink.Message) (traceEvent, bool) {
 			event.transport = decoder.Bytes()
 		case attrIIF:
 			event.iif = decoder.Uint32()
+		case attrOIF:
+			event.oif = decoder.Uint32()
 		case attrNFProto:
 			event.nfproto = decoder.Uint32()
 		case attrPolicy:
@@ -339,17 +342,24 @@ func traceText(events []traceEvent, own string, texts map[string]map[uint64]stri
 // the input device, the addresses, and the ports and flags of TCP or UDP.
 func packetFields(event traceEvent, interfaces map[uint32]string) string {
 	var fields []string
-	if event.iif != 0 {
-		name, known := interfaces[event.iif]
+	device := func(index uint32) string {
+		name, known := interfaces[index]
 		if !known {
-			if device, err := net.InterfaceByIndex(int(event.iif)); err == nil {
-				name = device.Name
+			if found, err := net.InterfaceByIndex(int(index)); err == nil {
+				name = found.Name
 			} else {
-				name = strconv.Itoa(int(event.iif))
+				name = strconv.Itoa(int(index))
 			}
-			interfaces[event.iif] = name
+			interfaces[index] = name
 		}
-		fields = append(fields, `iif "`+name+`"`)
+		return name
+	}
+	if event.iif != 0 {
+		fields = append(fields, `iif "`+device(event.iif)+`"`)
+	}
+	// the interface a forwarded packet leaves by
+	if event.oif != 0 {
+		fields = append(fields, `oif "`+device(event.oif)+`"`)
 	}
 	header := event.network
 	var protocol byte
@@ -411,7 +421,7 @@ type tracedPacket struct {
 	// iif is the interface it came in on; the rules of other tables that sent it elsewhere
 	// (redirect), took it for another transparent proxy (otherProxy) or replaced the mark
 	// of podkop (markReplaced)
-	iif                                string
+	iif, oif                           string
 	redirect, otherProxy, markReplaced string
 }
 
@@ -474,7 +484,7 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 		}
 		if event.kind == "packet" && event.chain == traceChain {
 			packet := &tracedPacket{question: strings.Contains(event.text+" ", " udp dport 53 "), flags: tcpFlags(event.text),
-				source: packetAddress(event.text, "saddr"), destination: packetAddress(event.text, "daddr"), iif: packetDevice(event.text)}
+				source: packetAddress(event.text, "saddr"), destination: packetAddress(event.text, "daddr"), iif: packetDevice(event.text, "iif")}
 			current[event.id] = packet
 			packets = append(packets, packet)
 			continue
@@ -488,6 +498,9 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 		case "packet":
 			if hook, known := hooks[event.chain]; known && (len(packet.hooks) == 0 || packet.hooks[len(packet.hooks)-1] != hook) {
 				packet.hooks = append(packet.hooks, hook)
+			}
+			if packet.oif == "" {
+				packet.oif = packetDevice(event.text, "oif")
 			}
 		case "rule":
 			switch {
@@ -533,9 +546,9 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 	return packets
 }
 
-// packetDevice reads the input device of the fields of a traced packet: `iif "br-lan"`.
-func packetDevice(fields string) string {
-	_, after, found := strings.Cut(fields, `iif "`)
+// packetDevice reads a device of the fields of a traced packet: `iif "br-lan"`, `oif "wan"`.
+func packetDevice(fields string, field string) string {
+	_, after, found := strings.Cut(fields, field+` "`)
 	if !found {
 		return ""
 	}
@@ -603,6 +616,8 @@ func (p *tracedPacket) outcome() string {
 	switch {
 	case p.dropped != "":
 		return "dropped by " + p.dropped
+	case contains(p.hooks, "forward") && p.oif != "":
+		return "forwarded through the router, out on " + p.oif
 	case contains(p.hooks, "forward"):
 		return "forwarded through the router"
 	case contains(p.hooks, "input"):
@@ -647,7 +662,11 @@ func TraceVerdict(lines []string, hooks map[string]string, questions bool, sourc
 			return "a rule of the firewall sends them to another DNS server (" + p.redirect + ")"
 		}
 		if p := first(forwarded); p != nil {
-			return "the device asks the DNS server " + p.destination.String() + ", not the router: the router passes its questions on to that server, and podkop never sees them"
+			out := ""
+			if p.oif != "" {
+				out = " (out on " + p.oif + ")"
+			}
+			return "the device " + p.source.String() + " asks the DNS server " + p.destination.String() + ", not the router: the router passes its questions on to that server" + out + ", and podkop never sees them"
 		}
 		if p := first(delivered); p != nil {
 			return "they reach the router (" + p.destination.String() + "), but its DNS server does not pass them to podkop: see the lines 'DNS on' above"
