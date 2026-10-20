@@ -1,0 +1,21 @@
+# podkop-exp
+
+[English](README.md)
+
+Репозиторий для тестов новой функциональности [podkop](https://github.com/itdoginfo/podkop). То, что проверяется здесь, может потом войти в podkop, измениться или исчезнуть.
+
+podkop-exp работает с настройками podkop (`/etc/config/podkop`) и его страницей в LuCI и ставится вместо пакета podkop: вместе они не работают. Бэкенд написан на Go и содержит sing-box внутри, отдельный пакет sing-box не нужен.
+
+## Установка
+
+OpenWrt 24.10 или новее, не меньше 80 МБ оперативной памяти. В консоли роутера:
+
+```sh
+sh <(wget -O - https://raw.githubusercontent.com/podkop-net/podkop-experimental/main/install.sh)
+```
+
+Установщик проверяет роутер, предлагает удалить podkop и пакеты, которые конфликтуют с podkop-exp, и ставит podkop-exp, его страницу и, по желанию, русский перевод. Настройки podkop сохраняются.
+
+Вернуться на podkop: удалите `podkop-exp`, `luci-app-podkop-exp` и `luci-i18n-podkop-exp-ru`, затем поставьте podkop по его README.
+
+Проблемы и вопросы — в [issues](https://github.com/podkop-net/podkop-experimental/issues).

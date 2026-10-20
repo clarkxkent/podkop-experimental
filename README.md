@@ -1,62 +1,21 @@
-# Podkop
+# podkop-exp
 
-Маршрутизация трафика для OpenWrt.
+[Русский](README.ru.md)
 
-Направляйте нужные ресурсы в туннель, а остальное — напрямую. Открытое программное обеспечение на базе [sing-box](https://github.com/SagerNet/sing-box).
+A place to test new functionality of [podkop](https://github.com/itdoginfo/podkop). What is tried here may later go to podkop, change, or go away.
 
-> [!WARNING]
-> Проект находится в стадии бета-версии. Возможны ошибки, нестабильная работа и существенные изменения функциональности.
+podkop-exp takes podkop's settings (`/etc/config/podkop`) and its LuCI page, and is installed instead of the podkop package: the two do not work together. Its backend is written in Go and has sing-box inside, so no sing-box package is needed.
 
-# Вещи, которые необходимо знать перед установкой
+## Install
 
-### Обновления и конфигурация
-- При обновлении **обязательно** [очищайте кэш LuCI](https://podkop.net/docs/clear-browser-cache/).
-- После обновления проверяйте конфигурацию — она может изменяться между версиями.
-- При старте Podkop модифицируется конфигурация Dnsmasq.
+OpenWrt 24.10 or newer, at least 80 MB of RAM. In the router's shell:
 
-### Системные требования
-- Требуется OpenWrt 24.10 или выше.
-- Необходимо минимум 25 МБ свободного места на устройстве. Устройства с флеш-памятью 16 МБ не поддерживаются.
-
-### Важные ограничения и особенности
-- Если установлен Getdomains, его [необходимо удалить](https://github.com/itdoginfo/domain-routing-openwrt?tab=readme-ov-file#скрипт-для-удаления)
-- Dashboard доступен только при подключении по HTTP (из-за особенностей Clash API). При использовании HTTPS или домена работа может быть недоступна.
-
-### Поддержка и диагностика
-- [Руководство по диагностике](https://podkop.net/docs/diagnostics/)
-- Актуальные изменения публикуются в [Telegram-чате](https://t.me/itdogchat/81758/420321). Пожалуйста, ознакомьтесь с закрепленными сообщениями.
-- При возникновении проблем оставляйте технически грамотный фидбэк в GitHub Issues и Telegram-чате.
-
-
-# Документация
-https://podkop.net/
-
-# Установка Podkop
-Полное руководство доступно в [документации](https://podkop.net/docs/install/)
-
-Для установки и обновления достаточно выполнить один скрипт:
-```
-sh <(wget -O - https://raw.githubusercontent.com/itdoginfo/podkop/refs/heads/main/install.sh)
+```sh
+sh <(wget -O - https://raw.githubusercontent.com/podkop-net/podkop-experimental/main/install.sh)
 ```
 
-С версии 0.8 sing-box входит в Podkop: пакет podkop содержит [podkop-engine](https://github.com/podkop-net/podkop-engine) — сборку sing-box с исправлениями и возможностями для Podkop (ссылки с транспортом xhttp, резервные ссылки в URLTest и другие). Отдельный пакет sing-box не нужен и не используется: Podkop не трогает ни его настройки, ни его файлы, и его можно оставить для других задач. Установщик предлагает удалить sing-box, оставшийся от прошлых версий Podkop.
+The installer checks the router, offers to remove podkop and the packages that conflict with podkop-exp, then installs podkop-exp, its page and, if you want, the Russian translation. The settings of podkop are kept.
 
-Альтернативный скрипт установки:
-```
-wget -O - https://mirror.podkop.net/urjw/scripts/bootstrap.sh | sh
-```
+Back to podkop: remove `podkop-exp`, `luci-app-podkop-exp` and `luci-i18n-podkop-exp-ru`, then install podkop as its README says.
 
-Обратите внимание: альтернативный скрипт отправляет на сервер телеметрию — модель роутера, список установленных пакетов, разметку флеш-памяти, объём оперативной памяти и статусы шагов установки. Эти данные используются для улучшения скрипта и исправления ошибок установки.
-
-## Будущее
-Планы развития проекта в настоящее время не публикуются в виде открытого roadmap. Обсуждение направлений и задач разработки ведётся авторами и контрибьюторами.
-
-> [!IMPORTANT]  
-> Pull Request принимаются только после согласования с авторами в Telegram-чате. На данный момент PR без предварительного обсуждения не рассматриваются.
-
-> [!WARNING]
-> Данное программное обеспечение предоставляется «как есть», без каких-либо явных или подразумеваемых гарантий, включая гарантии коммерческой пригодности и соответствия определённой цели. 
-> 
-> Правообладатели и участники проекта не несут ответственности за любые прямые, косвенные, случайные, специальные или иные убытки, возникшие в результате использования программного обеспечения, включая потерю данных, прибыли или прерывание деятельности, даже если они были предупреждены о возможности таких последствий.
-
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/itdoginfo/podkop)
+Problems and questions: [issues](https://github.com/podkop-net/podkop-experimental/issues).
