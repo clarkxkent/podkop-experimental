@@ -51,7 +51,10 @@ func counted(value bool, text string) string {
 // of the page) opens connections to that name and port meanwhile: the report tells whether
 // its DNS question came to sing-box, whether its connection came through the transparent
 // proxy, and, when not, what the kernel did to its packets (a trace of them).
-func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, version string, singBoxVersion string, running bool, routerFakeIP func() (works bool, answered bool), device *deviceCheck) string {
+//
+// engine tells what the sing-box inside is (podkop.Engine); outbounds tests the outbound of
+// every section and the direct one (outboundLines).
+func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, version string, singBoxVersion string, engine string, running bool, routerFakeIP func() (works bool, answered bool), outbounds func() []string, device *deviceCheck) string {
 	var lines []string
 	add := func(text ...string) { lines = append(lines, text...) }
 
@@ -69,6 +72,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		tables          *diag.Firewall
 		works, answered bool
 		address         string
+		outboundResults []string
 		deviceLines     []string
 		client          netip.Addr
 		asked           sync.WaitGroup
@@ -92,6 +96,11 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		func() { tables = diag.CheckFirewall(ctx, nil) },
 		func() { works, answered = routerFakeIP() },
 		func() { address = diag.FakeIPAddress(ctx) },
+		func() {
+			if running && outbounds != nil {
+				outboundResults = outbounds()
+			}
+		},
 	}
 	for _, ask := range asks {
 		asked.Add(1)
@@ -108,7 +117,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	add("📡 Global check run!", rule, "🛠️ System info")
 	add("🕳️ Podkop:        "+system.PodkopVersion+" (latest: "+system.PodkopLatestVersion+")",
 		"🕳️ LuCI App:      "+system.LuCIAppVersion,
-		"📦 Sing-box:      "+system.SingBoxVersion,
+		"⚙️ Engine:        "+engine,
 		"🛜 OpenWrt:       "+system.OpenWrtVersion,
 		"🛜 Device:        "+system.DeviceModel)
 
@@ -126,16 +135,13 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		add(lanDNSLines(lan, running)...)
 	}
 
-	add(rule, "📦 Sing-box status")
-	// sing-box is a part of the backend: installed, of a version that fits, without a
-	// service of its own by construction (singBoxAnswer)
+	add(rule, "📦 Podkop status")
+	// sing-box is a part of the backend: what is asked is whether the backend runs it and
+	// whether it listens where the DNS of the LAN and the firewall send to
 	singBox := diag.CheckSingBox(running)
-	add(flag(true, "Sing-box installed"),
-		"✅ Sing-box version is compatible (newer than 1.12.4)",
-		flag(true, "Sing-box service exist"),
-		flag(true, "Sing-box autostart disabled"),
-		flag(singBox.Running, "Sing-box process running"),
-		flag(singBox.Listening, "Sing-box listening ports"))
+	add(flag(singBox.Running, "Podkop runs"),
+		flag(singBox.Listening, "Podkop listens for the DNS of the LAN on "+dataplane.DNSServer.String()+
+			" and for the transparent proxy on "+dataplane.TProxyAddress+":"+strconv.Itoa(int(dataplane.TProxyPort))))
 	// another program on an address sing-box listens on keeps it from starting
 	for _, taken := range diag.BackendPorts(listeners) {
 		add("❌ " + taken)
@@ -214,10 +220,16 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	if !answered {
 		add("❌ Failed to get FakeIP info")
 	} else {
-		add(mark(works, "✅ Router DNS is routed through sing-box", "⚠️ Router DNS is NOT routed through sing-box"))
+		add(mark(works, "✅ The router's own connections go through podkop (its DNS answers with FakeIP)",
+			"⚠️ The router's own connections do NOT go through podkop"))
 	}
 	parsed, err := netip.ParseAddr(address)
-	add(mark(err == nil && dataplane.FakeIPPrefix.Contains(parsed), "✅ Sing-box works with FakeIP: ", "❌ Sing-box does NOT work with FakeIP: ") + address)
+	add(mark(err == nil && dataplane.FakeIPPrefix.Contains(parsed), "✅ Podkop answers with FakeIP addresses: ", "❌ Podkop does NOT answer with FakeIP addresses: ") +
+		dataplane.ReadinessName + " is " + mark(address != "", address, "not answered"))
+	if running {
+		add(rule, "🌍 Outbounds")
+		add(outboundResults...)
+	}
 	if device != nil {
 		add(rule, "🌐 This device")
 		add(deviceLines...)

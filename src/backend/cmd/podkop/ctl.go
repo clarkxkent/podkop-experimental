@@ -24,6 +24,7 @@ var commandCtl = &cobra.Command{
 		os.Exit(ctl.Run(ctl.Environment{
 			Version:        podkop.Version,
 			SingBoxVersion: C.Version,
+			Engine:         podkop.Engine(C.Version),
 			Features:       ctl.PageFeatures,
 			Socket:         api.SocketPath,
 			Paths:          diag.RouterPaths,

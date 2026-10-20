@@ -67,10 +67,13 @@ type systemAnswer struct {
 	PodkopLatestVersion string `json:"podkop_latest_version"`
 	LuCIAppVersion      string `json:"luci_app_version"`
 	SingBoxVersion      string `json:"sing_box_version"`
-	OpenWrtVersion      string `json:"openwrt_version"`
-	DeviceModel         string `json:"device_model"`
+	// Engine is what the sing-box inside is, for a person (podkop.Engine)
+	Engine         string `json:"engine"`
+	OpenWrtVersion string `json:"openwrt_version"`
+	DeviceModel    string `json:"device_model"`
 }
 
-func answerSystem(found *diag.System) systemAnswer {
-	return systemAnswer(*found)
+func answerSystem(found *diag.System, engine string) systemAnswer {
+	return systemAnswer{PodkopVersion: found.PodkopVersion, PodkopLatestVersion: found.PodkopLatestVersion, LuCIAppVersion: found.LuCIAppVersion,
+		SingBoxVersion: found.SingBoxVersion, Engine: engine, OpenWrtVersion: found.OpenWrtVersion, DeviceModel: found.DeviceModel}
 }

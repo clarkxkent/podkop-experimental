@@ -64,7 +64,7 @@ func TestTraceOfQuestions(t *testing.T) {
 	stopped = true
 	hooks, err := firewall.ChainHooks()
 	require.NoError(t, err)
-	require.Equal(t, []string{"to 127.0.0.1 (2): reached the router (hook input)"}, TraceStories(lines, hooks, true), "%q", lines)
+	require.Equal(t, []string{"to 127.0.0.1 (2): delivered to the router"}, TraceStories(lines, hooks, true), "%q", lines)
 	require.Empty(t, TraceStories(lines, hooks, false))
 	require.Equal(t, "127.0.0.1", TraceSource(lines, hooks).String())
 }

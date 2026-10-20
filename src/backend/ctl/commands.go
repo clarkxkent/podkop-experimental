@@ -26,9 +26,10 @@ import (
 // Environment is what the commands need to know of where they run.
 type Environment struct {
 	// Version is the version of the backend (podkop.Version), SingBoxVersion the one of
-	// sing-box.
+	// sing-box, Engine what the sing-box inside is, for a person (podkop.Engine).
 	Version        string
 	SingBoxVersion string
+	Engine         string
 	// Features are the names get_sing_box_features gives the user interface: PageFeatures.
 	Features []string
 	// Socket is the socket of the running backend.
@@ -112,8 +113,9 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 	pretty := func(value any) int { return write(value, "  ") }
 	// the settings as the backend reads them, with its defaults
 	settings := new(model.Settings)
+	var sections []model.Section
 	if config, err := model.Load(readUCI(env.Paths.Settings)); err == nil {
-		settings = &config.Settings
+		settings, sections = &config.Settings, config.Sections
 	}
 	switch arguments[0] {
 	case "get_status":
@@ -134,7 +136,7 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 			DNSConfigured int    `json:"dns_configured"`
 		}{asNumber(isRunning), asNumber(enabled), status, asNumber(diag.DNSOfLAN(readUCI(env.Paths.DHCP)))})
 	case "get_system_info":
-		return pretty(answerSystem(diag.SystemInfo(ctx, env.Version, env.SingBoxVersion)))
+		return pretty(answerSystem(diag.SystemInfo(ctx, env.Version, env.SingBoxVersion), env.Engine))
 	case "get_sing_box_features":
 		features := env.Features
 		if features == nil {
@@ -187,13 +189,13 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		var device *deviceCheck
 		if len(arguments) > 2 && probe.ValidLabel(arguments[1]) {
 			if port, err := strconv.ParseUint(arguments[2], 10, 16); err == nil && port > 0 {
-				device = &deviceCheck{label: arguments[1], port: uint16(port), probe: client.Probe}
+				device = &deviceCheck{label: arguments[1], port: uint16(port), probe: client.Probe, sources: settings.SourceNetworkInterfaces}
 			}
 		}
-		io.WriteString(output, globalCheck(ctx, env.Paths, settings, env.Version, env.SingBoxVersion, running(), func() (bool, bool) {
+		io.WriteString(output, globalCheck(ctx, env.Paths, settings, env.Version, env.SingBoxVersion, env.Engine, running(), func() (bool, bool) {
 			result, err := client.ProbeSelf()
 			return err == nil && result.DNS && result.Connection, err == nil
-		}, device))
+		}, func() []string { return outboundLines(&clashCaller{client: client}, sections) }, device))
 		return 0
 	case "check_logs":
 		if len(arguments) > 2 && arguments[1] == "--since" {
@@ -474,38 +476,7 @@ func clashAPI(client api.Client, arguments []string, output io.Writer) int {
 			output.Write(content)
 		}
 	}
-	// asked of the backend once, at the first call of the API
-	var facts *api.Facts
-	call := func(method string, path string, body string, timeout time.Duration) (int, []byte) {
-		if facts == nil {
-			facts, _ = client.Facts()
-			if facts == nil {
-				facts = new(api.Facts)
-			}
-		}
-		if facts.ClashAPI == "" {
-			return 0, nil
-		}
-		base, secret := "http://"+facts.ClashAPI, facts.ClashSecret
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		defer cancel()
-		request, err := http.NewRequestWithContext(ctx, method, base+path, strings.NewReader(body))
-		if err != nil {
-			return 0, nil
-		}
-		if secret != "" {
-			request.Header.Set("Authorization", "Bearer "+secret)
-		}
-		transport := &http.Transport{DisableKeepAlives: true, Proxy: nil}
-		defer transport.CloseIdleConnections()
-		response, err := (&http.Client{Transport: transport}).Do(request)
-		if err != nil {
-			return 0, nil
-		}
-		defer response.Body.Close()
-		content, _ := io.ReadAll(io.LimitReader(response.Body, 8<<20))
-		return response.StatusCode, content
-	}
+	call := (&clashCaller{client: client}).call
 	argument := func(index int) string {
 		if index < len(arguments) {
 			return arguments[index]

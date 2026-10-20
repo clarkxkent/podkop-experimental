@@ -18,6 +18,8 @@ type deviceCheck struct {
 	label string
 	port  uint16
 	probe func(label string, wait time.Duration) (*api.ProbeResult, error)
+	// sources are the interfaces podkop takes traffic from (source_network_interfaces)
+	sources []string
 }
 
 // deviceWait is how long the report waits for a connection of the device: the page opens
@@ -42,32 +44,34 @@ func (d *deviceCheck) run() ([]string, netip.Addr) {
 	if traceErr == nil {
 		hooks, _ = firewall.ChainHooks()
 	}
-	// stories tells the traced packets of one kind, or why there are none
-	stories := func(questions bool, none string) []string {
+	// told tells why the packets of one kind did not come to podkop, in a sentence, and
+	// then what the kernel did to them, a line a fate
+	told := func(questions bool, head string, none string) []string {
 		if traceErr != nil {
-			return []string{"   they could not be traced: " + traceErr.Error()}
+			return []string{head + ": they could not be traced (" + traceErr.Error() + ")"}
 		}
-		told := diag.TraceStories(traced, hooks, questions)
-		if len(told) == 0 {
-			return []string{"   " + none}
+		stories := diag.TraceStories(traced, hooks, questions)
+		if len(stories) == 0 {
+			return []string{head + ": " + none}
 		}
-		for index := range told {
-			told[index] = "   " + told[index]
+		lines := []string{head + ": " + diag.TraceVerdict(traced, hooks, questions, d.sources) + ". What the kernel did to them:"}
+		for _, story := range stories {
+			lines = append(lines, "   "+story)
 		}
-		return told
+		return lines
 	}
 	name := probe.Name(d.label)
 	if !result.DNS {
-		lines := []string{"❌ The DNS question of this device for " + name + " did not come to sing-box. What the kernel did to its DNS questions:"}
-		lines = append(lines, stories(true, "none of them passed the router over UDP port 53 while the check ran: the device resolves names some other way (DNS over HTTPS of the browser, say)")...)
+		lines := told(true, "❌ The DNS question of this device for "+name+" did not come to podkop",
+			"none of its DNS questions passed the router while the check ran: the device resolves names another way (DNS over HTTPS in the browser, or a DNS server it reaches by an encrypted channel)")
 		return lines, diag.TraceSource(traced, hooks)
 	}
-	lines := []string{"✅ The DNS question of this device came to sing-box: " + name + " is " + result.Address + " (FakeIP)"}
+	lines := []string{"✅ The DNS question of this device came to podkop: " + name + " is " + result.Address + " (FakeIP)"}
 	if result.Connection {
 		client, _ := netip.ParseAddr(result.Client)
-		return append(lines, "✅ Its connection came to sing-box through the transparent proxy, from "+result.Client), client
+		return append(lines, "✅ Its connection came to podkop through the transparent proxy, from "+result.Client), client
 	}
-	lines = append(lines, "❌ Its connections to "+result.Address+":"+strconv.Itoa(int(d.port))+" did not come to sing-box. What the kernel did to their packets:")
-	lines = append(lines, stories(false, "none of them came to the router while the check ran")...)
+	lines = append(lines, told(false, "❌ Its connections to "+result.Address+":"+strconv.Itoa(int(d.port))+" did not come to podkop",
+		"none of them came to the router while the check ran: the device does not send them through this router")...)
 	return lines, diag.TraceSource(traced, hooks)
 }

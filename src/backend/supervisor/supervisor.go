@@ -185,6 +185,8 @@ type Supervisor struct {
 	probes chan probeRequest
 	// statuses are questions about the state of the lists from another goroutine
 	statuses chan chan []ListState
+	// firewallTold is what the log last said of the sets of the firewall
+	firewallTold string
 	// restores are asks to put back what the network took, from another goroutine
 	restores chan chan string
 	// stuck tells that an instance of sing-box did not close: nothing more can run in
@@ -861,10 +863,16 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	// start, so that a load during the start or right after it is not missed, and once an
 	// instance, so that applies with the same configuration do not add more callbacks
 	tags := make([]string, len(next.result.RuleSets))
+	sources := make(map[string]string, len(next.result.RuleSets))
 	for index, ruleSet := range next.result.RuleSets {
 		tags[index] = ruleSet.Tag
+		sources[ruleSet.Tag] = ruleSet.URL
+		if ruleSet.URL == "" {
+			sources[ruleSet.Tag] = "file " + ruleSet.Path
+		}
 	}
-	instance.OnRuleSetUpdate(tags, func(string) {
+	instance.OnRuleSetUpdate(tags, func(tag string) {
+		s.log("info", "list ", tag, " loaded (", sources[tag], ")")
 		select {
 		case s.derive <- struct{}{}:
 		default:
@@ -886,6 +894,7 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	}
 	s.tellNotes()
 	s.storeConfig(next)
+	s.log("info", describeConfig(next))
 	return instance, nil
 }
 
@@ -1008,6 +1017,7 @@ func (s *Supervisor) surround(previousFirewall *firewall.Plan) error {
 		return E.Cause(err, "set up the firewall")
 	}
 	current.firewall = plan
+	s.tellFirewall(plan)
 	if current.result.Dataplane.TakeDNS {
 		changed, err := s.options.System.TakeOverDNS()
 		if err != nil {
@@ -1127,6 +1137,7 @@ func (s *Supervisor) refreshFirewall() {
 		return
 	}
 	current.firewall = next
+	s.tellFirewall(next)
 }
 
 // Apply brings the router to the settings as they are now. Settings that cannot be used

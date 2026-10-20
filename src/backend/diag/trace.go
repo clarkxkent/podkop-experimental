@@ -408,6 +408,11 @@ type tracedPacket struct {
 	steps []string
 	// dropped is the rule (or the policy of a chain) that dropped or rejected it
 	dropped string
+	// iif is the interface it came in on; the rules of other tables that sent it elsewhere
+	// (redirect), took it for another transparent proxy (otherProxy) or replaced the mark
+	// of podkop (markReplaced)
+	iif                                string
+	redirect, otherProxy, markReplaced string
 }
 
 // traceLine is one line of nft monitor trace: "trace id <id> <family> <table> <chain>
@@ -469,7 +474,7 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 		}
 		if event.kind == "packet" && event.chain == traceChain {
 			packet := &tracedPacket{question: strings.Contains(event.text+" ", " udp dport 53 "), flags: tcpFlags(event.text),
-				source: packetAddress(event.text, "saddr"), destination: packetAddress(event.text, "daddr")}
+				source: packetAddress(event.text, "saddr"), destination: packetAddress(event.text, "daddr"), iif: packetDevice(event.text)}
 			current[event.id] = packet
 			packets = append(packets, packet)
 			continue
@@ -495,24 +500,26 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 				switch {
 				case ours:
 				case redirects.MatchString(event.text):
-					packet.redirected = true
-					packet.steps = append(packet.steps, "sent elsewhere by "+event.chain+": "+event.text)
+					packet.redirected, packet.redirect = true, event.chain+": "+event.text
+					packet.steps = append(packet.steps, "sent elsewhere by "+packet.redirect)
 				case strings.Contains(event.text, "ct status dnat") && !packet.redirected:
-					packet.redirected = true
-					packet.steps = append(packet.steps, "sent elsewhere as the first question of its flow was ("+event.chain+": "+event.text+")")
+					packet.redirected, packet.redirect = true, event.chain+": "+event.text
+					packet.steps = append(packet.steps, "sent elsewhere as the first question of its flow was ("+packet.redirect+")")
 				}
 			case ours && strings.Contains(event.text, markOfPodkop) && !packet.marked:
 				packet.marked = true
 				packet.steps = append(packet.steps, "marked by podkop")
 			case ours && strings.Contains(event.text, " tproxy ") && !packet.proxied:
 				packet.proxied = true
-				packet.steps = append(packet.steps, "taken by the transparent proxy rule of podkop")
+				packet.steps = append(packet.steps, "taken by podkop's transparent proxy")
 			case !ours && strings.Contains(event.text, " tproxy "):
 				// a mark it sets is told with it
-				packet.steps = append(packet.steps, "taken by "+event.chain+": "+event.text)
+				packet.otherProxy = event.chain + ": " + event.text
+				packet.steps = append(packet.steps, "taken by another transparent proxy ("+packet.otherProxy+")")
 			case !ours && strings.Contains(event.text, "mark set ") && packet.marked:
 				// a mark set before the one of podkop is replaced by it: no matter
-				packet.steps = append(packet.steps, "its mark replaced by "+event.chain+": "+event.text)
+				packet.markReplaced = event.chain + ": " + event.text
+				packet.steps = append(packet.steps, "its mark replaced by a rule of another table ("+packet.markReplaced+")")
 			}
 			if (event.verdict == "drop" || event.verdict == "reject") && packet.dropped == "" {
 				packet.dropped = event.chain + ": " + event.text
@@ -524,6 +531,16 @@ func packetsOfTrace(lines []string, hooks map[string]string) []*tracedPacket {
 		}
 	}
 	return packets
+}
+
+// packetDevice reads the input device of the fields of a traced packet: `iif "br-lan"`.
+func packetDevice(fields string) string {
+	_, after, found := strings.Cut(fields, `iif "`)
+	if !found {
+		return ""
+	}
+	name, _, _ := strings.Cut(after, `"`)
+	return name
 }
 
 // tcpFlags reads the TCP flags of the fields of a traced packet: "syn", "ack", "psh | ack".
@@ -574,19 +591,88 @@ func (p *tracedPacket) story() string {
 		steps = append(steps, p.steps...)
 	}
 	if p.marked && !p.proxied {
-		steps = append(steps, "not taken by the transparent proxy rule of podkop")
+		steps = append(steps, "not taken by podkop's transparent proxy")
 	}
+	steps = append(steps, p.outcome())
+	return strings.Join(steps, " → ")
+}
+
+// outcome tells where a packet ended: dropped, forwarded through the router (the hook
+// forward), delivered to the router itself (input), or neither after the routing.
+func (p *tracedPacket) outcome() string {
 	switch {
 	case p.dropped != "":
-		steps = append(steps, "dropped by "+p.dropped)
+		return "dropped by " + p.dropped
 	case contains(p.hooks, "forward"):
-		steps = append(steps, "routed past the router (hook forward)")
+		return "forwarded through the router"
 	case contains(p.hooks, "input"):
-		steps = append(steps, "reached the router (hook input)")
+		return "delivered to the router"
 	default:
-		steps = append(steps, "lost after the routing: neither hook input nor forward")
+		return "lost after the routing: neither delivered to the router nor forwarded"
 	}
-	return strings.Join(steps, " → ")
+}
+
+// TraceVerdict tells in a sentence why the packets of a check that did not come to podkop
+// did not, from the first packet of the most telling fate: a drop, another table that took
+// them elsewhere, podkop's mark or transparent proxy that did not take them, a destination
+// past the router. Empty when no packet of the kind was traced. sources are the interfaces
+// podkop takes traffic from.
+func TraceVerdict(lines []string, hooks map[string]string, questions bool, sources []string) string {
+	var packets []*tracedPacket
+	for _, packet := range packetsOfTrace(lines, hooks) {
+		if packet.question == questions {
+			packets = append(packets, packet)
+		}
+	}
+	if len(packets) == 0 {
+		return ""
+	}
+	first := func(test func(*tracedPacket) bool) *tracedPacket {
+		for _, packet := range packets {
+			if test(packet) {
+				return packet
+			}
+		}
+		return nil
+	}
+	forwarded := func(p *tracedPacket) bool { return p.dropped == "" && contains(p.hooks, "forward") }
+	delivered := func(p *tracedPacket) bool {
+		return p.dropped == "" && contains(p.hooks, "input") && !contains(p.hooks, "forward")
+	}
+	if p := first(func(p *tracedPacket) bool { return p.dropped != "" }); p != nil {
+		return "a rule of the firewall drops them (" + p.dropped + ")"
+	}
+	if questions {
+		if p := first(func(p *tracedPacket) bool { return p.redirect != "" }); p != nil {
+			return "a rule of the firewall sends them to another DNS server (" + p.redirect + ")"
+		}
+		if p := first(forwarded); p != nil {
+			return "the device asks the DNS server " + p.destination.String() + ", not the router: the router passes its questions on to that server, and podkop never sees them"
+		}
+		if p := first(delivered); p != nil {
+			return "they reach the router (" + p.destination.String() + "), but its DNS server does not pass them to podkop: see the lines 'DNS on' above"
+		}
+		return "the kernel loses them after the routing"
+	}
+	if p := first(func(p *tracedPacket) bool { return p.otherProxy != "" }); p != nil {
+		return "another transparent proxy takes them (" + p.otherProxy + ")"
+	}
+	if p := first(func(p *tracedPacket) bool { return p.markReplaced != "" }); p != nil {
+		return "a rule of another table replaces podkop's mark on them (" + p.markReplaced + ")"
+	}
+	if p := first(func(p *tracedPacket) bool { return !p.marked }); p != nil {
+		if p.iif != "" && len(sources) > 0 && !contains(sources, p.iif) {
+			return "they come in on " + p.iif + ", which is not one of the interfaces podkop takes traffic from (" + strings.Join(sources, ", ") + ")"
+		}
+		return "podkop's rules do not mark them"
+	}
+	if p := first(func(p *tracedPacket) bool { return p.proxied && !forwarded(p) && !delivered(p) }); p != nil {
+		return "podkop's transparent proxy takes them, but the routing does not deliver them to the router: see the line 'Marked packets' above"
+	}
+	if p := first(forwarded); p != nil {
+		return "they pass through the router without podkop"
+	}
+	return "they reach the router, but not podkop"
 }
 
 func contains(list []string, value string) bool {

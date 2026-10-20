@@ -73,7 +73,7 @@ func TestTraceStories(t *testing.T) {
 		"to the router",
 		join(start("a1", packetSYN, true), traceLines("a1", "inet fw4 input packet: "+packetSYN,
 			`inet fw4 accept_from_lan rule iifname "eth1" accept comment "!fw4: accept lan IPv4/IPv6 traffic" (verdict accept)`)),
-		[]string{"SYN (1): marked by podkop → taken by the transparent proxy rule of podkop → reached the router (hook input)"},
+		[]string{"SYN (1): marked by podkop → taken by podkop's transparent proxy → delivered to the router"},
 	}, {
 		"a mark of another table between the marking and the transparent proxy",
 		join(start("b1", packetSYN, false), traceLines("b1", "inet foreign pre packet: "+packetSYN,
@@ -81,19 +81,19 @@ func TestTraceStories(t *testing.T) {
 			"inet PodkopTable proxy packet: "+packetSYN, "inet PodkopTable proxy policy accept meta mark 0x00000001 ",
 			"inet fw4 forward packet: "+packetSYN,
 			`inet fw4 accept_to_wan rule oifname "eth2" accept comment "!fw4: accept wan IPv4/IPv6 traffic" (verdict accept)`)),
-		[]string{"SYN (1): marked by podkop → its mark replaced by inet foreign pre: ip daddr 198.18.0.0/15 meta mark set 0x00000001 → not taken by the transparent proxy rule of podkop → routed past the router (hook forward)"},
+		[]string{"SYN (1): marked by podkop → its mark replaced by a rule of another table (inet foreign pre: ip daddr 198.18.0.0/15 meta mark set 0x00000001) → not taken by podkop's transparent proxy → forwarded through the router"},
 	}, {
 		"a mark of another table set before the one of podkop is no matter",
 		join(traceLines("c1", "inet PodkopTrace trace packet: "+packetSYN, "inet foreign pre packet: "+packetSYN,
 			"inet foreign pre rule ip daddr 198.18.0.0/15 meta mark set 0x00200000 (verdict continue)",
 			"inet PodkopTable mangle packet: "+packetSYN, "inet PodkopTable mangle rule "+ourMark,
 			"inet PodkopTable proxy packet: "+packetSYN, "inet PodkopTable proxy rule "+ourProxy, "inet fw4 input packet: "+packetSYN)),
-		[]string{"SYN (1): marked by podkop → taken by the transparent proxy rule of podkop → reached the router (hook input)"},
+		[]string{"SYN (1): marked by podkop → taken by podkop's transparent proxy → delivered to the router"},
 	}, {
 		"a mark replaced after the transparent proxy: lost after the routing",
 		join(start("d1", packetSYN, true), traceLines("d1", "inet fw4 prerouting packet: "+packetSYN, "inet foreign pre packet: "+packetSYN,
 			"inet foreign pre rule ip daddr 198.18.0.0/15 meta mark set 0x00000001 (verdict continue)")),
-		[]string{"SYN (1): marked by podkop → taken by the transparent proxy rule of podkop → its mark replaced by inet foreign pre: ip daddr 198.18.0.0/15 meta mark set 0x00000001 → lost after the routing: neither hook input nor forward"},
+		[]string{"SYN (1): marked by podkop → taken by podkop's transparent proxy → its mark replaced by a rule of another table (inet foreign pre: ip daddr 198.18.0.0/15 meta mark set 0x00000001) → lost after the routing: neither delivered to the router nor forwarded"},
 	}, {
 		"dropped by another table",
 		join(traceLines("e1", "inet PodkopTrace trace packet: "+packetSYN, "inet foreign pre packet: "+packetSYN,
@@ -104,7 +104,7 @@ func TestTraceStories(t *testing.T) {
 		join(start("f1", packetSYN, true), traceLines("f1", "inet fw4 input packet: "+packetSYN,
 			"inet fw4 input_lan rule jump reject_from_lan (verdict jump reject_from_lan)",
 			`inet fw4 handle_reject rule meta l4proto tcp reject with tcp reset comment "!fw4: Reject TCP traffic" (verdict drop)`)),
-		[]string{`SYN (1): marked by podkop → taken by the transparent proxy rule of podkop → dropped by inet fw4 handle_reject: meta l4proto tcp reject with tcp reset comment "!fw4: Reject TCP traffic"`},
+		[]string{`SYN (1): marked by podkop → taken by podkop's transparent proxy → dropped by inet fw4 handle_reject: meta l4proto tcp reject with tcp reset comment "!fw4: Reject TCP traffic"`},
 	}, {
 		// the SYN came to sing-box; the ACK was taken by another transparent proxy, which
 		// set its own mark: the connection never came up. Two packets with one trace id.
@@ -115,14 +115,14 @@ func TestTraceStories(t *testing.T) {
 				"inet foreign pre rule ip daddr 198.18.0.0/15 meta l4proto tcp tproxy ip to 127.0.0.1:7777 meta mark set 0x00000077 accept (verdict accept)",
 				"inet fw4 prerouting packet: "+packetACK)),
 		[]string{
-			"SYN (1): marked by podkop → taken by the transparent proxy rule of podkop → reached the router (hook input)",
-			"ACK (1): marked by podkop → taken by inet foreign pre: ip daddr 198.18.0.0/15 meta l4proto tcp tproxy ip to 127.0.0.1:7777 meta mark set 0x00000077 accept → not taken by the transparent proxy rule of podkop → lost after the routing: neither hook input nor forward",
+			"SYN (1): marked by podkop → taken by podkop's transparent proxy → delivered to the router",
+			"ACK (1): marked by podkop → taken by another transparent proxy (inet foreign pre: ip daddr 198.18.0.0/15 meta l4proto tcp tproxy ip to 127.0.0.1:7777 meta mark set 0x00000077 accept) → not taken by podkop's transparent proxy → lost after the routing: neither delivered to the router nor forwarded",
 		},
 	}, {
 		"what is no line of a trace is passed over; the same story of two packets is told once",
 		join([]string{"", "garbage", "trace id x"}, start("h1", packetSYN, true), traceLines("h1", "inet fw4 input packet: "+packetSYN),
 			start("h2", packetSYN, true), traceLines("h2", "inet fw4 input packet: "+packetSYN)),
-		[]string{"SYN (2): marked by podkop → taken by the transparent proxy rule of podkop → reached the router (hook input)"},
+		[]string{"SYN (2): marked by podkop → taken by podkop's transparent proxy → delivered to the router"},
 	}} {
 		t.Run(test.name, func(t *testing.T) {
 			require.Equal(t, test.want, TraceStories(test.lines, traceHooks, false))
@@ -147,7 +147,7 @@ func TestTraceQuestions(t *testing.T) {
 		join(question("q1", questionRouter, "inet fw4 input packet: "+questionRouter,
 			`inet fw4 accept_from_lan rule iifname "eth1" accept comment "!fw4: accept lan IPv4/IPv6 traffic" (verdict accept)`),
 			question("q2", questionRouter, "inet fw4 input packet: "+questionRouter)),
-		[]string{"to 192.168.78.1 (2): reached the router (hook input)"},
+		[]string{"to 192.168.78.1 (2): delivered to the router"},
 	}, {
 		"a zone of fw4 that rejects input",
 		question("q3", questionRouter, "inet fw4 input packet: "+questionRouter,
@@ -159,7 +159,7 @@ func TestTraceQuestions(t *testing.T) {
 		question("q4", questionRouter, "inet fw4 dstnat packet: "+questionRouter,
 			`inet fw4 dstnat_lan rule meta nfproto ipv4 udp dport 53 counter packets 3 bytes 180 redirect to :5353 comment "!fw4: Intercept-DNS" (verdict accept)`,
 			"inet fw4 input packet: "+questionRouter),
-		[]string{`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`},
+		[]string{`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → delivered to the router`},
 	}, {
 		// as fw4 writes them: the redirect, then the rule of the zone that accepts what was
 		// redirected, which a later question of the same flow passes alone
@@ -170,14 +170,14 @@ func TestTraceQuestions(t *testing.T) {
 			question("q10", questionRouter, "inet PodkopTable mangle rule ct status dnat return (verdict return)",
 				"inet fw4 input packet: "+questionRouter, `inet fw4 input_lan rule ct status dnat accept comment "!fw4: Accept port redirections" (verdict accept)`)),
 		[]string{
-			`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → reached the router (hook input)`,
-			`to 192.168.78.1 (1): sent elsewhere as the first question of its flow was (inet fw4 input_lan: ct status dnat accept comment "!fw4: Accept port redirections") → reached the router (hook input)`,
+			`to 192.168.78.1 (1): sent elsewhere by inet fw4 dstnat_lan: meta nfproto ipv4 udp dport 53 redirect to :5353 comment "!fw4: Intercept-DNS" → delivered to the router`,
+			`to 192.168.78.1 (1): sent elsewhere as the first question of its flow was (inet fw4 input_lan: ct status dnat accept comment "!fw4: Accept port redirections") → delivered to the router`,
 		},
 	}, {
 		"to a server past the router, while a connection of the check is traced too",
 		join(question("q5", questionPast, "inet fw4 forward packet: "+questionPast), start("q6", packetSYN, true),
 			traceLines("q6", "inet fw4 input packet: "+packetSYN)),
-		[]string{"to 8.8.8.8 (1): routed past the router (hook forward)"},
+		[]string{"to 8.8.8.8 (1): forwarded through the router"},
 	}} {
 		t.Run(test.name, func(t *testing.T) {
 			require.Equal(t, test.want, TraceStories(test.lines, traceHooks, true))
@@ -200,6 +200,30 @@ func TestRedirects(t *testing.T) {
 	} {
 		require.Equal(t, want, redirects.MatchString(text), text)
 	}
+}
+
+// The sentence that leads what the kernel did to the packets of a check.
+func TestTraceVerdict(t *testing.T) {
+	sources := []string{"eth1"}
+	dropped := join(traceLines("v1", "inet PodkopTrace trace packet: "+packetSYN, "inet foreign pre packet: "+packetSYN,
+		"inet foreign pre rule ip daddr 198.18.0.0/15 drop (verdict drop)"))
+	require.Equal(t, "a rule of the firewall drops them (inet foreign pre: ip daddr 198.18.0.0/15 drop)", TraceVerdict(dropped, traceHooks, false, sources))
+	replaced := join(start("v2", packetSYN, false), traceLines("v2", "inet foreign pre packet: "+packetSYN,
+		"inet foreign pre rule ip daddr 198.18.0.0/15 meta mark set 0x00000001 (verdict continue)", "inet fw4 forward packet: "+packetSYN))
+	require.Equal(t, "a rule of another table replaces podkop's mark on them (inet foreign pre: ip daddr 198.18.0.0/15 meta mark set 0x00000001)",
+		TraceVerdict(replaced, traceHooks, false, sources))
+	// not marked: the interface it came in on is not one podkop takes traffic from
+	unmarked := join(traceLines("v3", "inet PodkopTrace trace packet: "+packetSYN, "inet fw4 forward packet: "+packetSYN))
+	require.Equal(t, "they come in on eth1, which is not one of the interfaces podkop takes traffic from (br-lan)", TraceVerdict(unmarked, traceHooks, false, []string{"br-lan"}))
+	require.Equal(t, "podkop's rules do not mark them", TraceVerdict(unmarked, traceHooks, false, sources))
+	lost := join(start("v4", packetSYN, true))
+	require.Equal(t, "podkop's transparent proxy takes them, but the routing does not deliver them to the router: see the line 'Marked packets' above", TraceVerdict(lost, traceHooks, false, sources))
+	// DNS questions to a server past the router, or to the router
+	past := traceLines("v5", "inet PodkopTrace trace packet: "+questionPast, "inet fw4 forward packet: "+questionPast)
+	require.Equal(t, "the device asks the DNS server 8.8.8.8, not the router: the router passes its questions on to that server, and podkop never sees them", TraceVerdict(past, traceHooks, true, sources))
+	router := traceLines("v6", "inet PodkopTrace trace packet: "+questionRouter, "inet fw4 input packet: "+questionRouter)
+	require.Equal(t, "they reach the router (192.168.78.1), but its DNS server does not pass them to podkop: see the lines 'DNS on' above", TraceVerdict(router, traceHooks, true, sources))
+	require.Empty(t, TraceVerdict(nil, traceHooks, true, sources))
 }
 
 func TestTCPFlags(t *testing.T) {

@@ -29,7 +29,11 @@ GO_PKG_LDFLAGS:=-checklinkname=0
 # go.mod requires, and the commit of podkop-engine it is replaced with
 ENGINE_BASE:=$(shell sed -n 's|^require github.com/sagernet/sing-box v||p;s|^[[:space:]]*github.com/sagernet/sing-box v\([^ ]*\)$$|\1|p' $(BACKEND_DIR)/go.mod | head -n 1)
 ENGINE_COMMIT:=$(shell sed -n 's|^replace github.com/sagernet/sing-box => .*-\([0-9a-f]\{12\}\)$$|\1|p' $(BACKEND_DIR)/go.mod)
+# the release of podkop-engine that commit is (podkop-net/podkop-engine): changed with the
+# replace of go.mod
+ENGINE_RELEASE:=r15
 GO_PKG_LDFLAGS_X:=$(GO_PKG).Version=$(PKG_VERSION) \
+	$(GO_PKG).EngineRelease=$(ENGINE_RELEASE) \
 	github.com/sagernet/sing-box/constant.Version=$(ENGINE_BASE)-pdk-$(ENGINE_COMMIT)
 
 include $(INCLUDE_DIR)/package.mk

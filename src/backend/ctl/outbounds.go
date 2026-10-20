@@ -1,0 +1,129 @@
+package ctl
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/url"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
+)
+
+// outboundWait bounds the test of an outbound: global_check has to come within the 20 s
+// LuCI gives a call, and the tests run beside its other checks.
+const outboundWait = 5 * time.Second
+
+// directTag is the outbound of what goes without a proxy (plan: tagDirectOutbound).
+const directTag = "direct-out"
+
+// outboundLines tests the outbound of every section that has one, and the direct one, as
+// the dashboard of the page does: the delay of a request through it to delayTestURL; for a
+// group (urltest, selector) that of each member. The tests run at once.
+func outboundLines(caller *clashCaller, sections []model.Section) []string {
+	_, content := caller.call(http.MethodGet, "/proxies", "", 10*time.Second)
+	var listed struct {
+		Proxies map[string]struct {
+			Type string   `json:"type"`
+			Now  string   `json:"now"`
+			All  []string `json:"all"`
+		} `json:"proxies"`
+	}
+	if json.Unmarshal(content, &listed) != nil || len(listed.Proxies) == 0 {
+		return []string{"❌ The outbounds could not be tested: the Clash API of podkop does not answer"}
+	}
+	type test struct {
+		label, tag, kind, now string
+		members               int
+	}
+	var tests []test
+	for _, section := range sections {
+		if section.ConnectionType == "block" || section.ConnectionType == "exclusion" {
+			continue
+		}
+		tag := section.Name + "-out"
+		proxy, found := listed.Proxies[tag]
+		if !found {
+			continue
+		}
+		tests = append(tests, test{label: section.Name, tag: tag, kind: proxy.Type, now: proxy.Now, members: len(proxy.All)})
+	}
+	if _, found := listed.Proxies[directTag]; found {
+		tests = append(tests, test{label: "direct (without a proxy)", tag: directTag, kind: "Direct"})
+	}
+	results := make([]string, len(tests))
+	var tested sync.WaitGroup
+	for index, item := range tests {
+		tested.Add(1)
+		go func() {
+			defer tested.Done()
+			if item.kind == "Selector" || item.kind == "URLTest" {
+				results[index] = groupLine(caller, item.label, item.tag, item.kind, item.now, item.members)
+			} else {
+				results[index] = proxyLine(caller, item.label, item.tag)
+			}
+		}()
+	}
+	tested.Wait()
+	if len(results) == 0 {
+		return []string{"⚠️ No section has an outbound"}
+	}
+	return results
+}
+
+func delayQuery() string {
+	return url.Values{"url": {delayTestURL}, "timeout": {strconv.Itoa(int(outboundWait.Milliseconds()))}}.Encode()
+}
+
+// proxyLine tests one outbound: "✅ main: 123 ms".
+func proxyLine(caller *clashCaller, label string, tag string) string {
+	_, content := caller.call(http.MethodGet, "/proxies/"+url.PathEscape(tag)+"/delay?"+delayQuery(), "", outboundWait+3*time.Second)
+	var answer struct {
+		Delay   int    `json:"delay"`
+		Message string `json:"message"`
+	}
+	if json.Unmarshal(content, &answer) == nil && answer.Delay > 0 {
+		return "✅ " + label + ": " + strconv.Itoa(answer.Delay) + " ms"
+	}
+	reason := "no answer within " + strconv.Itoa(int(outboundWait.Seconds())) + " s"
+	if answer.Message != "" {
+		reason = answer.Message
+	}
+	return "❌ " + label + ": does not work (" + reason + ")"
+}
+
+// groupLine tests the members of a group: of an urltest the fastest and how many answer,
+// of a selector the one chosen.
+func groupLine(caller *clashCaller, label string, tag string, kind string, now string, members int) string {
+	_, content := caller.call(http.MethodGet, "/group/"+url.PathEscape(tag)+"/delay?"+delayQuery(), "", outboundWait+3*time.Second)
+	delays := map[string]int{}
+	_ = json.Unmarshal(content, &delays)
+	answering := make([]string, 0, len(delays))
+	for member, delay := range delays {
+		if delay > 0 {
+			answering = append(answering, member)
+		}
+	}
+	sort.Slice(answering, func(left int, right int) bool { return delays[answering[left]] < delays[answering[right]] })
+	if kind == "Selector" {
+		if delay := delays[now]; delay > 0 {
+			return "✅ " + label + " (selector, " + now + "): " + strconv.Itoa(delay) + " ms"
+		}
+		return "❌ " + label + " (selector, " + now + "): does not work; " + strconv.Itoa(len(answering)) + " of its outbounds answer"
+	}
+	if len(answering) == 0 {
+		return "❌ " + label + " (urltest): none of its outbounds answers"
+	}
+	var answered []string
+	for _, member := range answering {
+		answered = append(answered, member+" "+strconv.Itoa(delays[member])+" ms")
+	}
+	line := "✅ " + label + " (urltest): " + strings.Join(answered, ", ")
+	if len(answering) < members {
+		line += " (" + strconv.Itoa(len(answering)) + " of " + strconv.Itoa(members) + " answer)"
+	}
+	return line
+}
