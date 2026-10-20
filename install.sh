@@ -458,3 +458,5 @@ retire_podkop() {
         APK_CHANGES="$APK_CHANGES !$pkg"
     done
 }
+
+main
