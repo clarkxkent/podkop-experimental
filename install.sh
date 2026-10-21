@@ -139,8 +139,8 @@ msg "Downloading podkop-exp $TAG for $DISTRIB_ARCH ($((SIZE / 1048576)) MB)..."
 get "$PKG"
 get "$PAGE"
 FILES="$D/$PKG $D/$PAGE"
-# the translation goes with a LuCI in Russian, or where the page was in Russian
-if [ -n "$RU" ] && { has luci-i18n-base-ru || has luci-i18n-podkop-ru || has luci-i18n-podkop-exp-ru; }; then
+# the translation of the page: kept where it was, asked for elsewhere
+if [ -n "$RU" ] && { has luci-i18n-podkop-ru || has luci-i18n-podkop-exp-ru || ask "Русский язык интерфейса ставим? (Install the Russian translation of the page?)"; }; then
     get "$RU"
     FILES="$FILES $D/$RU"
 fi

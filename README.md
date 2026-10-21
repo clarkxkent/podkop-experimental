@@ -14,7 +14,7 @@ OpenWrt 24.10 or newer, at least 80 MB of RAM. In the router's shell:
 sh <(wget -O - https://raw.githubusercontent.com/podkop-net/podkop-experimental/main/install.sh)
 ```
 
-The installer checks the router, offers to remove podkop and the packages that conflict with podkop-exp (and, if the flash is short, sing-box packages podkop-exp does not need), then installs podkop-exp and its page, with the Russian translation when LuCI is in Russian. The settings of podkop are kept.
+The installer checks the router, offers to remove podkop and the packages that conflict with podkop-exp (and, if the flash is short, sing-box packages podkop-exp does not need), then installs podkop-exp and its page, with its Russian translation if you want it. The settings of podkop are kept.
 
 Back to podkop: remove `podkop-exp`, `luci-app-podkop-exp` and `luci-i18n-podkop-exp-ru`, then install podkop as its README says.
 
