@@ -91,13 +91,20 @@ pkg_install() {
     fi
 }
 
-pkg_arch() {
-    if [ "$PKG_IS_APK" -eq 1 ]; then
-        apk --print-arch
-    else
-        # the last architecture of opkg is the one of the router (all and noarch go first)
-        opkg print-architecture | awk '$2 != "all" && $2 != "noarch" { arch = $2 } END { print arch }'
-    fi
+# the package architectures of the router, the one of its release of OpenWrt first, then
+# those its package manager takes. "apk --print-arch" is the architecture of apk itself
+# (aarch64 on an aarch64_cortex-a53 router): it comes last.
+pkg_archs() {
+    {
+        sed -n "s/^DISTRIB_ARCH='\(.*\)'$/\1/p" /etc/openwrt_release
+        if [ "$PKG_IS_APK" -eq 1 ]; then
+            cat /etc/apk/arch 2>/dev/null
+            apk --print-arch
+        else
+            # "arch <name> <priority>": the highest priority first, all and noarch left out
+            opkg print-architecture 2>/dev/null | awk '$2 != "all" && $2 != "noarch" { print $3, $2 }' | sort -rn | awk '{ print $2 }'
+        fi
+    } | awk 'NF && !seen[$0]++'
 }
 
 # the packages besides podkop's own that need a package, a name a line
@@ -265,14 +272,11 @@ check_tproxy() {
 # the release: the URLs of podkop-exp for this architecture, of the page and of its Russian
 # translation (PKG_URL, PAGE_URL, RU_URL)
 find_release() {
-    local ext arch urls
+    local ext archs arch dashed urls
     ext=ipk
     [ "$PKG_IS_APK" -eq 1 ] && ext=apk
-    # podkop-exp is built for each architecture (the name of a package ends with the one of
-    # the router, "_" written as "-"); the packages of LuCI are the same for all
-    arch=$(pkg_arch | tr '_' '-')
-    [ -n "$arch" ] || die "Unknown package architecture"
-    msg "Package architecture: $arch"
+    archs=$(pkg_archs | tr '\n' ' ')
+    [ -n "$archs" ] || die "Unknown package architecture"
 
     wget -q -O "$DOWNLOAD_DIR/release.json" "$REPO" || die "The latest release is not available: $REPO"
     if grep -q 'API rate limit' "$DOWNLOAD_DIR/release.json"; then
@@ -280,10 +284,18 @@ find_release() {
     fi
     TAG=$(sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' "$DOWNLOAD_DIR/release.json" | head -n 1)
     urls=$(grep -o "https://[^\"[:space:]]*\.$ext" "$DOWNLOAD_DIR/release.json")
-    PKG_URL=$(echo "$urls" | grep "/podkop-exp-[^/]*-$arch\.$ext\$" | head -n 1)
+    # podkop-exp is built for each architecture (the name of a package ends with the one of
+    # the router, "_" written as "-"); the packages of LuCI are the same for all
+    PKG_URL=""
+    for arch in $archs; do
+        dashed=$(echo "$arch" | tr '_' '-')
+        PKG_URL=$(echo "$urls" | grep "/podkop-exp-[^/]*-$dashed\.$ext\$" | head -n 1)
+        [ -n "$PKG_URL" ] && break
+    done
+    [ -n "$PKG_URL" ] || die "Release $TAG has no podkop-exp for the architecture ${archs% } of this router"
+    msg "Package architecture: $arch"
     PAGE_URL=$(echo "$urls" | grep "/luci-app-podkop-exp-[^/]*\.$ext\$" | head -n 1)
     RU_URL=$(echo "$urls" | grep "/luci-i18n-podkop-exp-ru[^/]*\.$ext\$" | head -n 1)
-    [ -n "$PKG_URL" ] || die "Release $TAG has no podkop-exp for the architecture $arch"
     msg "Release $TAG"
 }
 
