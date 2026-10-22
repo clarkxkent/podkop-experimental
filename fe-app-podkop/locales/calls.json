@@ -206,7 +206,7 @@
     "call": "Close",
     "key": "Close",
     "places": [
-      "src/podkop/linkCheck.ts:197",
+      "src/podkop/linkCheck.ts:224",
       "src/partials/modal/renderModal.ts:26"
     ]
   },
@@ -1355,7 +1355,7 @@
     "call": "Show",
     "key": "Show",
     "places": [
-      "src/podkop/linkCheck.ts:190"
+      "src/podkop/linkCheck.ts:217"
     ]
   },
   {
@@ -1370,7 +1370,7 @@
     "call": "Some proxy links cannot be used",
     "key": "Some proxy links cannot be used",
     "places": [
-      "src/podkop/linkCheck.ts:167"
+      "src/podkop/linkCheck.ts:194"
     ]
   },
   {
@@ -1505,7 +1505,7 @@
     "call": "the engine refuses this link",
     "key": "the engine refuses this link",
     "places": [
-      "src/podkop/linkCheck.ts:136"
+      "src/podkop/linkCheck.ts:139"
     ]
   },
   {
@@ -1540,7 +1540,7 @@
     "call": "The settings are not saved. The engine of the router refuses these links:",
     "key": "The settings are not saved. The engine of the router refuses these links:",
     "places": [
-      "src/podkop/linkCheck.ts:169"
+      "src/podkop/linkCheck.ts:196"
     ]
   },
   {

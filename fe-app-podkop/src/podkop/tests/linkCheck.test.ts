@@ -20,9 +20,8 @@ vi.mock('../methods', () => ({
 }));
 vi.mock('../services', () => ({ logger: { warn: () => {} } }));
 
-const { linkPlaces, linkLabel, checkLinksBeforeSave } = await import(
-  '../linkCheck'
-);
+const { linkPlaces, linkLabel, checkLinksBeforeSave, linkBatches } =
+  await import('../linkCheck');
 
 const GOOD = 'vless://b831381d-6324-4d53-ad4f-8cda48b30811@192.0.2.1:443#DE-1';
 const KCP =
@@ -137,6 +136,27 @@ describe('checkLinksBeforeSave', () => {
     );
     expect(problems).toEqual([]);
     expect(asked).toEqual([]);
+  });
+
+  it('asks for many long links in parts below the limit of uhttpd', async () => {
+    const long = Array.from(
+      { length: 150 },
+      (_x, index) => `${GOOD}&extra=${'x'.repeat(500)}${index}`,
+    );
+    const problems = await checkLinksBeforeSave(
+      form({ main: { urltest_proxy_links: [...long, KCP] } }) as never,
+    );
+    expect(asked.length).toBeGreaterThan(1);
+    expect(asked.flat()).toEqual([...long, KCP]);
+    for (const part of asked)
+      expect(JSON.stringify(part).length).toBeLessThan(65536 - 1024);
+    expect(problems.map((problem) => problem.index)).toEqual([151]);
+  });
+
+  it('keeps a link longer than a part alone', () => {
+    expect(
+      linkBatches(['a', 'x'.repeat(50000), 'b']).map((part) => part.length),
+    ).toEqual([1, 1, 1]);
   });
 
   it('refuses nothing when the router does not answer', async () => {

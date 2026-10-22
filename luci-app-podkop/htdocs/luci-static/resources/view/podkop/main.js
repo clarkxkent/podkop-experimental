@@ -4515,14 +4515,15 @@ async function checkLinksBeforeSave(map) {
   if (places.some((place) => !validateProxyUrl(place.link).valid)) return [];
   const links = [...new Set(places.map((place) => place.link))];
   try {
-    const answer = await PodkopShellMethods.checkLinks(links);
-    if (!answer.success || !Array.isArray(answer.data) || answer.data.length !== links.length) {
-      logger.warn("[LINKS]", "the router did not check the links");
-      return [];
+    const results = /* @__PURE__ */ new Map();
+    for (const part of linkBatches(links)) {
+      const answer = await PodkopShellMethods.checkLinks(part);
+      if (!answer.success || !Array.isArray(answer.data) || answer.data.length !== part.length) {
+        logger.warn("[LINKS]", "the router did not check the links");
+        return [];
+      }
+      part.forEach((link, index) => results.set(link, answer.data[index]));
     }
-    const results = new Map(
-      links.map((link, index) => [link, answer.data[index]])
-    );
     return places.filter((place) => !results.get(place.link)?.ok).map((place) => ({
       ...place,
       error: results.get(place.link)?.error || _("the engine refuses this link")
@@ -4531,6 +4532,24 @@ async function checkLinksBeforeSave(map) {
     logger.warn("[LINKS]", "the router did not check the links:", err);
     return [];
   }
+}
+var PART_BYTES = 4e4;
+function linkBatches(links) {
+  const parts = [];
+  let part = [];
+  let size = 0;
+  for (const link of links) {
+    const bytes = JSON.stringify(link).length + 1;
+    if (part.length && size + bytes > PART_BYTES) {
+      parts.push(part);
+      part = [];
+      size = 0;
+    }
+    part.push(link);
+    size += bytes;
+  }
+  if (part.length) parts.push(part);
+  return parts;
 }
 function showLinkProblem(problem) {
   ui.hideModal();
@@ -4963,6 +4982,7 @@ return baseclass.extend({
   injectGlobalStyles,
   insertIf,
   insertIfObj,
+  linkBatches,
   linkLabel,
   linkPlaces,
   logger,

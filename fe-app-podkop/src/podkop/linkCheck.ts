@@ -2,13 +2,15 @@ import { validateProxyUrl } from '../validators/validateProxyUrl';
 import { linkParts, readAddress } from '../validators/linkAddress';
 import { PodkopShellMethods } from './methods';
 import { logger } from './services';
+import type { Podkop } from './types';
 
 // Before the settings are saved, the proxy links of every section are asked of the router:
 // the engine of its build takes each as the configuration would (check_links), so that a
 // link it cannot use (a transport or a kind of outbound this build has not) is told by its
 // field here, and not by the log after the apply, where it would keep the whole
-// configuration from running. One request for all the links of the form, at the save only:
-// the page checks the form of a link itself as it is typed.
+// configuration from running. One request for the links of the form (more for many long
+// ones: linkBatches), at the save only: the page checks the form of a link itself as it is
+// typed.
 
 // the fields of a section that hold proxy links
 const LINK_OPTIONS = [
@@ -116,18 +118,19 @@ export async function checkLinksBeforeSave(
   if (places.some((place) => !validateProxyUrl(place.link).valid)) return [];
   const links = [...new Set(places.map((place) => place.link))];
   try {
-    const answer = await PodkopShellMethods.checkLinks(links);
-    if (
-      !answer.success ||
-      !Array.isArray(answer.data) ||
-      answer.data.length !== links.length
-    ) {
-      logger.warn('[LINKS]', 'the router did not check the links');
-      return [];
+    const results = new Map<string, Podkop.LinkCheck>();
+    for (const part of linkBatches(links)) {
+      const answer = await PodkopShellMethods.checkLinks(part);
+      if (
+        !answer.success ||
+        !Array.isArray(answer.data) ||
+        answer.data.length !== part.length
+      ) {
+        logger.warn('[LINKS]', 'the router did not check the links');
+        return [];
+      }
+      part.forEach((link, index) => results.set(link, answer.data[index]));
     }
-    const results = new Map(
-      links.map((link, index) => [link, answer.data[index]]),
-    );
     return places
       .filter((place) => !results.get(place.link)?.ok)
       .map((place) => ({
@@ -139,6 +142,30 @@ export async function checkLinksBeforeSave(
     logger.warn('[LINKS]', 'the router did not check the links:', err);
     return [];
   }
+}
+
+// uhttpd takes no more than 64 KB of a request to /ubus (UH_UBUS_MAX_POST_SIZE) and answers
+// a larger one with an error: the links are asked in parts well below that
+const PART_BYTES = 40000;
+
+// linkBatches splits the links into parts of PART_BYTES of JSON at most, a link that is longer
+// alone
+export function linkBatches(links: string[]): string[][] {
+  const parts: string[][] = [];
+  let part: string[] = [];
+  let size = 0;
+  for (const link of links) {
+    const bytes = JSON.stringify(link).length + 1;
+    if (part.length && size + bytes > PART_BYTES) {
+      parts.push(part);
+      part = [];
+      size = 0;
+    }
+    part.push(link);
+    size += bytes;
+  }
+  if (part.length) parts.push(part);
+  return parts;
 }
 
 // showLinkProblem opens the tab of the sections and points at the field of a link: the item
