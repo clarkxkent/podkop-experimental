@@ -2,8 +2,10 @@ package ctl
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -72,6 +74,17 @@ func TestBusObject(t *testing.T) {
 	for command := range inProcess {
 		require.True(t, known[command], command)
 	}
+
+	// the links the page asks about before it saves: in the order asked
+	env.CheckLink = func(link string) error {
+		if strings.Contains(link, "kcp") {
+			return errors.New("the mKCP transport is not supported")
+		}
+		return nil
+	}
+	answer, status = BusObject(env).Methods["run"].Call(ctx, map[string]any{"command": "check_links", "params": []any{"vless://a@b:1?type=kcp", "socks5://c:1080"}})
+	require.Equal(t, ubus.StatusOK, status)
+	require.Equal(t, ExecResult{Stdout: `[{"ok":false,"error":"the mKCP transport is not supported"},{"ok":true}]` + "\n"}, answer)
 
 	// calls at once, as the bus makes them (run with -race)
 	var group sync.WaitGroup

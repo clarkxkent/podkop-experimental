@@ -42,6 +42,15 @@ type Environment struct {
 	AutostartPath string
 	// ServicePath is the script of the service.
 	ServicePath string
+	// CheckLink tells why the engine of this build cannot use a proxy link, as the
+	// configuration would refuse it (engine.CheckLink); nil returns are links it can use.
+	CheckLink func(link string) error
+}
+
+// LinkCheck is what check_links tells of a link: whether the engine takes it, and why not.
+type LinkCheck struct {
+	OK    bool   `json:"ok"`
+	Error string `json:"error,omitempty"`
 }
 
 // PageFeatures are the names get_sing_box_features gives: those the user interface of
@@ -74,6 +83,7 @@ var Commands = [][2]string{
 	{"check_fakeip_client", "<label> [ms]: what the backend saw of the check name a device opened a connection to"},
 	{"clash_api", "get_proxies | get_proxy_latency <tag> [ms] | get_group_latency <tag> [ms] | set_group_proxy <group> <proxy>"},
 	{"global_check", "[label port]: every check as one report; with the label of a check name and a port the device that asks opens connections to meanwhile, also what came of its DNS question and its connections"},
+	{"check_links", "<link>...: each proxy link as the engine of this build takes it when the settings run, as JSON: [{ok, error}]"},
 	{"check_logs", "[--since RUN:NUMBER]: the log of the backend and of sing-box; with --since, as JSON, only the lines after that number of that run (all of another run), and where to go on from"},
 	{"show_sing_box_config", "The sing-box configuration that runs, secrets masked; --rejected: the last one refused"},
 	{"show_config", "The settings, secrets masked"},
@@ -137,6 +147,23 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		}{asNumber(isRunning), asNumber(enabled), status, asNumber(diag.DNSOfLAN(readUCI(env.Paths.DHCP)))})
 	case "get_system_info":
 		return pretty(answerSystem(diag.SystemInfo(ctx, env.Version, env.SingBoxVersion, false), env.Engine))
+	case "check_links":
+		// the page asks before it saves the settings: the reason of a link the configuration
+		// would be refused for, by the field it is in, and not in the log after the apply
+		results := make([]LinkCheck, 0, len(arguments)-1)
+		for _, link := range arguments[1:] {
+			result := LinkCheck{OK: true}
+			if env.CheckLink == nil {
+				result = LinkCheck{Error: "links are not checked by this program"}
+			} else if err := env.CheckLink(link); err != nil {
+				// a kind of outbound the slim build leaves out: the advice of the engine names its
+				// own packages, which are not those of podkop
+				message, _, _ := strings.Cut(err.Error(), ", install podkop-engine-full")
+				result = LinkCheck{Error: message}
+			}
+			results = append(results, result)
+		}
+		return compact(results)
 	case "get_sing_box_features":
 		features := env.Features
 		if features == nil {

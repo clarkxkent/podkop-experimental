@@ -9,6 +9,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/api"
 	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
 	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/engine"
 	C "github.com/sagernet/sing-box/constant"
 
 	"github.com/spf13/cobra"
@@ -38,6 +39,7 @@ func ctlEnvironment() ctl.Environment {
 		ConfigDir:      configDir,
 		AutostartPath:  "/etc/rc.d/S99podkop",
 		ServicePath:    "/etc/init.d/podkop",
+		CheckLink:      engine.CheckLink,
 	}
 }
 

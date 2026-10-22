@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"testing"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
@@ -35,4 +37,27 @@ func TestBusStats(t *testing.T) {
 
 	answer, _ = busObject(ctl.Environment{}, fixedTraffic{}).Methods["stats"].Call(context.Background(), nil)
 	require.False(t, answer.(Stats).Running)
+}
+
+// check_links with the engine of this build: a link it takes, one whose transport it does not
+// have, and the answer of the build for VMess (the slim one has no VMess outbound)
+func TestCheckLinksWithTheEngine(t *testing.T) {
+	var output, errorOutput bytes.Buffer
+	env := ctl.Environment{CheckLink: engine.CheckLink}
+	status := ctl.Run(env, []string{"check_links",
+		"socks5://192.0.2.1:1080",
+		"vless://b831381d-6324-4d53-ad4f-8cda48b30811@192.0.2.1:443?type=kcp",
+		"vmess://b831381d-6324-4d53-ad4f-8cda48b30811@192.0.2.1:443?type=ws",
+	}, &output, &errorOutput)
+	require.Zero(t, status)
+	var results []ctl.LinkCheck
+	require.NoError(t, json.Unmarshal(output.Bytes(), &results))
+	require.Len(t, results, 3)
+	require.True(t, results[0].OK)
+	require.False(t, results[1].OK)
+	require.Contains(t, results[1].Error, "mKCP")
+	// the slim build says what it has not, without the advice of the engine's own packages
+	require.False(t, results[2].OK)
+	require.Contains(t, results[2].Error, "not included in this build")
+	require.NotContains(t, results[2].Error, "podkop-engine-full")
 }
