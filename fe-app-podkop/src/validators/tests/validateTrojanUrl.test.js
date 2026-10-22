@@ -93,6 +93,12 @@ const validUrls = [
     'xhttp + none',
     'trojan://VEetltxLtw@127.0.0.1:59072?type=xhttp&path=%2Fxhttppath&host=google.com&mode=auto&security=none#trojan-xhttp',
   ],
+  // a raw space in a parameter: the engine reads it (links of panels carry JSON with
+  // spaces there), what it does with the value is the router's to tell
+  [
+    'tcp + reality + unexpected spaces',
+    'trojan://cME3ZlUrYF@127.0.0.1:43772?type=tcp&security=reality&pbk=DckTwU6p6pTX9QxFXOi6vH4Vzt_RCE1vMCnj2c6hvjw&fp=chrome&sni= google.com&sid=221a80cf94&spx=%2F#trojan-tcp-reality',
+  ],
 ];
 
 const invalidUrls = [
@@ -101,10 +107,6 @@ const invalidUrls = [
   ['No host', 'trojan://pass@:443?type=tcp&security=tls'],
   ['No port', 'trojan://pass@127.0.0.1?type=tcp&security=tls'],
   ['Invalid port', 'trojan://pass@127.0.0.1:abc?type=tcp&security=tls'],
-  [
-    'tcp + reality + unexpected spaces',
-    'trojan://cME3ZlUrYF@127.0.0.1:43772?type=tcp&security=reality&pbk=DckTwU6p6pTX9QxFXOi6vH4Vzt_RCE1vMCnj2c6hvjw&fp=chrome&sni= google.com&sid=221a80cf94&spx=%2F#trojan-tcp-reality',
-  ],
 ];
 
 describe('validateTrojanUrl', () => {

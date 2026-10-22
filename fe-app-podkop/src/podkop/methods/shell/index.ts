@@ -92,6 +92,11 @@ export const PodkopShellMethods = {
     ),
   showSingBoxConfig: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
+  checkLinks: async (links: string[]) =>
+    callBaseMethod<Podkop.LinkCheck[]>(
+      Podkop.AvailableMethods.CHECK_LINKS,
+      links,
+    ),
   checkLogs: async () =>
     callBaseMethod<unknown>(Podkop.AvailableMethods.CHECK_LOGS),
   getSystemInfo: async () =>

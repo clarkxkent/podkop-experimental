@@ -1,124 +1,35 @@
 import { ValidationResult } from './types';
-import { parseQueryString } from '../helpers/parseQueryString';
+import {
+  wrongStart,
+  invalid,
+  linkParts,
+  readAddress,
+  readServer,
+  valid,
+  validPortList,
+} from './linkAddress';
 
+// hysteria2://[auth@]host[:ports]/?parameters#name, also hy2://: without a port, 443; the
+// port may be a list of ports and ranges ("443,8443-8450")
 export function validateHysteria2Url(url: string): ValidationResult {
-  try {
-    const isHY2 = url.startsWith('hysteria2://');
-    const isHY2Short = url.startsWith('hy2://');
-
-    if (!isHY2 && !isHY2Short)
-      return {
-        valid: false,
-        message: _('Invalid HY2 URL: must start with hysteria2:// or hy2://'),
-      };
-
-    if (/\s/.test(url))
-      return {
-        valid: false,
-        message: _('Invalid HY2 URL: must not contain spaces'),
-      };
-
-    const prefix = isHY2 ? 'hysteria2://' : 'hy2://';
-    const body = url.slice(prefix.length);
-
-    const [mainPart] = body.split('#');
-    const [authHostPort, queryString] = mainPart.split('?');
-
-    if (!authHostPort)
-      return {
-        valid: false,
-        message: _('Invalid HY2 URL: missing credentials/server'),
-      };
-
-    const [passwordPart, hostPortPart] = authHostPort.split('@');
-
-    if (!passwordPart)
-      return { valid: false, message: _('Invalid HY2 URL: missing password') };
-
-    if (!hostPortPart)
-      return {
-        valid: false,
-        message: _('Invalid HY2 URL: missing host & port'),
-      };
-
-    const [host, port] = hostPortPart.split(':');
-
-    if (!host)
-      return { valid: false, message: _('Invalid HY2 URL: missing host') };
-
-    if (!port)
-      return { valid: false, message: _('Invalid HY2 URL: missing port') };
-
-    const cleanedPort = port.replace('/', '');
-    const portEntries = cleanedPort.split(',');
-
-    const isValidPortNumber = (value: string) => {
-      if (!/^\d+$/.test(value)) return false;
-      const num = Number(value);
-      return num >= 1 && num <= 65535;
-    };
-
-    const isValidPortEntry = (entry: string) => {
-      if (!entry) return false;
-      if (!entry.includes('-')) return isValidPortNumber(entry);
-
-      const rangeParts = entry.split('-');
-      if (rangeParts.length !== 2) return false;
-
-      const [start, end] = rangeParts;
-      if (!isValidPortNumber(start) || !isValidPortNumber(end)) return false;
-
-      return Number(start) <= Number(end);
-    };
-
-    if (!portEntries.every(isValidPortEntry))
-      return {
-        valid: false,
-        message: _('Invalid HY2 URL: invalid port number'),
-      };
-
-    if (queryString) {
-      const params = parseQueryString(queryString);
-      const paramsKeys = Object.keys(params);
-
-      if (
-        paramsKeys.includes('insecure') &&
-        !['0', '1'].includes(params.insecure)
-      )
-        return {
-          valid: false,
-          message: _('Invalid HY2 URL: insecure must be 0 or 1'),
-        };
-
-      const validObfsTypes = ['none', 'salamander'];
-
-      if (paramsKeys.includes('obfs') && !validObfsTypes.includes(params.obfs))
-        return {
-          valid: false,
-          message: _('Invalid HY2 URL: unsupported obfs type'),
-        };
-
-      if (
-        paramsKeys.includes('obfs') &&
-        params.obfs !== 'none' &&
-        !params['obfs-password']
-      )
-        return {
-          valid: false,
-          message: _(
-            'Invalid HY2 URL: obfs-password required when obfs is set',
-          ),
-        };
-
-      if (paramsKeys.includes('sni') && !params.sni)
-        return {
-          valid: false,
-          message: _('Invalid HY2 URL: sni cannot be empty'),
-        };
-    }
-
-    return { valid: true, message: _('Valid') };
-  } catch (_e) {
-    return { valid: false, message: _('Invalid HY2 URL: parsing failed') };
+  const start = wrongStart(url, ['hysteria2', 'hy2']);
+  if (start) return invalid('Hysteria2', start);
+  const server = readAddress(linkParts(url).address);
+  if (typeof server === 'string') return invalid('Hysteria2', server);
+  if (
+    server.port !== '' &&
+    !(/^[\d,-]+$/.test(server.port) && validPortList(server.port))
+  ) {
+    return invalid('Hysteria2', _('invalid server port'));
   }
+  return valid();
+}
+
+// hysteria://host:port?auth=…&upmbps=…#name, Hysteria 1
+export function validateHysteriaUrl(url: string): ValidationResult {
+  const start = wrongStart(url, ['hysteria']);
+  if (start) return invalid('Hysteria', start);
+  const server = readServer(url, true);
+  if (typeof server === 'string') return invalid('Hysteria', server);
+  return valid();
 }

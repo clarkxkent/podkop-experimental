@@ -138,191 +138,150 @@ function bulkValidate(values, validate) {
   };
 }
 
-// src/validators/validateShadowsocksUrl.ts
-function validateShadowsocksUrl(url) {
-  if (!url.startsWith("ss://")) {
-    return {
-      valid: false,
-      message: _("Invalid Shadowsocks URL: must start with ss://")
-    };
-  }
-  try {
-    if (!url || /\s/.test(url)) {
-      return {
-        valid: false,
-        message: _("Invalid Shadowsocks URL: must not contain spaces")
-      };
-    }
-    const mainPart = url.includes("?") ? url.split("?")[0] : url.split("#")[0];
-    const encryptedPart = mainPart.split("/")[2]?.split("@")[0];
-    if (!encryptedPart) {
-      return {
-        valid: false,
-        message: _("Invalid Shadowsocks URL: missing credentials")
-      };
-    }
-    try {
-      const decoded = atob(encryptedPart);
-      if (!decoded.includes(":")) {
-        return {
-          valid: false,
-          message: _(
-            "Invalid Shadowsocks URL: decoded credentials must contain method:password"
-          )
-        };
-      }
-    } catch (_e) {
-      if (!encryptedPart.includes(":") && !encryptedPart.includes("-")) {
-        return {
-          valid: false,
-          message: _(
-            'Invalid Shadowsocks URL: missing method and password separator ":"'
-          )
-        };
-      }
-    }
-    const serverPart = url.split("@")[1];
-    if (!serverPart) {
-      return {
-        valid: false,
-        message: _("Invalid Shadowsocks URL: missing server address")
-      };
-    }
-    const [server, portAndRest] = serverPart.split(":");
-    if (!server) {
-      return {
-        valid: false,
-        message: _("Invalid Shadowsocks URL: missing server")
-      };
-    }
-    const port = portAndRest ? portAndRest.split(/[?#]/)[0] : null;
-    if (!port) {
-      return {
-        valid: false,
-        message: _("Invalid Shadowsocks URL: missing port")
-      };
-    }
-    const portNum = parseInt(port, 10);
-    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-      return {
-        valid: false,
-        message: _("Invalid port number. Must be between 1 and 65535")
-      };
-    }
-  } catch (_e) {
-    return {
-      valid: false,
-      message: _("Invalid Shadowsocks URL: parsing failed")
-    };
-  }
+// src/validators/linkAddress.ts
+function invalid(label, message) {
+  return { valid: false, message: `${label}: ${message}` };
+}
+function valid() {
   return { valid: true, message: _("Valid") };
 }
-
-// src/helpers/parseQueryString.ts
-function parseQueryString(query) {
-  const clean = query.startsWith("?") ? query.slice(1) : query;
-  return clean.split("&").filter(Boolean).reduce(
-    (acc, pair) => {
-      const [rawKey, rawValue = ""] = pair.split("=");
-      if (!rawKey) {
-        return acc;
-      }
-      const key = decodeURIComponent(rawKey);
-      const value = decodeURIComponent(rawValue);
-      return { ...acc, [key]: value };
-    },
-    {}
+function linkParts(url) {
+  let rest = url.slice(url.indexOf("://") + 3);
+  const hash = rest.indexOf("#");
+  if (hash >= 0) rest = rest.slice(0, hash);
+  const question = rest.indexOf("?");
+  if (question < 0) return { address: rest, query: "" };
+  return { address: rest.slice(0, question), query: rest.slice(question + 1) };
+}
+function schemeOf(url) {
+  const end = url.indexOf("://");
+  return end > 0 ? url.slice(0, end).toLowerCase() : "";
+}
+function wrongStart(url, schemes) {
+  if (!schemes.includes(schemeOf(url))) {
+    return `${_("must start with")} ${schemes.map((scheme) => scheme + "://").join(", ")}`;
+  }
+  return "";
+}
+function validPort(port) {
+  return /^\d{1,5}$/.test(port) && Number(port) >= 1 && Number(port) <= 65535;
+}
+function validPortList(list) {
+  const items = list.split(",").map((item) => item.trim()).filter(Boolean);
+  return items.length > 0 && items.every((item) => item.split(/[-:]/).every((port) => validPort(port)));
+}
+function validHost(host, bracketed) {
+  if (bracketed)
+    return /^[0-9a-fA-F:.]+(%[\w.-]+)?$/.test(host) && host.includes(":");
+  return /^[\p{L}\p{N}._-]+$/u.test(host);
+}
+function readAddress(address) {
+  if (/\s/.test(address)) return _("must not contain spaces");
+  let user;
+  let hostPort = address;
+  const at = address.lastIndexOf("@");
+  if (at >= 0) {
+    try {
+      user = decodeURIComponent(address.slice(0, at));
+    } catch (_e) {
+      return _("invalid escape in the user");
+    }
+    hostPort = address.slice(at + 1);
+  }
+  let path = "";
+  const slash = hostPort.indexOf("/");
+  if (slash >= 0) {
+    path = hostPort.slice(slash);
+    hostPort = hostPort.slice(0, slash);
+  }
+  let host;
+  let port = "";
+  let bracketed = false;
+  if (hostPort.startsWith("[")) {
+    const end = hostPort.indexOf("]");
+    if (end < 0) return _("invalid server address");
+    host = hostPort.slice(1, end);
+    bracketed = true;
+    const after = hostPort.slice(end + 1);
+    if (after && !after.startsWith(":")) return _("invalid server address");
+    port = after.slice(1);
+  } else {
+    const colon = hostPort.indexOf(":");
+    host = colon >= 0 ? hostPort.slice(0, colon) : hostPort;
+    port = colon >= 0 ? hostPort.slice(colon + 1) : "";
+  }
+  if (!host) return _("missing server address");
+  if (!validHost(host, bracketed)) return _("invalid server address");
+  return { user, host, port, path };
+}
+function readServer(url, portRequired) {
+  const address = readAddress(linkParts(url).address);
+  if (typeof address === "string") return address;
+  if (address.port === "") {
+    return portRequired ? _("missing server port") : address;
+  }
+  return validPort(address.port) ? address : _("invalid server port");
+}
+function validUserID(user) {
+  if (user.length <= 30) return true;
+  return /^[0-9a-fA-F]{8}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{4}-?[0-9a-fA-F]{12}$/.test(
+    user
   );
+}
+function strictUUID(text) {
+  return /^[0-9a-fA-F]{32}$/.test(text) || /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(
+    text
+  );
+}
+function decodeBase64(text) {
+  const cleaned = text.trim().replace(/-/g, "+").replace(/_/g, "/");
+  if (!cleaned || !/^[A-Za-z0-9+/]+={0,2}$/.test(cleaned)) return void 0;
+  try {
+    return atob(cleaned);
+  } catch (_e) {
+    return void 0;
+  }
+}
+
+// src/validators/validateShadowsocksUrl.ts
+function validateShadowsocksUrl(url) {
+  const start = wrongStart(url, ["ss"]);
+  if (start) return invalid("Shadowsocks", start);
+  let address = linkParts(url).address;
+  if (!address.includes("@")) {
+    const decoded = decodeBase64(address.replace(/\/$/, ""));
+    if (!decoded || !decoded.includes("@")) {
+      return invalid(
+        "Shadowsocks",
+        _("neither method:password@server nor base64 of it")
+      );
+    }
+    const at = decoded.lastIndexOf("@");
+    address = decoded.slice(0, at).replace(/%/g, "%25") + decoded.slice(at);
+  }
+  const server = readAddress(address);
+  if (typeof server === "string") return invalid("Shadowsocks", server);
+  if (server.port === "")
+    return invalid("Shadowsocks", _("missing server port"));
+  if (!validPort(server.port))
+    return invalid("Shadowsocks", _("invalid server port"));
+  let credentials = server.user ?? "";
+  if (!credentials.includes(":")) credentials = decodeBase64(credentials) ?? "";
+  const colon = credentials.indexOf(":");
+  if (colon <= 0)
+    return invalid("Shadowsocks", _("missing method and password"));
+  return valid();
 }
 
 // src/validators/validateVlessUrl.ts
 function validateVlessUrl(url) {
-  try {
-    if (!url.startsWith("vless://"))
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: must start with vless://"
-      };
-    if (/\s/.test(url))
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: must not contain spaces"
-      };
-    const body = url.slice("vless://".length);
-    const [mainPart] = body.split("#");
-    const [userHostPort, queryString] = mainPart.split("?");
-    if (!userHostPort)
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: missing host and UUID"
-      };
-    const [userPart, hostPortPart] = userHostPort.split("@");
-    if (!userPart)
-      return { valid: false, message: "Invalid VLESS URL: missing UUID" };
-    if (!hostPortPart)
-      return { valid: false, message: "Invalid VLESS URL: missing server" };
-    const [host, port] = hostPortPart.split(":");
-    if (!host)
-      return { valid: false, message: "Invalid VLESS URL: missing hostname" };
-    if (!port)
-      return { valid: false, message: "Invalid VLESS URL: missing port" };
-    const cleanedPort = port.replace("/", "");
-    const portNum = Number(cleanedPort);
-    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535)
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: invalid port number"
-      };
-    if (!queryString)
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: missing query parameters"
-      };
-    const params = parseQueryString(queryString);
-    const validTypes = [
-      "tcp",
-      "raw",
-      "udp",
-      "grpc",
-      "http",
-      "httpupgrade",
-      "xhttp",
-      "ws",
-      "kcp"
-    ];
-    const validSecurities = ["tls", "reality", "none"];
-    if (!params.type || !validTypes.includes(params.type))
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: unsupported or missing type"
-      };
-    if (!params.security || !validSecurities.includes(params.security))
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: unsupported or missing security"
-      };
-    if (params.security === "reality") {
-      if (!params.pbk)
-        return {
-          valid: false,
-          message: "Invalid VLESS URL: missing pbk for reality"
-        };
-      if (!params.fp)
-        return {
-          valid: false,
-          message: "Invalid VLESS URL: missing fp for reality"
-        };
-    }
-    if (params.flow === "xtls-rprx-vision-udp443") {
-      return {
-        valid: false,
-        message: "Invalid VLESS URL: flow xtls-rprx-vision-udp443 is not supported"
-      };
-    }
-    return { valid: true, message: _("Valid") };
-  } catch (_e) {
-    return { valid: false, message: _("Invalid VLESS URL: parsing failed") };
-  }
+  const start = wrongStart(url, ["vless"]);
+  if (start) return invalid("VLESS", start);
+  const server = readServer(url, true);
+  if (typeof server === "string") return invalid("VLESS", server);
+  if (!server.user) return invalid("VLESS", _("missing UUID"));
+  if (!validUserID(server.user)) return invalid("VLESS", _("invalid UUID"));
+  return valid();
 }
 
 // src/validators/validateOutboundJson.ts
@@ -337,233 +296,155 @@ function validateOutboundJson(value) {
 
 // src/validators/validateTrojanUrl.ts
 function validateTrojanUrl(url) {
-  try {
-    if (!url.startsWith("trojan://")) {
-      return {
-        valid: false,
-        message: _("Invalid Trojan URL: must start with trojan://")
-      };
-    }
-    if (!url || /\s/.test(url)) {
-      return {
-        valid: false,
-        message: _("Invalid Trojan URL: must not contain spaces")
-      };
-    }
-    const body = url.slice("trojan://".length);
-    const [mainPart] = body.split("#");
-    const [userHostPort] = mainPart.split("?");
-    const [userPart, hostPortPart] = userHostPort.split("@");
-    if (!userHostPort)
-      return {
-        valid: false,
-        message: "Invalid Trojan URL: missing credentials and host"
-      };
-    if (!userPart)
-      return { valid: false, message: "Invalid Trojan URL: missing password" };
-    if (!hostPortPart)
-      return {
-        valid: false,
-        message: "Invalid Trojan URL: missing hostname and port"
-      };
-    const [host, port] = hostPortPart.split(":");
-    if (!host)
-      return { valid: false, message: "Invalid Trojan URL: missing hostname" };
-    if (!port)
-      return { valid: false, message: "Invalid Trojan URL: missing port" };
-    const portNum = Number(port);
-    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535)
-      return {
-        valid: false,
-        message: "Invalid Trojan URL: invalid port number"
-      };
-  } catch (_e) {
-    return { valid: false, message: _("Invalid Trojan URL: parsing failed") };
-  }
-  return { valid: true, message: _("Valid") };
+  const start = wrongStart(url, ["trojan"]);
+  if (start) return invalid("Trojan", start);
+  const server = readServer(url, true);
+  if (typeof server === "string") return invalid("Trojan", server);
+  if (!server.user) return invalid("Trojan", _("missing password"));
+  return valid();
 }
 
 // src/validators/validateSocksUrl.ts
 function validateSocksUrl(url) {
-  try {
-    if (!/^socks(4|4a|5):\/\//.test(url)) {
-      return {
-        valid: false,
-        message: _(
-          "Invalid SOCKS URL: must start with socks4://, socks4a://, or socks5://"
-        )
-      };
-    }
-    if (!url || /\s/.test(url)) {
-      return {
-        valid: false,
-        message: _("Invalid SOCKS URL: must not contain spaces")
-      };
-    }
-    const body = url.replace(/^socks(4|4a|5):\/\//, "");
-    const [authAndHost] = body.split("#");
-    const [credentials, hostPortPart] = authAndHost.includes("@") ? authAndHost.split("@") : [null, authAndHost];
-    if (credentials) {
-      const [username, _password] = credentials.split(":");
-      if (!username) {
-        return {
-          valid: false,
-          message: _("Invalid SOCKS URL: missing username")
-        };
-      }
-    }
-    if (!hostPortPart) {
-      return {
-        valid: false,
-        message: _("Invalid SOCKS URL: missing host and port")
-      };
-    }
-    const [host, port] = hostPortPart.split(":");
-    if (!host) {
-      return {
-        valid: false,
-        message: _("Invalid SOCKS URL: missing hostname or IP")
-      };
-    }
-    if (!port) {
-      return { valid: false, message: _("Invalid SOCKS URL: missing port") };
-    }
-    const portNum = Number(port);
-    if (!Number.isInteger(portNum) || portNum < 1 || portNum > 65535) {
-      return {
-        valid: false,
-        message: _("Invalid SOCKS URL: invalid port number")
-      };
-    }
-    const ipv4Result = validateIPV4(host);
-    const domainResult = validateDomain(host);
-    if (!ipv4Result.valid && !domainResult.valid) {
-      return {
-        valid: false,
-        message: _("Invalid SOCKS URL: invalid host format")
-      };
-    }
-  } catch (_e) {
-    return { valid: false, message: _("Invalid SOCKS URL: parsing failed") };
-  }
-  return { valid: true, message: _("Valid") };
+  const start = wrongStart(url, [
+    "socks",
+    "socks4",
+    "socks4a",
+    "socks5",
+    "socks5h"
+  ]);
+  if (start) return invalid("SOCKS", start);
+  const server = readServer(url, false);
+  if (typeof server === "string") return invalid("SOCKS", server);
+  return valid();
 }
 
 // src/validators/validateHysteriaUrl.ts
 function validateHysteria2Url(url) {
-  try {
-    const isHY2 = url.startsWith("hysteria2://");
-    const isHY2Short = url.startsWith("hy2://");
-    if (!isHY2 && !isHY2Short)
-      return {
-        valid: false,
-        message: _("Invalid HY2 URL: must start with hysteria2:// or hy2://")
-      };
-    if (/\s/.test(url))
-      return {
-        valid: false,
-        message: _("Invalid HY2 URL: must not contain spaces")
-      };
-    const prefix = isHY2 ? "hysteria2://" : "hy2://";
-    const body = url.slice(prefix.length);
-    const [mainPart] = body.split("#");
-    const [authHostPort, queryString] = mainPart.split("?");
-    if (!authHostPort)
-      return {
-        valid: false,
-        message: _("Invalid HY2 URL: missing credentials/server")
-      };
-    const [passwordPart, hostPortPart] = authHostPort.split("@");
-    if (!passwordPart)
-      return { valid: false, message: _("Invalid HY2 URL: missing password") };
-    if (!hostPortPart)
-      return {
-        valid: false,
-        message: _("Invalid HY2 URL: missing host & port")
-      };
-    const [host, port] = hostPortPart.split(":");
-    if (!host)
-      return { valid: false, message: _("Invalid HY2 URL: missing host") };
-    if (!port)
-      return { valid: false, message: _("Invalid HY2 URL: missing port") };
-    const cleanedPort = port.replace("/", "");
-    const portEntries = cleanedPort.split(",");
-    const isValidPortNumber = (value) => {
-      if (!/^\d+$/.test(value)) return false;
-      const num = Number(value);
-      return num >= 1 && num <= 65535;
-    };
-    const isValidPortEntry = (entry) => {
-      if (!entry) return false;
-      if (!entry.includes("-")) return isValidPortNumber(entry);
-      const rangeParts = entry.split("-");
-      if (rangeParts.length !== 2) return false;
-      const [start, end] = rangeParts;
-      if (!isValidPortNumber(start) || !isValidPortNumber(end)) return false;
-      return Number(start) <= Number(end);
-    };
-    if (!portEntries.every(isValidPortEntry))
-      return {
-        valid: false,
-        message: _("Invalid HY2 URL: invalid port number")
-      };
-    if (queryString) {
-      const params = parseQueryString(queryString);
-      const paramsKeys = Object.keys(params);
-      if (paramsKeys.includes("insecure") && !["0", "1"].includes(params.insecure))
-        return {
-          valid: false,
-          message: _("Invalid HY2 URL: insecure must be 0 or 1")
-        };
-      const validObfsTypes = ["none", "salamander"];
-      if (paramsKeys.includes("obfs") && !validObfsTypes.includes(params.obfs))
-        return {
-          valid: false,
-          message: _("Invalid HY2 URL: unsupported obfs type")
-        };
-      if (paramsKeys.includes("obfs") && params.obfs !== "none" && !params["obfs-password"])
-        return {
-          valid: false,
-          message: _(
-            "Invalid HY2 URL: obfs-password required when obfs is set"
-          )
-        };
-      if (paramsKeys.includes("sni") && !params.sni)
-        return {
-          valid: false,
-          message: _("Invalid HY2 URL: sni cannot be empty")
-        };
-    }
-    return { valid: true, message: _("Valid") };
-  } catch (_e) {
-    return { valid: false, message: _("Invalid HY2 URL: parsing failed") };
+  const start = wrongStart(url, ["hysteria2", "hy2"]);
+  if (start) return invalid("Hysteria2", start);
+  const server = readAddress(linkParts(url).address);
+  if (typeof server === "string") return invalid("Hysteria2", server);
+  if (server.port !== "" && !(/^[\d,-]+$/.test(server.port) && validPortList(server.port))) {
+    return invalid("Hysteria2", _("invalid server port"));
   }
+  return valid();
+}
+function validateHysteriaUrl(url) {
+  const start = wrongStart(url, ["hysteria"]);
+  if (start) return invalid("Hysteria", start);
+  const server = readServer(url, true);
+  if (typeof server === "string") return invalid("Hysteria", server);
+  return valid();
+}
+
+// src/validators/validateVmessUrl.ts
+function validateVmessUrl(url) {
+  const start = wrongStart(url, ["vmess"]);
+  if (start) return invalid("VMess", start);
+  const body = url.slice("vmess://".length).split("#")[0];
+  const decoded = decodeBase64(body);
+  if (decoded === void 0 || !decoded.trim().startsWith("{")) {
+    const server = readServer(url, true);
+    if (typeof server === "string") return invalid("VMess", server);
+    if (!server.user) return invalid("VMess", _("missing UUID"));
+    if (!validUserID(server.user)) return invalid("VMess", _("invalid UUID"));
+    return valid();
+  }
+  let link;
+  try {
+    link = JSON.parse(decoded);
+  } catch (_e) {
+    return invalid("VMess", _("the base64 of the link is no JSON"));
+  }
+  const text = (value) => typeof value === "string" || typeof value === "number" ? String(value) : "";
+  if (!text(link.add)) return invalid("VMess", _("missing server address"));
+  if (!validPort(text(link.port)))
+    return invalid("VMess", _("invalid server port"));
+  if (!text(link.id)) return invalid("VMess", _("missing UUID"));
+  if (!validUserID(text(link.id))) return invalid("VMess", _("invalid UUID"));
+  return valid();
+}
+
+// src/validators/validateTuicUrl.ts
+function validateTuicUrl(url) {
+  const start = wrongStart(url, ["tuic"]);
+  if (start) return invalid("TUIC", start);
+  const server = readServer(url, false);
+  if (typeof server === "string") return invalid("TUIC", server);
+  const user = server.user ?? "";
+  const colon = user.indexOf(":");
+  if (colon < 0 || !strictUUID(user.slice(0, colon))) {
+    return invalid("TUIC", _("the user must be a UUID and a password"));
+  }
+  return valid();
+}
+
+// src/validators/validateHttpProxyUrl.ts
+function validateHttpProxyUrl(url) {
+  const start = wrongStart(url, ["http", "https"]);
+  if (start) return invalid("HTTP", start);
+  const server = readServer(url, true);
+  if (typeof server === "string") return invalid("HTTP", server);
+  if (server.path !== "" && server.path !== "/") {
+    return invalid("HTTP", _("an address with a path is a page, not a proxy"));
+  }
+  return valid();
+}
+
+// src/validators/validateTlsProxyUrl.ts
+function validateAnytlsUrl(url) {
+  const start = wrongStart(url, ["anytls"]);
+  if (start) return invalid("AnyTLS", start);
+  const server = readServer(url, false);
+  if (typeof server === "string") return invalid("AnyTLS", server);
+  return valid();
+}
+function validateNaiveUrl(url) {
+  const start = wrongStart(url, ["naive+https", "naive+quic"]);
+  if (start) return invalid("NaiveProxy", start);
+  const server = readServer(url, false);
+  if (typeof server === "string") return invalid("NaiveProxy", server);
+  return valid();
 }
 
 // src/validators/validateProxyUrl.ts
+var VALIDATORS = {
+  vless: validateVlessUrl,
+  vmess: validateVmessUrl,
+  trojan: validateTrojanUrl,
+  ss: validateShadowsocksUrl,
+  socks: validateSocksUrl,
+  socks4: validateSocksUrl,
+  socks4a: validateSocksUrl,
+  socks5: validateSocksUrl,
+  socks5h: validateSocksUrl,
+  http: validateHttpProxyUrl,
+  https: validateHttpProxyUrl,
+  hysteria2: validateHysteria2Url,
+  hy2: validateHysteria2Url,
+  hysteria: validateHysteriaUrl,
+  tuic: validateTuicUrl,
+  anytls: validateAnytlsUrl,
+  "naive+https": validateNaiveUrl,
+  "naive+quic": validateNaiveUrl
+};
+var PROXY_LINK_SCHEMES = Object.keys(VALIDATORS);
 function validateProxyUrl(url) {
-  const trimmedUrl = url.trim();
-  if (trimmedUrl.startsWith("ss://")) {
-    return validateShadowsocksUrl(trimmedUrl);
+  const lines = url.split("\n").map((line) => line.trim()).filter(Boolean);
+  if (lines.length > 1) {
+    return { valid: false, message: _("One link per field") };
   }
-  if (trimmedUrl.startsWith("vless://")) {
-    return validateVlessUrl(trimmedUrl);
+  const link = lines[0] ?? "";
+  const scheme = link.includes("://") ? link.slice(0, link.indexOf("://")).toLowerCase() : "";
+  const validator = VALIDATORS[scheme];
+  if (!validator) {
+    return {
+      valid: false,
+      message: `${_("Unsupported link type")}: ${scheme ? scheme + "://" : link.slice(0, 12)}. ${_("Supported")}: vless, vmess, trojan, ss, socks, http(s), hysteria2/hy2, hysteria, tuic, anytls, naive+https/naive+quic`
+    };
   }
-  if (trimmedUrl.startsWith("trojan://")) {
-    return validateTrojanUrl(trimmedUrl);
-  }
-  if (/^socks(4|4a|5):\/\//.test(trimmedUrl)) {
-    return validateSocksUrl(trimmedUrl);
-  }
-  if (trimmedUrl.startsWith("hysteria2://") || trimmedUrl.startsWith("hy2://")) {
-    return validateHysteria2Url(trimmedUrl);
-  }
-  return {
-    valid: false,
-    message: _(
-      "URL must start with vless://, ss://, trojan://, socks4/5://, or hysteria2://hy2://"
-    )
-  };
+  return validator(link);
 }
 
 // src/helpers/parseValueList.ts
@@ -622,6 +503,7 @@ var Podkop;
     AvailableMethods2["DISABLE"] = "disable";
     AvailableMethods2["GLOBAL_CHECK"] = "global_check";
     AvailableMethods2["SHOW_SING_BOX_CONFIG"] = "show_sing_box_config";
+    AvailableMethods2["CHECK_LINKS"] = "check_links";
     AvailableMethods2["CHECK_LOGS"] = "check_logs";
     AvailableMethods2["GET_SYSTEM_INFO"] = "get_system_info";
     AvailableMethods2["GET_SING_BOX_FEATURES"] = "get_sing_box_features";
@@ -709,6 +591,10 @@ var PodkopShellMethods = {
     19e3
   ),
   showSingBoxConfig: async () => callBaseMethod(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
+  checkLinks: async (links) => callBaseMethod(
+    Podkop.AvailableMethods.CHECK_LINKS,
+    links
+  ),
   checkLogs: async () => callBaseMethod(Podkop.AvailableMethods.CHECK_LOGS),
   getSystemInfo: async () => callBaseMethod(
     Podkop.AvailableMethods.GET_SYSTEM_INFO
@@ -4574,6 +4460,132 @@ var DiagnosticTab = {
   styles: styles4
 };
 
+// src/podkop/linkCheck.ts
+var LINK_OPTIONS = [
+  "proxy_string",
+  "selector_proxy_links",
+  "urltest_proxy_links",
+  "urltest_fallback_links"
+];
+function linkPlaces(map) {
+  const places = [];
+  for (const section of map.children ?? []) {
+    if (typeof section.cfgsections !== "function") continue;
+    for (const sectionId of section.cfgsections()) {
+      for (const option of section.children ?? []) {
+        if (!LINK_OPTIONS.includes(option.option) || !option.isActive(sectionId)) {
+          continue;
+        }
+        const value = option.formvalue(sectionId);
+        const links = (Array.isArray(value) ? value : [value]).map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
+        links.forEach(
+          (link, index) => places.push({
+            section: sectionId,
+            option: option.option,
+            field: (option.title ?? option.option).replace(/<[^>]*>/g, ""),
+            index: index + 1,
+            count: links.length,
+            link
+          })
+        );
+      }
+    }
+  }
+  return places;
+}
+function linkLabel(link) {
+  const scheme = link.includes("://") ? link.slice(0, link.indexOf("://")) : "";
+  let name = "";
+  const hash = link.indexOf("#");
+  if (hash >= 0) {
+    try {
+      name = decodeURIComponent(link.slice(hash + 1)).trim();
+    } catch (_e) {
+      name = link.slice(hash + 1).trim();
+    }
+  }
+  const address = readAddress(linkParts(link).address);
+  const server = typeof address === "string" ? "" : (address.host.includes(":") ? `[${address.host}]` : address.host) + (address.port ? `:${address.port}` : "");
+  const kind = server ? `${scheme}, ${server}` : scheme;
+  return name ? `\xAB${name}\xBB (${kind})` : kind;
+}
+async function checkLinksBeforeSave(map) {
+  const places = linkPlaces(map);
+  if (!places.length) return [];
+  if (places.some((place) => !validateProxyUrl(place.link).valid)) return [];
+  const links = [...new Set(places.map((place) => place.link))];
+  try {
+    const answer = await PodkopShellMethods.checkLinks(links);
+    if (!answer.success || !Array.isArray(answer.data) || answer.data.length !== links.length) {
+      logger.warn("[LINKS]", "the router did not check the links");
+      return [];
+    }
+    const results = new Map(
+      links.map((link, index) => [link, answer.data[index]])
+    );
+    return places.filter((place) => !results.get(place.link)?.ok).map((place) => ({
+      ...place,
+      error: results.get(place.link)?.error || _("the engine refuses this link")
+    }));
+  } catch (err) {
+    logger.warn("[LINKS]", "the router did not check the links:", err);
+    return [];
+  }
+}
+function showLinkProblem(problem) {
+  ui.hideModal();
+  const tab = document.querySelector(
+    'ul.cbi-tabmenu li[data-tab="section"] a'
+  );
+  tab?.click();
+  const field = document.getElementById(
+    `cbi-podkop-${problem.section}-${problem.option}`
+  );
+  if (!field) return;
+  const item = Array.from(field.querySelectorAll(".item")).find(
+    (element) => element.textContent?.trim() === problem.link
+  );
+  const target = item ?? field;
+  target.scrollIntoView({ block: "center" });
+  target.classList.add("pdk-link-problem");
+  setTimeout(() => target.classList.remove("pdk-link-problem"), 6e3);
+}
+function showLinkProblems(problems) {
+  ui.showModal(_("Some proxy links cannot be used"), [
+    E("p", {}, [
+      _(
+        "The settings are not saved. The engine of the router refuses these links:"
+      )
+    ]),
+    E(
+      "ul",
+      { class: "pdk-link-problems" },
+      problems.map(
+        (problem) => E("li", {}, [
+          E("strong", {}, [
+            `${problem.section} \xB7 ${problem.field}` + (problem.count > 1 ? ` \xB7 ${problem.index}/${problem.count}` : "")
+          ]),
+          E("div", {}, [linkLabel(problem.link)]),
+          E("div", { class: "pdk-link-problem-error" }, [problem.error]),
+          E(
+            "button",
+            {
+              class: "cbi-button cbi-button-action",
+              click: () => showLinkProblem(problem)
+            },
+            [_("Show")]
+          )
+        ])
+      )
+    ),
+    E("div", { class: "right" }, [
+      E("button", { class: "cbi-button", click: () => ui.hideModal() }, [
+        _("Close")
+      ])
+    ])
+  ]);
+}
+
 // src/styles.ts
 var GlobalStyles = `
 ${DashboardTab.styles}
@@ -4594,6 +4606,34 @@ ${PartialStyles}
 /* Vertical align for remove section action button */
 #cbi-podkop-section > .cbi-section-remove {
     margin-bottom: -32px;
+}
+
+/* The links the router refuses at a save (linkCheck.ts) */
+.pdk-link-problems {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pdk-link-problems li {
+    display: grid;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color-medium, #ddd);
+    overflow-wrap: anywhere;
+}
+
+.pdk-link-problems li button {
+    justify-self: start;
+}
+
+.pdk-link-problem-error {
+    color: var(--error-color-high, #c0392b);
+}
+
+.pdk-link-problem {
+    outline: 2px solid var(--error-color-high, #c0392b);
+    outline-offset: 2px;
 }
 
 /* Centered class helper */
@@ -4846,6 +4886,23 @@ function preserveScrollForPage(renderFn) {
   });
 }
 
+// src/helpers/parseQueryString.ts
+function parseQueryString(query) {
+  const clean = query.startsWith("?") ? query.slice(1) : query;
+  return clean.split("&").filter(Boolean).reduce(
+    (acc, pair) => {
+      const [rawKey, rawValue = ""] = pair.split("=");
+      if (!rawKey) {
+        return acc;
+      }
+      const key = decodeURIComponent(rawKey);
+      const value = decodeURIComponent(rawValue);
+      return { ...acc, [key]: value };
+    },
+    {}
+  );
+}
+
 // src/helpers/svgEl.ts
 function svgEl(tag, attrs = {}, children = []) {
   const NS = "http://www.w3.org/2000/svg";
@@ -4888,6 +4945,7 @@ return baseclass.extend({
   FETCH_TIMEOUT,
   Logger,
   PODKOP_LUCI_APP_VERSION,
+  PROXY_LINK_SCHEMES,
   PodkopShellMethods,
   REGIONAL_OPTIONS,
   RemoteFakeIPMethods,
@@ -4897,6 +4955,7 @@ return baseclass.extend({
   UPDATE_INTERVAL_OPTIONS,
   URLTEST_DOWNLOAD_URL_OPTIONS,
   bulkValidate,
+  checkLinksBeforeSave,
   coreService,
   executeShellCommand,
   getProxyUrlName,
@@ -4904,18 +4963,26 @@ return baseclass.extend({
   injectGlobalStyles,
   insertIf,
   insertIfObj,
+  linkLabel,
+  linkPlaces,
   logger,
   maskIP,
   onMount,
   parseQueryString,
   parseValueList,
   preserveScrollForPage,
+  showLinkProblems,
   splitProxyString,
   store,
   svgEl,
+  validateAnytlsUrl,
   validateDNS,
   validateDomain,
+  validateHttpProxyUrl,
+  validateHysteria2Url,
+  validateHysteriaUrl,
   validateIPV4,
+  validateNaiveUrl,
   validateOutboundJson,
   validatePath,
   validateProxyUrl,
@@ -4923,7 +4990,9 @@ return baseclass.extend({
   validateSocksUrl,
   validateSubnet,
   validateTrojanUrl,
+  validateTuicUrl,
   validateUrl,
   validateVlessUrl,
+  validateVmessUrl,
   withTimeout
 });

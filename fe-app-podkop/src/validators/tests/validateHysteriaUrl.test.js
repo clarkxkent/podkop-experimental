@@ -33,28 +33,25 @@ const validUrls = [
     'port range 5000-6000',
     'hysteria2://letmein@example.com:123,5000-6000/?insecure=1&obfs=salamander&obfs-password=gawrgura&pinSHA256=deadbeef&sni=real.example.com',
   ],
-];
 
-const invalidUrls = [
-  ['No prefix', 'pw@example.com:443'],
+  // the engine takes these, or judges them itself
   ['Missing password', 'hysteria2://@example.com:443/'],
-  ['Missing host', 'hysteria2://pw@:443/'],
-  ['Missing port', 'hysteria2://pw@example.com/'],
-  ['Non-numeric port', 'hysteria2://pw@example.com:port/'],
-  ['Port out of range', 'hysteria2://pw@example.com:99999/'],
-
-  // Obfuscation errors
+  ['Missing port: 443', 'hysteria2://pw@example.com/'],
+  ['A list of ports', 'hy2://pw@example.com:443,8443-8450/?sni=example.com'],
   ['Unknown obfs type', 'hysteria2://pw@example.com:443/?obfs=weird'],
   [
     'obfs without obfs-password',
     'hysteria2://pw@example.com:443/?obfs=salamander',
   ],
-
-  // insecure only accepts 0/1
-  ['invalid insecure', 'hysteria2://pw@example.com:443/?insecure=5'],
-
-  // SNI empty
   ['empty sni', 'hysteria2://pw@example.com:443/?sni='],
+];
+
+const invalidUrls = [
+  ['No prefix', 'pw@example.com:443'],
+  ['Missing host', 'hysteria2://pw@:443/'],
+  ['Non-numeric port', 'hysteria2://pw@example.com:port/'],
+  ['Port out of range', 'hysteria2://pw@example.com:99999/'],
+  ['Broken list of ports', 'hysteria2://pw@example.com:443,,x/'],
 ];
 
 describe('validateHysteria2Url', () => {

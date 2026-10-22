@@ -34,7 +34,9 @@ function createSectionContent(section, singBoxFeatures = []) {
     form.TextValue,
     "proxy_string",
     _("Proxy Configuration URL"),
-    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
+    _(
+      "Share links: vless, ss, trojan, socks, http(s), hysteria2, tuic, and vmess, anytls, hysteria, naive where the engine has them",
+    ),
   );
   o.depends("proxy_config_type", "url");
   o.rows = 5;
@@ -86,7 +88,9 @@ function createSectionContent(section, singBoxFeatures = []) {
     form.DynamicList,
     "selector_proxy_links",
     _("Selector Proxy Links"),
-    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
+    _(
+      "Share links: vless, ss, trojan, socks, http(s), hysteria2, tuic, and vmess, anytls, hysteria, naive where the engine has them",
+    ),
   );
   o.depends("proxy_config_type", "selector");
   o.rmempty = false;
@@ -109,7 +113,9 @@ function createSectionContent(section, singBoxFeatures = []) {
     form.DynamicList,
     "urltest_proxy_links",
     _("URLTest Proxy Links"),
-    _("vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links")
+    _(
+      "Share links: vless, ss, trojan, socks, http(s), hysteria2, tuic, and vmess, anytls, hysteria, naive where the engine has them",
+    ),
   );
   o.depends("proxy_config_type", "urltest");
   o.rmempty = false;
@@ -133,7 +139,9 @@ function createSectionContent(section, singBoxFeatures = []) {
       form.DynamicList,
       "urltest_fallback_links",
       _("Fallback URLs"),
-      _("Used in this order only while none of the URLTest proxy links responds")
+      _(
+        "Used in this order only while none of the URLTest proxy links responds",
+      ),
     );
     o.depends("proxy_config_type", "urltest");
     o.validate = function (section_id, value) {
@@ -156,7 +164,7 @@ function createSectionContent(section, singBoxFeatures = []) {
     form.ListValue,
     "urltest_check_interval",
     _("URLTest Check Interval"),
-    _("The interval between connectivity tests")
+    _("The interval between connectivity tests"),
   );
   o.value("30s", _("Every 30 seconds"));
   o.value("1m", _("Every 1 minute"));
@@ -169,7 +177,9 @@ function createSectionContent(section, singBoxFeatures = []) {
     form.Value,
     "urltest_tolerance",
     _("URLTest Tolerance"),
-    _("The maximum difference in response times (ms) allowed when comparing servers")
+    _(
+      "The maximum difference in response times (ms) allowed when comparing servers",
+    ),
   );
   o.default = "50";
   o.rmempty = false;
@@ -181,23 +191,38 @@ function createSectionContent(section, singBoxFeatures = []) {
 
     const parsed = parseFloat(value);
 
-    if (/^[0-9]+$/.test(value) && !isNaN(parsed) && isFinite(parsed) && parsed >= 50 && parsed <= 1000) {
+    if (
+      /^[0-9]+$/.test(value) &&
+      !isNaN(parsed) &&
+      isFinite(parsed) &&
+      parsed >= 50 &&
+      parsed <= 1000
+    ) {
       return true;
     }
 
-    return _('Must be a number in the range of 50 - 1000');
+    return _("Must be a number in the range of 50 - 1000");
   };
 
   o = section.option(
     form.Value,
     "urltest_testing_url",
     _("URLTest Testing URL"),
-    _("The URL used to test server connectivity")
+    _("The URL used to test server connectivity"),
   );
-  o.value("https://www.gstatic.com/generate_204", "https://www.gstatic.com/generate_204 (Google)");
-  o.value("https://cp.cloudflare.com/generate_204", "https://cp.cloudflare.com/generate_204 (Cloudflare)");
+  o.value(
+    "https://www.gstatic.com/generate_204",
+    "https://www.gstatic.com/generate_204 (Google)",
+  );
+  o.value(
+    "https://cp.cloudflare.com/generate_204",
+    "https://cp.cloudflare.com/generate_204 (Cloudflare)",
+  );
   o.value("https://captive.apple.com", "https://captive.apple.com (Apple)");
-  o.value("https://connectivity-check.ubuntu.com", "https://connectivity-check.ubuntu.com (Ubuntu)")
+  o.value(
+    "https://connectivity-check.ubuntu.com",
+    "https://connectivity-check.ubuntu.com (Ubuntu)",
+  );
   o.default = "https://www.gstatic.com/generate_204";
   o.rmempty = false;
   o.depends("proxy_config_type", "urltest");
@@ -221,7 +246,9 @@ function createSectionContent(section, singBoxFeatures = []) {
       form.ListValue,
       "urltest_download_check",
       _("Download Check"),
-      _("Before switching to a server, 64 KiB is downloaded through it, so a server that freezes connections after about 16 KB is skipped")
+      _(
+        "Before switching to a server, 64 KiB is downloaded through it, so a server that freezes connections after about 16 KB is skipped",
+      ),
     );
     o.value("default", _("Default"));
     o.value("off", _("Disabled"));
@@ -233,14 +260,19 @@ function createSectionContent(section, singBoxFeatures = []) {
       form.Value,
       "urltest_download_url",
       _("Download Check URL"),
-      _("The URL must serve at least 64 KiB or announce a shorter length")
+      _("The URL must serve at least 64 KiB or announce a shorter length"),
     );
-    Object.entries(main.URLTEST_DOWNLOAD_URL_OPTIONS).forEach(([key, label]) => {
-      o.value(key, _(label));
-    });
+    Object.entries(main.URLTEST_DOWNLOAD_URL_OPTIONS).forEach(
+      ([key, label]) => {
+        o.value(key, _(label));
+      },
+    );
     o.default = "https://speed.cloudflare.com/__down?bytes=65536";
     o.rmempty = false;
-    o.depends({ proxy_config_type: "urltest", urltest_download_check: "custom" });
+    o.depends({
+      proxy_config_type: "urltest",
+      urltest_download_check: "custom",
+    });
 
     o.validate = function (section_id, value) {
       if (!value || value.length === 0) {

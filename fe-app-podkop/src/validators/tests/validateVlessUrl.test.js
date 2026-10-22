@@ -52,16 +52,10 @@ const validUrls = [
     'xhttp + none',
     'vless://c2841505-ec32-4b8d-b6dd-3e19d648c321@127.0.0.1:45507?type=xhttp&encryption=none&path=%2Fxhttppath&host=xhttp&mode=auto&security=none#vless-xhttp',
   ],
-];
 
-const invalidUrls = [
-  ['No prefix', 'uuid@host:443?type=tcp&security=tls'],
-  ['No uuid', 'vless://@127.0.0.1:443?type=tcp&security=tls'],
-  ['No host', 'vless://uuid@:443?type=tcp&security=tls'],
-  ['No port', 'vless://uuid@127.0.0.1?type=tcp&security=tls'],
-  ['Invalid port', 'vless://uuid@127.0.0.1:abc?type=tcp&security=tls'],
-  ['Missing type', 'vless://uuid@127.0.0.1:443?security=tls'],
-  ['Missing security', 'vless://uuid@127.0.0.1:443?type=tcp'],
+  // what the engine of the router judges, not the page
+  ['no parameters', 'vless://uuid@127.0.0.1:443'],
+  ['missing security', 'vless://uuid@127.0.0.1:443?type=tcp'],
   [
     'reality without pbk',
     'vless://uuid@127.0.0.1:443?type=tcp&security=reality&fp=chrome',
@@ -71,9 +65,33 @@ const invalidUrls = [
     'vless://uuid@127.0.0.1:443?type=tcp&security=reality&pbk=abc',
   ],
   [
+    'IPv6 server',
+    'vless://6f1c9a0e-3b52-4c1e-9a55-2d4a1b0f7c11@[2001:db8::10]:443?security=none&type=tcp',
+  ],
+  ['name of the LAN', 'vless://6f1c9a0e3b524c1e9a552d4a1b0f7c11@proxy-box:443'],
+  [
+    'spaces in the name',
+    'vless://uuid@server.example.org:443?type=tcp#My Server DE',
+  ],
+  // a raw space in a parameter: the engine reads it (links of panels carry JSON with
+  // spaces there), what it does with the value is the router's to tell
+  [
     'tcp + reality + unexpected spaces',
     'vless://e95163dc-905e-480a-afe5-20b146288679@127.0.0.1:16399?type=tcp&encryption=none&security=reality&pbk=tqhSkeDR6jsqC-BYCnZWBrdL33g705ba8tV5-ZboWTM&fp=chrome&sni= google.com&sid=f6&spx=%2F#vless-tcp-reality',
   ],
+];
+
+const invalidUrls = [
+  ['No prefix', 'uuid@host:443?type=tcp&security=tls'],
+  ['No uuid', 'vless://@127.0.0.1:443?type=tcp&security=tls'],
+  [
+    'Not a UUID and too long for a name',
+    'vless://e95163dc-905e-480a-afe5-20b146288679x@127.0.0.1:443',
+  ],
+  ['No host', 'vless://uuid@:443?type=tcp&security=tls'],
+  ['No port', 'vless://uuid@127.0.0.1?type=tcp&security=tls'],
+  ['Invalid port', 'vless://uuid@127.0.0.1:abc?type=tcp&security=tls'],
+  ['IPv6 without brackets', 'vless://uuid@2001:db8::1:443'],
 ];
 
 describe('validateVlessUrl', () => {

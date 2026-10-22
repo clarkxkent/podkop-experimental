@@ -23,6 +23,34 @@ ${PartialStyles}
     margin-bottom: -32px;
 }
 
+/* The links the router refuses at a save (linkCheck.ts) */
+.pdk-link-problems {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.pdk-link-problems li {
+    display: grid;
+    gap: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border-color-medium, #ddd);
+    overflow-wrap: anywhere;
+}
+
+.pdk-link-problems li button {
+    justify-self: start;
+}
+
+.pdk-link-problem-error {
+    color: var(--error-color-high, #c0392b);
+}
+
+.pdk-link-problem {
+    outline: 2px solid var(--error-color-high, #c0392b);
+    outline-offset: 2px;
+}
+
 /* Centered class helper */
 .centered {
     display: flex;

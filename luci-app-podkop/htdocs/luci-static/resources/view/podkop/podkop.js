@@ -32,6 +32,23 @@ const EntryPoint = {
     // Enable tab views
     podkopMap.tabbed = true;
 
+    // A save by the user first asks the router about the proxy links of every section: one
+    // its engine refuses keeps the settings from being saved, with its field and the reason.
+    // The silent saves of LuCI (a section added or removed) are left alone.
+    const save = podkopMap.save;
+    podkopMap.save = function (cb, silent) {
+      if (silent) {
+        return save.call(this, cb, silent);
+      }
+      return main.checkLinksBeforeSave(this).then((problems) => {
+        if (problems.length) {
+          main.showLinkProblems(problems);
+          return Promise.reject(new Error("proxy links refused by the router"));
+        }
+        return save.call(this, cb, silent);
+      });
+    };
+
     // Sections tab
     const sectionsSection = podkopMap.section(
       form.TypedSection,

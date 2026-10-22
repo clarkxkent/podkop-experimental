@@ -1,96 +1,43 @@
 import { ValidationResult } from './types';
+import {
+  wrongStart,
+  decodeBase64,
+  invalid,
+  linkParts,
+  readAddress,
+  valid,
+  validPort,
+} from './linkAddress';
 
-// TODO refactor current validation and add tests
+// ss://userinfo@host:port/?plugin=…#name (SIP002): the method and the password as they are
+// ("method:password", URL-escaped) or in base64; or the older form, everything before the
+// name in base64 ("method:password@host:port")
 export function validateShadowsocksUrl(url: string): ValidationResult {
-  if (!url.startsWith('ss://')) {
-    return {
-      valid: false,
-      message: _('Invalid Shadowsocks URL: must start with ss://'),
-    };
+  const start = wrongStart(url, ['ss']);
+  if (start) return invalid('Shadowsocks', start);
+  let address = linkParts(url).address;
+  if (!address.includes('@')) {
+    const decoded = decodeBase64(address.replace(/\/$/, ''));
+    if (!decoded || !decoded.includes('@')) {
+      return invalid(
+        'Shadowsocks',
+        _('neither method:password@server nor base64 of it'),
+      );
+    }
+    // the user of this form is not escaped: a password may have a "%" of its own
+    const at = decoded.lastIndexOf('@');
+    address = decoded.slice(0, at).replace(/%/g, '%25') + decoded.slice(at);
   }
-
-  try {
-    if (!url || /\s/.test(url)) {
-      return {
-        valid: false,
-        message: _('Invalid Shadowsocks URL: must not contain spaces'),
-      };
-    }
-
-    const mainPart = url.includes('?') ? url.split('?')[0] : url.split('#')[0];
-
-    const encryptedPart = mainPart.split('/')[2]?.split('@')[0];
-
-    if (!encryptedPart) {
-      return {
-        valid: false,
-        message: _('Invalid Shadowsocks URL: missing credentials'),
-      };
-    }
-
-    try {
-      const decoded = atob(encryptedPart);
-
-      if (!decoded.includes(':')) {
-        return {
-          valid: false,
-          message: _(
-            'Invalid Shadowsocks URL: decoded credentials must contain method:password',
-          ),
-        };
-      }
-    } catch (_e) {
-      if (!encryptedPart.includes(':') && !encryptedPart.includes('-')) {
-        return {
-          valid: false,
-          message: _(
-            'Invalid Shadowsocks URL: missing method and password separator ":"',
-          ),
-        };
-      }
-    }
-
-    const serverPart = url.split('@')[1];
-
-    if (!serverPart) {
-      return {
-        valid: false,
-        message: _('Invalid Shadowsocks URL: missing server address'),
-      };
-    }
-
-    const [server, portAndRest] = serverPart.split(':');
-
-    if (!server) {
-      return {
-        valid: false,
-        message: _('Invalid Shadowsocks URL: missing server'),
-      };
-    }
-
-    const port = portAndRest ? portAndRest.split(/[?#]/)[0] : null;
-
-    if (!port) {
-      return {
-        valid: false,
-        message: _('Invalid Shadowsocks URL: missing port'),
-      };
-    }
-
-    const portNum = parseInt(port, 10);
-
-    if (isNaN(portNum) || portNum < 1 || portNum > 65535) {
-      return {
-        valid: false,
-        message: _('Invalid port number. Must be between 1 and 65535'),
-      };
-    }
-  } catch (_e) {
-    return {
-      valid: false,
-      message: _('Invalid Shadowsocks URL: parsing failed'),
-    };
-  }
-
-  return { valid: true, message: _('Valid') };
+  const server = readAddress(address);
+  if (typeof server === 'string') return invalid('Shadowsocks', server);
+  if (server.port === '')
+    return invalid('Shadowsocks', _('missing server port'));
+  if (!validPort(server.port))
+    return invalid('Shadowsocks', _('invalid server port'));
+  let credentials = server.user ?? '';
+  if (!credentials.includes(':')) credentials = decodeBase64(credentials) ?? '';
+  const colon = credentials.indexOf(':');
+  if (colon <= 0)
+    return invalid('Shadowsocks', _('missing method and password'));
+  return valid();
 }

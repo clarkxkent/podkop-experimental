@@ -14,15 +14,27 @@ const validUrls = [
     'plain-user',
     'ss://2022-blake3-aes-256-gcm:dmCly/Zh15Ww9+s+GFXiFTIkpw7c/qCISaBrai7WhhY=@127.0.0.1:27214?type=tcp#shadowsocks-plain-user',
   ],
+
+  ['no parameters', 'ss://YWVzLTI1Ni1nY206cGFzcw@127.0.0.1:8388'],
+  ['plain method and password', 'ss://aes-256-gcm:pass@[2001:db8::1]:8388#v6'],
+  [
+    'older form, all in base64',
+    'ss://YWVzLTI1Ni1nY206cGFzc0AxMjcuMC4wLjE6ODM4OA#old',
+  ],
+  [
+    'URL-safe base64 with a plugin',
+    'ss://YWVzLTEyOC1nY206dGVzdA@192.0.2.1:8888/?plugin=obfs-local%3Bobfs%3Dhttp#plugin',
+  ],
 ];
 
 const invalidUrls = [
   ['No prefix', 'uuid@127.0.0.1:443?type=tcp'],
-  ['No host', 'ss://password@:443?type=tcp'],
-  ['No port', 'ss://password@127.0.0.1?type=tcp'],
-  ['Invalid port', 'ss://password@127.0.0.1:abc?type=tcp'],
-  ['Missing type', 'ss://password@127.0.0.1:443'],
-  ['Contains space', 'ss://password@127.0.0.1:443?type=tcp #extra'],
+  ['No host', 'ss://YWVzLTI1Ni1nY206cGFzcw@:443?type=tcp'],
+  ['No port', 'ss://YWVzLTI1Ni1nY206cGFzcw@127.0.0.1?type=tcp'],
+  ['Invalid port', 'ss://YWVzLTI1Ni1nY206cGFzcw@127.0.0.1:abc?type=tcp'],
+  ['No method', 'ss://password@127.0.0.1:443'],
+  ['Space in the server', 'ss://YWVzLTI1Ni1nY206cGFzcw@127.0. 0.1:443'],
+  ['Older form without a server', 'ss://YWVzLTI1Ni1nY206cGFzcw'],
 ];
 
 describe('validateShadowsocksUrl', () => {

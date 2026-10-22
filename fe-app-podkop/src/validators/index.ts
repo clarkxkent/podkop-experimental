@@ -11,3 +11,8 @@ export * from './validateOutboundJson';
 export * from './validateTrojanUrl';
 export * from './validateProxyUrl';
 export * from './validateSocksUrl';
+export * from './validateHysteriaUrl';
+export * from './validateVmessUrl';
+export * from './validateTuicUrl';
+export * from './validateHttpProxyUrl';
+export * from './validateTlsProxyUrl';

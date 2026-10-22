@@ -64,6 +64,7 @@ export namespace Podkop {
     DISABLE = 'disable',
     GLOBAL_CHECK = 'global_check',
     SHOW_SING_BOX_CONFIG = 'show_sing_box_config',
+    CHECK_LINKS = 'check_links',
     CHECK_LOGS = 'check_logs',
     GET_SYSTEM_INFO = 'get_system_info',
     GET_SING_BOX_FEATURES = 'get_sing_box_features',
@@ -196,6 +197,12 @@ export namespace Podkop {
   }
 
   // the lines of the log a reader has not seen, and the cursor to ask with next
+  // what check_links tells of a link: whether the engine of the router takes it, and why not
+  export interface LinkCheck {
+    ok: boolean;
+    error?: string;
+  }
+
   export interface FakeIPClientCheckResult {
     dns: boolean;
     connection: boolean;

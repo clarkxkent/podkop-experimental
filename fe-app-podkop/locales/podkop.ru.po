@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-22 11:59+0000\n"
-"PO-Revision-Date: 2026-10-22 11:59+0000\n"
+"POT-Creation-Date: 2026-10-22 18:17+0000\n"
+"PO-Revision-Date: 2026-10-22 18:17+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -34,6 +34,9 @@ msgstr "Активные соединения"
 
 msgid "Additional marking rules found"
 msgstr "Найдены дополнительные правила маркировки"
+
+msgid "an address with a path is a page, not a proxy"
+msgstr "адрес с путём — это страница, а не прокси"
 
 msgid "Applicable for SOCKS and Shadowsocks proxy"
 msgstr "Применимо для SOCKS и Shadowsocks прокси"
@@ -308,47 +311,11 @@ msgstr "Неверный формат DNS-сервера. Примеры: 8.8.8.
 msgid "Invalid domain address"
 msgstr "Неверный домен"
 
+msgid "invalid escape in the user"
+msgstr "неверное экранирование в имени пользователя"
+
 msgid "Invalid format. Use X.X.X.X or X.X.X.X/Y"
 msgstr "Неверный формат. Используйте X.X.X.X или X.X.X.X/Y"
-
-msgid "Invalid HY2 URL: insecure must be 0 or 1"
-msgstr "Неверный URL Hysteria2: параметр insecure должен быть 0 или 1"
-
-msgid "Invalid HY2 URL: invalid port number"
-msgstr "Неверный URL Hysteria2: неверный номер порта"
-
-msgid "Invalid HY2 URL: missing credentials/server"
-msgstr "Неверный URL Hysteria2: отсутствуют учетные данные/сервер"
-
-msgid "Invalid HY2 URL: missing host"
-msgstr "Неверный URL Hysteria2: отсутствует хост"
-
-msgid "Invalid HY2 URL: missing host & port"
-msgstr "Неверный URL Hysteria2: отсутствуют хост и порт"
-
-msgid "Invalid HY2 URL: missing password"
-msgstr "Неверный URL Hysteria2: отсутствует пароль"
-
-msgid "Invalid HY2 URL: missing port"
-msgstr "Неверный URL Hysteria2: отсутствует порт"
-
-msgid "Invalid HY2 URL: must not contain spaces"
-msgstr "Неверный URL Hysteria2: не должен содержать пробелов"
-
-msgid "Invalid HY2 URL: must start with hysteria2:// or hy2://"
-msgstr "Неверный URL Hysteria2: должен начинаться с hysteria2:// или hy2://"
-
-msgid "Invalid HY2 URL: obfs-password required when obfs is set"
-msgstr "Неверный URL Hysteria2: требуется obfs-password, когда установлен obfs"
-
-msgid "Invalid HY2 URL: parsing failed"
-msgstr "Неверный URL Hysteria2: ошибка разбора"
-
-msgid "Invalid HY2 URL: sni cannot be empty"
-msgstr "Неверный URL Hysteria2: sni не может быть пустым"
-
-msgid "Invalid HY2 URL: unsupported obfs type"
-msgstr "Неверный URL Hysteria2: неподдерживаемый тип obfs"
 
 msgid "Invalid IP address"
 msgstr "Неверный IP-адрес"
@@ -359,77 +326,17 @@ msgstr "Неверный формат JSON"
 msgid "Invalid path format. Path must start with \"/\" and contain valid characters"
 msgstr "Неверный формат пути. Путь должен начинаться с \"/\" и содержать допустимые символы"
 
-msgid "Invalid port number. Must be between 1 and 65535"
-msgstr "Неверный номер порта. Допустимо от 1 до 65535"
+msgid "invalid server address"
+msgstr "неверный адрес сервера"
 
-msgid "Invalid Shadowsocks URL: decoded credentials must contain method:password"
-msgstr "Неверный URL Shadowsocks: декодированные данные должны содержать method:password"
-
-msgid "Invalid Shadowsocks URL: missing credentials"
-msgstr "Неверный URL Shadowsocks: отсутствуют учетные данные"
-
-msgid "Invalid Shadowsocks URL: missing method and password separator \":\""
-msgstr "Неверный URL Shadowsocks: отсутствует разделитель метода и пароля \":\""
-
-msgid "Invalid Shadowsocks URL: missing port"
-msgstr "Неверный URL Shadowsocks: отсутствует порт"
-
-msgid "Invalid Shadowsocks URL: missing server"
-msgstr "Неверный URL Shadowsocks: отсутствует сервер"
-
-msgid "Invalid Shadowsocks URL: missing server address"
-msgstr "Неверный URL Shadowsocks: отсутствует адрес сервера"
-
-msgid "Invalid Shadowsocks URL: must not contain spaces"
-msgstr "Неверный URL Shadowsocks: не должен содержать пробелов"
-
-msgid "Invalid Shadowsocks URL: must start with ss://"
-msgstr "Неверный URL Shadowsocks: должен начинаться с ss://"
-
-msgid "Invalid Shadowsocks URL: parsing failed"
-msgstr "Неверный URL Shadowsocks: ошибка разбора"
-
-msgid "Invalid SOCKS URL: invalid host format"
-msgstr "Неверный URL SOCKS: неверный формат хоста"
-
-msgid "Invalid SOCKS URL: invalid port number"
-msgstr "Неверный URL SOCKS: неверный номер порта"
-
-msgid "Invalid SOCKS URL: missing host and port"
-msgstr "Неверный URL SOCKS: отсутствует хост и порт"
-
-msgid "Invalid SOCKS URL: missing hostname or IP"
-msgstr "Неверный URL SOCKS: отсутствует имя хоста или IP-адрес"
-
-msgid "Invalid SOCKS URL: missing port"
-msgstr "Неверный URL SOCKS: отсутствует порт"
-
-msgid "Invalid SOCKS URL: missing username"
-msgstr "Неверный URL SOCKS: отсутствует имя пользователя"
-
-msgid "Invalid SOCKS URL: must not contain spaces"
-msgstr "Неверный URL SOCKS: не должен содержать пробелов"
-
-msgid "Invalid SOCKS URL: must start with socks4://, socks4a://, or socks5://"
-msgstr "Неверный URL-адрес SOCKS: должен начинаться с socks4://, socks4a:// или socks5://"
-
-msgid "Invalid SOCKS URL: parsing failed"
-msgstr "Неверный URL SOCKS: парсинг не удался"
-
-msgid "Invalid Trojan URL: must not contain spaces"
-msgstr "Неверный URL Trojan: не должен содержать пробелов"
-
-msgid "Invalid Trojan URL: must start with trojan://"
-msgstr "Неверный URL Trojan: должен начинаться с trojan://"
-
-msgid "Invalid Trojan URL: parsing failed"
-msgstr "Неверный URL Trojan: ошибка разбора"
+msgid "invalid server port"
+msgstr "неверный порт сервера"
 
 msgid "Invalid URL format"
 msgstr "Неверный формат URL"
 
-msgid "Invalid VLESS URL: parsing failed"
-msgstr "Неверный URL VLESS: ошибка разбора"
+msgid "invalid UUID"
+msgstr "неверный UUID"
 
 msgid "IP address 0.0.0.0 is not allowed"
 msgstr "IP-адрес 0.0.0.0 не допускается"
@@ -458,6 +365,21 @@ msgstr "Основной DNS"
 msgid "Memory Usage"
 msgstr "Использование памяти"
 
+msgid "missing method and password"
+msgstr "нет метода и пароля"
+
+msgid "missing password"
+msgstr "нет пароля"
+
+msgid "missing server address"
+msgstr "нет адреса сервера"
+
+msgid "missing server port"
+msgstr "нет порта сервера"
+
+msgid "missing UUID"
+msgstr "нет UUID"
+
 msgid "Mixed Proxy Port"
 msgstr "Порт смешанного прокси"
 
@@ -466,6 +388,15 @@ msgstr "Наблюдаемые интерфейсы"
 
 msgid "Must be a number in the range of 50 - 1000"
 msgstr "Должно быть числом от 50 до 1000"
+
+msgid "must not contain spaces"
+msgstr "не должна содержать пробелов"
+
+msgid "must start with"
+msgstr "должна начинаться с"
+
+msgid "neither method:password@server nor base64 of it"
+msgstr "нет ни method:password@сервер, ни base64 этой строки"
 
 msgid "Network Interface"
 msgstr "Сетевой интерфейс"
@@ -481,6 +412,9 @@ msgstr "Не отвечает"
 
 msgid "Not running"
 msgstr "Не запущено"
+
+msgid "One link per field"
+msgstr "Одна ссылка на поле"
 
 msgid "Operation timed out"
 msgstr "Время ожидания истекло"
@@ -638,8 +572,17 @@ msgstr "Информация о сервисах"
 msgid "Settings"
 msgstr "Настройки"
 
+msgid "Share links: vless, ss, trojan, socks, http(s), hysteria2, tuic, and vmess, anytls, hysteria, naive where the engine has them"
+msgstr "Ссылки: vless, ss, trojan, socks, http(s), hysteria2, tuic, а также vmess, anytls, hysteria, naive, если они есть в движке"
+
+msgid "Show"
+msgstr "Показать"
+
 msgid "Show sing-box config"
 msgstr "Показать sing-box конфигурацию"
+
+msgid "Some proxy links cannot be used"
+msgstr "Некоторые ссылки на прокси нельзя использовать"
 
 msgid "Source Network Interface"
 msgstr "Сетевой интерфейс источника"
@@ -668,6 +611,9 @@ msgstr "Остановить podkop"
 msgid "Successfully copied!"
 msgstr "Успешно скопировано!"
 
+msgid "Supported"
+msgstr "Поддерживаются"
+
 msgid "System info"
 msgstr "Системная информация"
 
@@ -683,11 +629,17 @@ msgstr "Тестирование задержки"
 msgid "Text List"
 msgstr "Текстовый список"
 
+msgid "the base64 of the link is no JSON"
+msgstr "в base64 ссылки не JSON"
+
 msgid "The devices YACD is opened from. A device of the WAN also needs its port 9090 opened in the firewall of the router"
 msgstr "Устройства, с которых открывается YACD. Для устройства WAN порт 9090 нужно также открыть в межсетевом экране роутера"
 
 msgid "The DNS server used to look up the IP address of an upstream DNS server"
 msgstr "DNS-сервер, используемый для поиска IP-адреса вышестоящего DNS-сервера"
+
+msgid "the engine refuses this link"
+msgstr "движок отвергает эту ссылку"
 
 msgid "The interval between connectivity tests"
 msgstr "Интервал между тестами подключения"
@@ -701,11 +653,17 @@ msgstr "Ссылки появятся здесь после «Сохранить
 msgid "The maximum difference in response times (ms) allowed when comparing servers"
 msgstr "Максимально допустимая разница во времени отклика (мс) при сравнении серверов"
 
+msgid "The settings are not saved. The engine of the router refuses these links:"
+msgstr "Настройки не сохранены. Движок роутера отвергает эти ссылки:"
+
 msgid "The URL must serve at least 64 KiB or announce a shorter length"
 msgstr "Ссылка должна отдавать не меньше 64 КиБ или сообщать меньшую длину"
 
 msgid "The URL used to test server connectivity"
 msgstr "URL-адрес, используемый для проверки подключения к серверу"
+
+msgid "the user must be a UUID and a password"
+msgstr "пользователь должен быть UUID и паролем"
 
 msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
 msgstr "Веб-панель sing-box, открывается с устройств, выбранных ниже; без неё API панели доступен только с самого роутера"
@@ -740,11 +698,11 @@ msgstr "неизвестно"
 msgid "Unknown error"
 msgstr "Неизвестная ошибка"
 
+msgid "Unsupported link type"
+msgstr "Неподдерживаемый тип ссылки"
+
 msgid "Uplink"
 msgstr "Исходящий"
-
-msgid "URL must start with vless://, ss://, trojan://, socks4/5://, or hysteria2://hy2://"
-msgstr "URL должен начинаться с vless://, ss://, trojan://, socks4/5:// или hysteria2:// hy2://"
 
 msgid "URL must use one of the following protocols:"
 msgstr "URL должен использовать один из следующих протоколов:"
@@ -796,9 +754,6 @@ msgstr "Посмотреть логи"
 
 msgid "Visit Wiki"
 msgstr "Перейти в wiki"
-
-msgid "vless://, ss://, trojan://, socks4/5://, hy2/hysteria2:// links"
-msgstr ""
 
 msgid "Warning: %s cannot be used together with %s. Previous selections have been removed."
 msgstr "Предупреждение: %s нельзя использовать вместе с %s. Предыдущие варианты были удалены."

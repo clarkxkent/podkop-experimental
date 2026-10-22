@@ -10,18 +10,25 @@ const validUrls = [
   ['socks5 with domain', 'socks5://user:pass@my.proxy.com:1080'],
   ['socks5 with dash in domain', 'socks5://user:pass@fast-proxy.net:8080'],
   ['socks5 with uppercase domain', 'socks5://USER:PASSWORD@Example.COM:1080'],
+
+  // the engine takes these
+  ['no port: 1080', 'socks5://127.0.0.1'],
+  ['empty username', 'socks5://:pass@127.0.0.1:1080'],
+  ['underscore in a name', 'socks5://user:pass@exa_mple.com:1080'],
+  ['socks5h', 'socks5h://192.0.2.1:1080'],
+  [
+    'socks:// of v2rayN, the user in base64',
+    'socks://dXNlcjpwYXNz@192.0.2.1:1080#v2rayN',
+  ],
 ];
 
 const invalidUrls = [
   ['no prefix', '127.0.0.1:1080'],
   ['wrong prefix', 'http://127.0.0.1:1080'],
   ['missing host', 'socks5://user:pass@:1080'],
-  ['missing port', 'socks5://127.0.0.1'],
   ['invalid port (non-numeric)', 'socks5://127.0.0.1:abc'],
   ['invalid port (too high)', 'socks5://127.0.0.1:99999'],
   ['space in url', 'socks5://127.0. 0.1:1080'],
-  ['missing username when auth provided', 'socks5://:pass@127.0.0.1:1080'],
-  ['invalid domain chars', 'socks5://user:pass@exa_mple.com:1080'],
   ['extra symbol', 'socks5:///127.0.0.1:1080'],
 ];
 
