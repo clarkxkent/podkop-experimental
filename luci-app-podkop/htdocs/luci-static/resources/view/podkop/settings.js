@@ -258,6 +258,19 @@ function createSettingsContent(section, singBoxFeatures = []) {
   o.multiple = true;
   o.optional = false;
   o.rmempty = false;
+  // Only the devices with an address of their own: the firewall lets in the device a
+  // connection comes in through, which is the one with the address (a bridge, not its
+  // ports). The link-local IPv6 address every device that is up has does not count.
+  o.filter = function (section_id, value) {
+    const device = this.devices.find((dev) => dev.getName() === value);
+    if (!device) {
+      return false;
+    }
+    return (
+      device.getIPAddrs().length > 0 ||
+      device.getIP6Addrs().some((address) => !/^fe80:/i.test(address))
+    );
+  };
   o.validate = function (section_id) {
     return L.toArray(this.formvalue(section_id)).length
       ? true
