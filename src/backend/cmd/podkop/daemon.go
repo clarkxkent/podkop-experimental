@@ -11,11 +11,13 @@ import (
 
 	"github.com/podkop-net/podkop-experimental/src/backend/api"
 	"github.com/podkop-net/podkop-experimental/src/backend/clock"
+	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/supervisor"
+	"github.com/podkop-net/podkop-experimental/src/backend/ubus"
 
 	"github.com/spf13/cobra"
 )
@@ -93,6 +95,10 @@ var commandDaemon = &cobra.Command{
 				os.Stdout.WriteString("[warn] the socket for commands is not there: " + err.Error() + "\n")
 			}
 		}()
+		// the commands of the page answered here, with no program started for a call
+		go ubus.Serve(ctx, ubus.Socket(), ctl.BusObject(ctlEnvironment()), func(message string) {
+			say("warn", message)
+		})
 		if err := backend.Run(ctx, reload); err != nil {
 			// sing-box did not close and holds its sockets: the router is given back, and
 			// a new process is the only way on

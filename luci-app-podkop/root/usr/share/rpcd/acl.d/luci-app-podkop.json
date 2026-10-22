@@ -16,6 +16,9 @@
         ],
         "log": [
           "read"
+        ],
+        "podkop": [
+          "run"
         ]
       },
       "uci": [
