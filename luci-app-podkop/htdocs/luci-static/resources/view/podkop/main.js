@@ -4866,7 +4866,27 @@ async function withTimeout(promise, timeoutMs, operationName, timeoutMessage = _
 
 // src/helpers/executeShellCommand.ts
 var executeFile;
+var backendRun;
+var PODKOP = "/usr/bin/podkop";
+async function askBackend(args) {
+  backendRun ?? (backendRun = rpc.declare({
+    object: "podkop",
+    method: "run",
+    params: ["command", "params"],
+    nobatch: true
+  }));
+  try {
+    const reply = await backendRun(args[0], args.slice(1));
+    return typeof reply === "object" && reply !== null ? reply : void 0;
+  } catch {
+    return void 0;
+  }
+}
 async function execute(command, args) {
+  if (command === PODKOP && args.length) {
+    const answered = await askBackend(args);
+    if (answered) return answered;
+  }
   executeFile ?? (executeFile = rpc.declare({
     object: "file",
     method: "exec",

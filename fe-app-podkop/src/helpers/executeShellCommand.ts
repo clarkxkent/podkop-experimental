@@ -19,6 +19,30 @@ type ExecuteFile = (
 ) => Promise<ExecuteShellCommandResponse | number>;
 
 let executeFile: ExecuteFile | undefined;
+let backendRun: ExecuteFile | undefined;
+
+const PODKOP = '/usr/bin/podkop';
+
+// The commands of /usr/bin/podkop are asked first of the running backend: the method run of
+// its object "podkop" on ubus answers them without a program started for a call, in the form
+// of file.exec. When the backend does not run (no such object), or does not answer that
+// command itself (a status: the actions on the service, the global check), the program runs.
+async function askBackend(
+  args: string[],
+): Promise<ExecuteShellCommandResponse | undefined> {
+  backendRun ??= rpc.declare<ExecuteShellCommandResponse | number>({
+    object: 'podkop',
+    method: 'run',
+    params: ['command', 'params'],
+    nobatch: true,
+  });
+  try {
+    const reply = await backendRun(args[0], args.slice(1));
+    return typeof reply === 'object' && reply !== null ? reply : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 // fs.exec leaves the call to LuCI, which gathers the calls of one frame into a single
 // request; the router answers such a request call by call, so a quick command waits for
@@ -27,6 +51,11 @@ async function execute(
   command: string,
   args: string[],
 ): Promise<ExecuteShellCommandResponse> {
+  if (command === PODKOP && args.length) {
+    const answered = await askBackend(args);
+    if (answered) return answered;
+  }
+
   executeFile ??= rpc.declare<ExecuteShellCommandResponse | number>({
     object: 'file',
     method: 'exec',
