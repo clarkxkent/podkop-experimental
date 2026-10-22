@@ -18,7 +18,8 @@
           "read"
         ],
         "podkop": [
-          "run"
+          "run",
+          "stats"
         ]
       },
       "uci": [

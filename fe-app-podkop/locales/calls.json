@@ -3,35 +3,35 @@
     "call": "✔ Enabled",
     "key": "✔ Enabled",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:357"
+      "src/podkop/tabs/dashboard/initController.ts:321"
     ]
   },
   {
     "call": "✔ Running",
     "key": "✔ Running",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:346"
+      "src/podkop/tabs/dashboard/initController.ts:310"
     ]
   },
   {
     "call": "✘ Disabled",
     "key": "✘ Disabled",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:358"
+      "src/podkop/tabs/dashboard/initController.ts:322"
     ]
   },
   {
     "call": "✘ Stopped",
     "key": "✘ Stopped",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:347"
+      "src/podkop/tabs/dashboard/initController.ts:311"
     ]
   },
   {
     "call": "Active Connections",
     "key": "Active Connections",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:307"
+      "src/podkop/tabs/dashboard/initController.ts:271"
     ]
   },
   {
@@ -73,7 +73,7 @@
     "call": "Autostart",
     "key": "Autostart",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:355"
+      "src/podkop/tabs/dashboard/initController.ts:319"
     ]
   },
   {
@@ -422,8 +422,8 @@
     "call": "Downlink",
     "key": "Downlink",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:241",
-      "src/podkop/tabs/dashboard/initController.ts:275"
+      "src/podkop/tabs/dashboard/initController.ts:205",
+      "src/podkop/tabs/dashboard/initController.ts:239"
     ]
   },
   {
@@ -1056,7 +1056,7 @@
     "call": "Memory Usage",
     "key": "Memory Usage",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:311"
+      "src/podkop/tabs/dashboard/initController.ts:275"
     ]
   },
   {
@@ -1200,7 +1200,7 @@
     "call": "Podkop",
     "key": "Podkop",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:344"
+      "src/podkop/tabs/dashboard/initController.ts:308"
     ]
   },
   {
@@ -1488,7 +1488,7 @@
     "call": "Services info",
     "key": "Services info",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:340"
+      "src/podkop/tabs/dashboard/initController.ts:304"
     ]
   },
   {
@@ -1574,7 +1574,7 @@
     "call": "System info",
     "key": "System info",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:304"
+      "src/podkop/tabs/dashboard/initController.ts:268"
     ]
   },
   {
@@ -1652,14 +1652,14 @@
     "call": "Traffic",
     "key": "Traffic",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:238"
+      "src/podkop/tabs/dashboard/initController.ts:202"
     ]
   },
   {
     "call": "Traffic Total",
     "key": "Traffic Total",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:268"
+      "src/podkop/tabs/dashboard/initController.ts:232"
     ]
   },
   {
@@ -1723,8 +1723,8 @@
     "call": "Uplink",
     "key": "Uplink",
     "places": [
-      "src/podkop/tabs/dashboard/initController.ts:240",
-      "src/podkop/tabs/dashboard/initController.ts:271"
+      "src/podkop/tabs/dashboard/initController.ts:204",
+      "src/podkop/tabs/dashboard/initController.ts:235"
     ]
   },
   {

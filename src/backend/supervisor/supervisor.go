@@ -87,6 +87,7 @@ type Instance interface {
 	RuleSetUpdated(tag string) (time.Time, bool)
 	UpdateRuleSets(ctx context.Context) (engine.RuleSetUpdate, error)
 	FakeIPAddress(name string) (netip.Addr, bool, error)
+	Traffic() (engine.Traffic, error)
 }
 
 var _ Instance = (*engine.Instance)(nil)
@@ -208,6 +209,8 @@ type Supervisor struct {
 	statusAccess sync.Mutex
 	status       Status
 	facts        api.Facts
+	// live is the instance that runs, for the goroutines that ask what goes through it
+	live Instance
 }
 
 // running is a state of the router that was brought up.
@@ -281,6 +284,20 @@ func (s *Supervisor) Facts() api.Facts {
 	return s.facts
 }
 
+// Traffic tells what went through the sing-box that runs (engine.Instance.Traffic); false
+// when nothing runs, or for the moment one instance gives way to another. It may be called
+// from any goroutine.
+func (s *Supervisor) Traffic() (engine.Traffic, bool) {
+	s.statusAccess.Lock()
+	live := s.live
+	s.statusAccess.Unlock()
+	if live == nil {
+		return engine.Traffic{}, false
+	}
+	traffic, err := live.Traffic()
+	return traffic, err == nil
+}
+
 // factsOf are the facts of a state that runs.
 func factsOf(current *running) api.Facts {
 	if current == nil {
@@ -302,6 +319,10 @@ func (s *Supervisor) done(ok bool, replaced bool, message ...any) Result {
 	}
 	s.status.Last, s.status.LastAt = result, now
 	s.facts = factsOf(s.current)
+	s.live = nil
+	if s.current != nil {
+		s.live = s.current.instance
+	}
 	if s.current == nil {
 		s.writeState(stateReleased)
 	} else {
@@ -1228,6 +1249,7 @@ func (s *Supervisor) Stop() {
 	s.statusAccess.Lock()
 	s.status.Running = false
 	s.facts = api.Facts{}
+	s.live = nil
 	s.statusAccess.Unlock()
 	s.writeState(stateStopped)
 }

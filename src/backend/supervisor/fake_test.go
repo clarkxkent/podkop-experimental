@@ -90,6 +90,12 @@ func (i *fakeInstance) FakeIPAddress(string) (netip.Addr, bool, error) {
 func (i *fakeInstance) UpdateRuleSets(context.Context) (engine.RuleSetUpdate, error) {
 	return engine.RuleSetUpdate{}, nil
 }
+func (i *fakeInstance) Traffic() (engine.Traffic, error) {
+	if !i.started || i.closed {
+		return engine.Traffic{}, engine.ErrClosed
+	}
+	return engine.Traffic{Up: int64(len(i.config)), Down: 2, Connections: 3}, nil
+}
 
 // fakeFixture is a supervisor of a fake engine and a recorder: no root is needed.
 func fakeFixture(t *testing.T) (*Supervisor, *fakeEngine, *recorder, func(name string, ttl string)) {
@@ -153,6 +159,9 @@ func TestFakeApply(t *testing.T) {
 	require.True(t, s.Boot().OK)
 	require.Equal(t, []string{"routing", "firewall", "dns"}, system.take())
 	first := s.current.instance
+	traffic, running := s.Traffic()
+	require.True(t, running)
+	require.Equal(t, engine.Traffic{Up: int64(len(fake.built[0].config)), Down: 2, Connections: 3}, traffic)
 
 	result := s.Apply()
 	require.True(t, result.OK, result.Message)
@@ -176,7 +185,13 @@ func TestFakeApply(t *testing.T) {
 	require.Equal(t, string(fake.built[1].config), string(fake.built[3].config), "the previous configuration is started again")
 	require.Same(t, fake.built[3], s.current.instance)
 	require.Equal(t, stateRunning, state(t, s))
+	// what goes through the instance that runs now, not one closed before
+	traffic, running = s.Traffic()
+	require.True(t, running)
+	require.Equal(t, int64(len(fake.built[3].config)), traffic.Up)
 	s.Stop()
+	_, running = s.Traffic()
+	require.False(t, running)
 }
 
 // An instance that does not close leaves the process nothing to go on with: the router is

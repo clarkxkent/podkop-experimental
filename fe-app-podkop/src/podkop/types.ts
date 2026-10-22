@@ -214,6 +214,17 @@ export namespace Podkop {
     status: string;
   }
 
+  // the answer of the method stats of the backend's object on ubus
+  export interface Stats {
+    running: boolean;
+    // milliseconds of a clock of the backend
+    at: number;
+    up: number;
+    down: number;
+    connections: number;
+    memory: number;
+  }
+
   export interface GetSystemInfo {
     podkop_version: string;
     podkop_latest_version: string;

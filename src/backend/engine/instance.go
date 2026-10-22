@@ -10,6 +10,7 @@ import (
 
 	"github.com/sagernet/sing-box"
 	"github.com/sagernet/sing-box/adapter"
+	"github.com/sagernet/sing-box/common/trafficcontrol"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/experimental/deprecated"
 	"github.com/sagernet/sing-box/include"
@@ -341,4 +342,27 @@ func (i *Instance) FakeIPAddress(name string) (netip.Addr, bool, error) {
 	}
 	address, found := store.Peek(name, false)
 	return address, found, nil
+}
+
+// Traffic is what went through an instance: the bytes of its connections up and down since
+// it started, those still open and those closed, and the connections open now.
+type Traffic struct {
+	Up          int64
+	Down        int64
+	Connections int
+}
+
+// Traffic tells what went through the instance, from the tracker sing-box keeps for the Clash
+// API and for a log writer of its own (which the instances of the backend all have).
+func (i *Instance) Traffic() (Traffic, error) {
+	if !i.enter() {
+		return Traffic{}, ErrClosed
+	}
+	defer i.leave()
+	manager := service.PtrFromContext[trafficcontrol.Manager](i.ctx)
+	if manager == nil {
+		return Traffic{}, E.New("this sing-box keeps no count of its traffic")
+	}
+	up, down := manager.Total()
+	return Traffic{Up: up, Down: down, Connections: manager.ConnectionsLen()}, nil
 }

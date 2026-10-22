@@ -1601,168 +1601,6 @@ function coreService() {
   });
 }
 
-// src/podkop/services/socket.service.ts
-var CONNECT_TIMEOUT_MS = 1e4;
-var SocketManager = class _SocketManager {
-  constructor() {
-    this.sockets = /* @__PURE__ */ new Map();
-    this.listeners = /* @__PURE__ */ new Map();
-    this.connected = /* @__PURE__ */ new Map();
-    this.errorListeners = /* @__PURE__ */ new Map();
-  }
-  static getInstance() {
-    if (!_SocketManager.instance) {
-      _SocketManager.instance = new _SocketManager();
-    }
-    return _SocketManager.instance;
-  }
-  resetAll() {
-    for (const [url, ws] of this.sockets.entries()) {
-      try {
-        if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
-          ws.close();
-        }
-      } catch (err) {
-        logger.error(
-          "[SOCKET]",
-          `resetAll: failed to close socket ${url}`,
-          err
-        );
-      }
-    }
-    this.sockets.clear();
-    this.listeners.clear();
-    this.errorListeners.clear();
-    this.connected.clear();
-    logger.info("[SOCKET]", "All connections and state have been reset.");
-  }
-  connect(url) {
-    if (this.sockets.has(url)) return;
-    let ws;
-    try {
-      ws = new WebSocket(url);
-    } catch (err) {
-      logger.error(
-        "[SOCKET]",
-        `failed to construct WebSocket for ${url}:`,
-        err
-      );
-      this.triggerError(url, err instanceof Event ? err : String(err));
-      return;
-    }
-    this.sockets.set(url, ws);
-    this.connected.set(url, false);
-    const current = () => this.sockets.get(url) === ws;
-    this.listeners.set(url, /* @__PURE__ */ new Set());
-    if (!this.errorListeners.has(url)) {
-      this.errorListeners.set(url, /* @__PURE__ */ new Set());
-    }
-    const connectTimer = setTimeout(() => {
-      if (current() && !this.connected.get(url)) {
-        logger.error(
-          "[SOCKET]",
-          `No answer from ${url} in ${CONNECT_TIMEOUT_MS} ms`
-        );
-        this.triggerError(url, "Connection timed out");
-        try {
-          ws.close();
-        } catch (_err) {
-        }
-      }
-    }, CONNECT_TIMEOUT_MS);
-    ws.addEventListener("open", () => {
-      clearTimeout(connectTimer);
-      if (!current()) return;
-      this.connected.set(url, true);
-      logger.info("[SOCKET]", "Connected to", url);
-    });
-    ws.addEventListener("message", (event) => {
-      if (!current()) return;
-      const handlers = this.listeners.get(url);
-      if (handlers) {
-        for (const handler of handlers) {
-          try {
-            handler(event.data);
-          } catch (err) {
-            logger.error("[SOCKET]", `Handler error for ${url}:`, err);
-          }
-        }
-      }
-    });
-    ws.addEventListener("close", () => {
-      clearTimeout(connectTimer);
-      if (!current()) return;
-      this.connected.set(url, false);
-      logger.warn("[SOCKET]", `Disconnected: ${url}`);
-      this.triggerError(url, "Connection closed");
-    });
-    ws.addEventListener("error", (err) => {
-      if (!current()) return;
-      logger.error("[SOCKET]", `Socket error for ${url}:`, err);
-      this.triggerError(url, err);
-    });
-  }
-  subscribe(url, listener, onError) {
-    if (!this.errorListeners.has(url)) {
-      this.errorListeners.set(url, /* @__PURE__ */ new Set());
-    }
-    if (onError) {
-      this.errorListeners.get(url)?.add(onError);
-    }
-    if (!this.sockets.has(url)) {
-      this.connect(url);
-    }
-    if (!this.listeners.has(url)) {
-      this.listeners.set(url, /* @__PURE__ */ new Set());
-    }
-    this.listeners.get(url)?.add(listener);
-  }
-  unsubscribe(url, listener, onError) {
-    this.listeners.get(url)?.delete(listener);
-    if (onError) {
-      this.errorListeners.get(url)?.delete(onError);
-    }
-  }
-  // eslint-disable-next-line
-  send(url, data) {
-    const ws = this.sockets.get(url);
-    if (ws && this.connected.get(url)) {
-      ws.send(typeof data === "string" ? data : JSON.stringify(data));
-    } else {
-      logger.warn("[SOCKET]", `Cannot send: not connected to ${url}`);
-      this.triggerError(url, "Not connected");
-    }
-  }
-  disconnect(url) {
-    const ws = this.sockets.get(url);
-    if (ws) {
-      ws.close();
-      this.sockets.delete(url);
-      this.listeners.delete(url);
-      this.errorListeners.delete(url);
-      this.connected.delete(url);
-    }
-  }
-  disconnectAll() {
-    for (const url of this.sockets.keys()) {
-      this.disconnect(url);
-    }
-  }
-  triggerError(url, err) {
-    const handlers = this.errorListeners.get(url);
-    if (handlers) {
-      for (const cb of handlers) {
-        try {
-          cb(err);
-        } catch (e) {
-          logger.error("[SOCKET]", `Error handler threw for ${url}:`, e);
-        }
-      }
-    }
-  }
-};
-var socket = SocketManager.getInstance();
-
 // src/podkop/tabs/dashboard/partials/renderSections.ts
 function renderFailedState() {
   return E(
@@ -2017,6 +1855,54 @@ async function fetchServicesInfo() {
   }
 }
 
+// src/podkop/tabs/dashboard/helpers/statsWidgets.ts
+function statsWidgets(current, previous) {
+  if (!current?.running) {
+    return {
+      bandwidthWidget: {
+        loading: false,
+        failed: true,
+        data: { up: 0, down: 0 }
+      },
+      trafficTotalWidget: {
+        loading: false,
+        failed: true,
+        data: { downloadTotal: 0, uploadTotal: 0 }
+      },
+      systemInfoWidget: {
+        loading: false,
+        failed: true,
+        data: { connections: 0, memory: 0 }
+      }
+    };
+  }
+  const widgets = {
+    trafficTotalWidget: {
+      loading: false,
+      failed: false,
+      data: { downloadTotal: current.down, uploadTotal: current.up }
+    },
+    systemInfoWidget: {
+      loading: false,
+      failed: false,
+      data: { connections: current.connections, memory: current.memory }
+    }
+  };
+  if (previous?.running) {
+    const seconds = (current.at - previous.at) / 1e3;
+    const rate = (now, before) => seconds > 0 && now >= before ? Math.round((now - before) / seconds) : 0;
+    widgets.bandwidthWidget = {
+      loading: false,
+      failed: false,
+      data: {
+        up: rate(current.up, previous.up),
+        down: rate(current.down, previous.down)
+      }
+    };
+  }
+  return widgets;
+}
+
 // src/podkop/tabs/dashboard/initController.ts
 async function fetchDashboardSections() {
   const prev = store.get().sectionsWidget;
@@ -2039,81 +1925,42 @@ async function fetchDashboardSections() {
     }
   });
 }
-async function connectToClashSockets() {
-  const clashApiSecret = await getClashApiSecret();
-  socket.subscribe(
-    `${getClashWsUrl()}/traffic?token=${clashApiSecret}`,
-    (msg) => {
-      const parsedMsg = JSON.parse(msg);
-      store.set({
-        bandwidthWidget: {
-          loading: false,
-          failed: false,
-          data: { up: parsedMsg.up, down: parsedMsg.down }
-        }
-      });
-    },
-    (_err) => {
-      logger.error(
-        "[DASHBOARD]",
-        "connectToClashSockets - traffic: failed to connect to",
-        getClashWsUrl()
-      );
-      store.set({
-        bandwidthWidget: {
-          loading: false,
-          failed: true,
-          data: { up: 0, down: 0 }
-        }
-      });
-    }
-  );
-  socket.subscribe(
-    `${getClashWsUrl()}/connections?token=${clashApiSecret}`,
-    (msg) => {
-      const parsedMsg = JSON.parse(msg);
-      store.set({
-        trafficTotalWidget: {
-          loading: false,
-          failed: false,
-          data: {
-            downloadTotal: parsedMsg.downloadTotal,
-            uploadTotal: parsedMsg.uploadTotal
-          }
-        },
-        systemInfoWidget: {
-          loading: false,
-          failed: false,
-          data: {
-            connections: parsedMsg.connections?.length,
-            memory: parsedMsg.memory
-          }
-        }
-      });
-    },
-    (_err) => {
-      logger.error(
-        "[DASHBOARD]",
-        "connectToClashSockets - connections: failed to connect to",
-        getClashWsUrl()
-      );
-      store.set({
-        trafficTotalWidget: {
-          loading: false,
-          failed: true,
-          data: { downloadTotal: 0, uploadTotal: 0 }
-        },
-        systemInfoWidget: {
-          loading: false,
-          failed: true,
-          data: {
-            connections: 0,
-            memory: 0
-          }
-        }
-      });
-    }
-  );
+var STATS_MS = 2e3;
+var statsTimers = [];
+var lastStats;
+var backendStats;
+async function fetchStats() {
+  if (document.hidden) {
+    lastStats = void 0;
+    return;
+  }
+  backendStats ?? (backendStats = rpc.declare({
+    object: "podkop",
+    method: "stats",
+    nobatch: true
+  }));
+  let current;
+  try {
+    const reply = await backendStats();
+    current = typeof reply === "object" && reply !== null ? reply : void 0;
+  } catch {
+  }
+  if (!mounted) return;
+  store.set(statsWidgets(current, lastStats));
+  lastStats = current;
+}
+function startStats() {
+  stopStats();
+  fetchStats();
+  statsTimers = [
+    setTimeout(fetchStats, 1e3),
+    setInterval(fetchStats, STATS_MS)
+  ];
+}
+function stopStats() {
+  statsTimers.forEach((timer) => clearTimeout(timer));
+  statsTimers = [];
+  lastStats = void 0;
 }
 async function handleChooseOutbound(selector, tag) {
   await PodkopShellMethods.setClashApiGroupProxy(selector, tag);
@@ -2344,7 +2191,7 @@ async function onPageMount() {
   await fetchDashboardSections();
   await fetchServicesInfo();
   if (!mounted) return;
-  await connectToClashSockets();
+  startStats();
 }
 function onPageUnmount() {
   mounted = false;
@@ -2356,7 +2203,7 @@ function onPageUnmount() {
     "servicesInfoWidget",
     "sectionsWidget"
   ]);
-  socket.resetAll();
+  stopStats();
 }
 function isCurrent() {
   return store.get().tabService.current === "dashboard";
@@ -4967,10 +4814,6 @@ async function onMount(id, previous) {
 }
 
 // src/helpers/getClashApiUrl.ts
-function getClashWsUrl() {
-  const { hostname } = window.location;
-  return `ws://${hostname}:9090`;
-}
 function getClashUIUrl() {
   const { hostname } = window.location;
   return `http://${hostname}:9090/ui`;
@@ -5043,7 +4886,6 @@ return baseclass.extend({
   coreService,
   executeShellCommand,
   getClashUIUrl,
-  getClashWsUrl,
   getProxyUrlName,
   injectGlobalStyles,
   insertIf,
@@ -5054,7 +4896,6 @@ return baseclass.extend({
   parseQueryString,
   parseValueList,
   preserveScrollForPage,
-  socket,
   splitProxyString,
   store,
   svgEl,

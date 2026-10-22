@@ -11,7 +11,6 @@ import (
 
 	"github.com/podkop-net/podkop-experimental/src/backend/api"
 	"github.com/podkop-net/podkop-experimental/src/backend/clock"
-	"github.com/podkop-net/podkop-experimental/src/backend/ctl"
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
@@ -96,7 +95,7 @@ var commandDaemon = &cobra.Command{
 			}
 		}()
 		// the commands of the page answered here, with no program started for a call
-		go ubus.Serve(ctx, ubus.Socket(), ctl.BusObject(ctlEnvironment()), func(message string) {
+		go ubus.Serve(ctx, ubus.Socket(), busObject(ctlEnvironment(), backend), func(message string) {
 			say("warn", message)
 		})
 		if err := backend.Run(ctx, reload); err != nil {

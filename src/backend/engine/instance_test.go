@@ -155,3 +155,54 @@ func TestLogSink(t *testing.T) {
 	require.Equal(t, log.LevelDebug, sinkLevel(&option.LogOptions{Level: "debug"}))
 	require.Equal(t, log.LevelPanic, sinkLevel(&option.LogOptions{Level: "debug", Disabled: true}))
 }
+
+// The traffic of an instance: the bytes of a connection through its mixed inbound, the
+// connection while it is open, nothing to tell once it is closed.
+func TestTraffic(t *testing.T) {
+	dnsPort, mixedPort := freePort(t), freePort(t)
+	instance, err := BuildLogged(configuration(t, dnsPort, mixedPort), func(string, string) {})
+	require.NoError(t, err)
+	require.NoError(t, instance.Start())
+	defer instance.Close(10 * time.Second)
+
+	// a server that reads what comes and answers as much
+	server, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer server.Close()
+	go func() {
+		conn, err := server.Accept()
+		if err != nil {
+			return
+		}
+		defer conn.Close()
+		_, _ = io.Copy(conn, conn)
+	}()
+
+	before, err := instance.Traffic()
+	require.NoError(t, err)
+	require.Zero(t, before.Connections)
+
+	conn, err := net.Dial("tcp", fmt.Sprintf("127.0.0.1:%d", mixedPort))
+	require.NoError(t, err)
+	defer conn.Close()
+	_, err = fmt.Fprintf(conn, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n\r\n", server.Addr(), server.Addr())
+	require.NoError(t, err)
+	answer := make([]byte, 64)
+	n, err := conn.Read(answer)
+	require.NoError(t, err)
+	require.Contains(t, string(answer[:n]), " 200 ")
+	payload := make([]byte, 64<<10)
+	_, err = conn.Write(payload)
+	require.NoError(t, err)
+	_, err = io.ReadFull(conn, payload)
+	require.NoError(t, err)
+
+	require.Eventually(t, func() bool {
+		now, err := instance.Traffic()
+		return err == nil && now.Connections == 1 && now.Up >= int64(len(payload)) && now.Down >= int64(len(payload))
+	}, 5*time.Second, 20*time.Millisecond)
+
+	require.NoError(t, instance.Close(10*time.Second))
+	_, err = instance.Traffic()
+	require.ErrorIs(t, err, ErrClosed)
+}

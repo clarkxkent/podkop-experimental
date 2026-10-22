@@ -1,14 +1,11 @@
-import {
-  getClashWsUrl,
-  onMount,
-  preserveScrollForPage,
-} from '../../../helpers';
+import { onMount, preserveScrollForPage } from '../../../helpers';
 import { prettyBytes } from '../../../helpers/prettyBytes';
 import { CustomPodkopMethods, PodkopShellMethods } from '../../methods';
-import { logger, socket, store, StoreType } from '../../services';
+import { logger, store, StoreType } from '../../services';
 import { renderSections, renderWidget } from './partials';
 import { fetchServicesInfo } from '../../fetchers';
-import { getClashApiSecret } from '../../methods/custom/getClashApiSecret';
+import { statsWidgets } from './helpers/statsWidgets';
+import type { Podkop } from '../../types';
 
 // Fetchers
 
@@ -38,85 +35,52 @@ async function fetchDashboardSections() {
   });
 }
 
-async function connectToClashSockets() {
-  const clashApiSecret = await getClashApiSecret();
+// The numbers of the dashboard come from the running backend: the method stats of its
+// object on ubus, asked every 2 s while the tab is open and the page visible (the first two
+// a second apart, for the first rates). The page used to read two websockets of the Clash
+// API, one of which sent the whole list of the connections every second (141 KB/s at 300
+// connections), and which a page of LuCI served over https cannot open.
+const STATS_MS = 2000;
+let statsTimers: ReturnType<typeof setTimeout>[] = [];
+let lastStats: Podkop.Stats | undefined;
+let backendStats: (() => Promise<Podkop.Stats | number>) | undefined;
 
-  socket.subscribe(
-    `${getClashWsUrl()}/traffic?token=${clashApiSecret}`,
-    (msg) => {
-      const parsedMsg = JSON.parse(msg);
+async function fetchStats() {
+  if (document.hidden) {
+    // the rates after a pause are of the next two answers
+    lastStats = undefined;
+    return;
+  }
+  backendStats ??= rpc.declare<Podkop.Stats | number>({
+    object: 'podkop',
+    method: 'stats',
+    nobatch: true,
+  });
+  let current: Podkop.Stats | undefined;
+  try {
+    const reply = await backendStats();
+    current = typeof reply === 'object' && reply !== null ? reply : undefined;
+  } catch {
+    // no object podkop: the backend does not run
+  }
+  if (!mounted) return;
+  store.set(statsWidgets(current, lastStats));
+  lastStats = current;
+}
 
-      store.set({
-        bandwidthWidget: {
-          loading: false,
-          failed: false,
-          data: { up: parsedMsg.up, down: parsedMsg.down },
-        },
-      });
-    },
-    (_err) => {
-      logger.error(
-        '[DASHBOARD]',
-        'connectToClashSockets - traffic: failed to connect to',
-        getClashWsUrl(),
-      );
-      store.set({
-        bandwidthWidget: {
-          loading: false,
-          failed: true,
-          data: { up: 0, down: 0 },
-        },
-      });
-    },
-  );
+function startStats() {
+  stopStats();
+  fetchStats();
+  statsTimers = [
+    setTimeout(fetchStats, 1000),
+    setInterval(fetchStats, STATS_MS),
+  ];
+}
 
-  socket.subscribe(
-    `${getClashWsUrl()}/connections?token=${clashApiSecret}`,
-    (msg) => {
-      const parsedMsg = JSON.parse(msg);
-
-      store.set({
-        trafficTotalWidget: {
-          loading: false,
-          failed: false,
-          data: {
-            downloadTotal: parsedMsg.downloadTotal,
-            uploadTotal: parsedMsg.uploadTotal,
-          },
-        },
-        systemInfoWidget: {
-          loading: false,
-          failed: false,
-          data: {
-            connections: parsedMsg.connections?.length,
-            memory: parsedMsg.memory,
-          },
-        },
-      });
-    },
-    (_err) => {
-      logger.error(
-        '[DASHBOARD]',
-        'connectToClashSockets - connections: failed to connect to',
-        getClashWsUrl(),
-      );
-      store.set({
-        trafficTotalWidget: {
-          loading: false,
-          failed: true,
-          data: { downloadTotal: 0, uploadTotal: 0 },
-        },
-        systemInfoWidget: {
-          loading: false,
-          failed: true,
-          data: {
-            connections: 0,
-            memory: 0,
-          },
-        },
-      });
-    },
-  );
+function stopStats() {
+  statsTimers.forEach((timer) => clearTimeout(timer));
+  statsTimers = [];
+  lastStats = undefined;
 }
 
 // Handlers
@@ -416,7 +380,7 @@ async function onPageMount() {
   await fetchServicesInfo();
   // the tab may have been left while the answers came
   if (!mounted) return;
-  await connectToClashSockets();
+  startStats();
 }
 
 function onPageUnmount() {
@@ -431,7 +395,7 @@ function onPageUnmount() {
     'servicesInfoWidget',
     'sectionsWidget',
   ]);
-  socket.resetAll();
+  stopStats();
 }
 
 function isCurrent() {
