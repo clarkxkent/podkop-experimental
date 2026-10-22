@@ -3,6 +3,7 @@ package plan
 import (
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
@@ -52,6 +53,10 @@ import (
 //     fakeip.podkop.fyi to port 8443, and its DNS rule answers both from FakeIP. The page
 //     of this backend asks the backend instead. That DNS rule answers the readiness name
 //     (dataplane.ReadinessName) alone.
+// 10. The Clash API listens on 127.0.0.1, or on every address with YACD on, where the
+//     firewall lets only the devices of yacd_interfaces reach it (firewall.Plan); the shell
+//     backend listens on the address of the LAN, or on every address with YACD's WAN
+//     access, which this backend does not have.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -182,13 +187,18 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 			routeObject.set("default_http_client", tagListsHTTPClient)
 		}
 	}
-	if shell.Settings != nil && shell.Settings.Settings.YACDSecretKey != "" {
-		if experimental, _ := document.get("experimental"); experimental != nil {
-			if experimentalObject, isObject := experimental.(*object); isObject {
-				if clashAPI, _ := experimentalObject.get("clash_api"); clashAPI != nil {
-					if clashAPIObject, isObject := clashAPI.(*object); isObject {
+	if experimental, _ := document.get("experimental"); experimental != nil && shell.Settings != nil {
+		if experimentalObject, isObject := experimental.(*object); isObject {
+			if clashAPI, _ := experimentalObject.get("clash_api"); clashAPI != nil {
+				if clashAPIObject, isObject := clashAPI.(*object); isObject {
+					if shell.Settings.Settings.YACDSecretKey != "" {
 						clashAPIObject.set("secret", shell.Settings.Settings.YACDSecretKey)
 					}
+					address := "127.0.0.1"
+					if shell.Settings.Settings.EnableYACD {
+						address = "0.0.0.0"
+					}
+					clashAPIObject.set("external_controller", address+":"+strconv.Itoa(dataplane.ClashAPIPort))
 				}
 			}
 		}

@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-20 17:50+0000\n"
-"PO-Revision-Date: 2026-10-20 17:50+0000\n"
+"POT-Creation-Date: 2026-10-22 11:59+0000\n"
+"PO-Revision-Date: 2026-10-22 11:59+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -34,9 +34,6 @@ msgstr "Активные соединения"
 
 msgid "Additional marking rules found"
 msgstr "Найдены дополнительные правила маркировки"
-
-msgid "Allows access to YACD from the WAN. Make sure to open the appropriate port in your firewall."
-msgstr "Обеспечивает доступ к YACD из WAN. Убедитесь, что в брандмауэре открыт соответствующий порт."
 
 msgid "Applicable for SOCKS and Shadowsocks proxy"
 msgstr "Применимо для SOCKS и Shadowsocks прокси"
@@ -94,6 +91,9 @@ msgstr "Проверки не выполнены"
 
 msgid "Checks passed"
 msgstr "Проверки пройдены"
+
+msgid "Choose the devices YACD is opened from"
+msgstr "Выберите устройства, с которых открывается YACD"
 
 msgid "CIDR must be between 0 and 32"
 msgstr "CIDR должен быть между 0 и 32"
@@ -238,9 +238,6 @@ msgstr "Включить uTLS-fallback"
 
 msgid "Enable YACD"
 msgstr "Включить YACD"
-
-msgid "Enable YACD WAN Access"
-msgstr "Включить доступ YACD WAN"
 
 msgid "Enter complete outbound configuration in JSON format"
 msgstr "Введите полную конфигурацию исходящего соединения в формате JSON"
@@ -581,9 +578,6 @@ msgstr "Запустить диагностику"
 msgid "Russia inside restrictions"
 msgstr "Ограничения Russia inside"
 
-msgid "Secret key for authenticating remote access to YACD when WAN access is enabled."
-msgstr "Секретный ключ для аутентификации удаленного доступа к YACD при включенном доступе через WAN."
-
 msgid "Sections"
 msgstr "Секции"
 
@@ -689,11 +683,20 @@ msgstr "Тестирование задержки"
 msgid "Text List"
 msgstr "Текстовый список"
 
+msgid "The devices YACD is opened from. A device of the WAN also needs its port 9090 opened in the firewall of the router"
+msgstr "Устройства, с которых открывается YACD. Для устройства WAN порт 9090 нужно также открыть в межсетевом экране роутера"
+
 msgid "The DNS server used to look up the IP address of an upstream DNS server"
 msgstr "DNS-сервер, используемый для поиска IP-адреса вышестоящего DNS-сервера"
 
 msgid "The interval between connectivity tests"
 msgstr "Интервал между тестами подключения"
+
+msgid "The key YACD asks for; the links below carry it"
+msgstr "Ключ, который спрашивает YACD; ссылки ниже уже содержат его"
+
+msgid "The links appear here after Save & Apply"
+msgstr "Ссылки появятся здесь после «Сохранить и применить»"
 
 msgid "The maximum difference in response times (ms) allowed when comparing servers"
 msgstr "Максимально допустимая разница во времени отклика (мс) при сравнении серверов"
@@ -703,6 +706,9 @@ msgstr "Ссылка должна отдавать не меньше 64 КиБ �
 
 msgid "The URL used to test server connectivity"
 msgstr "URL-адрес, используемый для проверки подключения к серверу"
+
+msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
+msgstr "Веб-панель sing-box, открывается с устройств, выбранных ниже; без неё API панели доступен только с самого роутера"
 
 msgid "Time in seconds for DNS record caching (default: 60)"
 msgstr "Время в секундах для кэширования DNS записей (по умолчанию: 60)"
@@ -802,6 +808,12 @@ msgstr "Предупреждение: Russia inside может быть испо
 
 msgid "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints"
 msgstr "Если сервер не отвечает на TLS ClientHello с отпечатком uTLS из ссылки, соединение пробуется с другими отпечатками"
+
+msgid "YACD Links"
+msgstr "Ссылки YACD"
+
+msgid "YACD Network Interfaces"
+msgstr "Сетевые интерфейсы YACD"
 
 msgid "YACD Secret Key"
 msgstr "Секретный ключ YACD"

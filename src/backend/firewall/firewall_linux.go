@@ -40,6 +40,9 @@ const (
 	statusDNAT = 1 << 5
 )
 
+// clashAPIPriority is that of the chain clash_api: before fw4's input chain (filter, 0)
+const clashAPIPriority = -1
+
 // the numbers the sets go by inside the transaction that makes them
 const (
 	idLocal = iota + 1
@@ -82,6 +85,11 @@ type Plan struct {
 	Subnets []netip.Prefix
 	// Groups are destinations that go to the proxy only for some ports.
 	Groups []Group
+	// ClashAPIInterfaces are the devices that reach the Clash API, which listens on every
+	// address while YACD is on: a chain of the input lets their connections to its port in,
+	// and those of the router itself (lo), and drops the others. None: no such chain, the
+	// API listens on this host only.
+	ClashAPIInterfaces []string
 
 	// the ranges of Subnets, merged once (rangesOf)
 	subnets merged
@@ -139,7 +147,7 @@ type PortRange struct {
 // structure tells the rules of two plans apart: everything but what the sets hold.
 func (p *Plan) structure() string {
 	var text strings.Builder
-	fmt.Fprint(&text, p.Interfaces, p.ExcludeNTP, p.Sources)
+	fmt.Fprint(&text, p.Interfaces, p.ExcludeNTP, p.Sources, p.ClashAPIInterfaces)
 	for _, group := range p.Groups {
 		fmt.Fprint(&text, group.Set, group.Protocol, group.Ports)
 	}
@@ -445,6 +453,21 @@ func Apply(plan *Plan) error {
 			&expr.Payload{DestRegister: 1, Base: expr.PayloadBaseTransportHeader, Offset: 2, Len: 2},
 			&expr.Lookup{SourceRegister: 1, SetName: portSet.Name, SetID: portSet.ID},
 		}, mark)
+	}
+	// clash_api: the port of the Clash API from the devices of YACD and from the router
+	// itself; before the input chain of fw4, whose rules then go on as they would
+	if len(plan.ClashAPIInterfaces) > 0 {
+		guard := conn.AddChain(&nftables.Chain{Name: "clash_api", Table: table, Type: nftables.ChainTypeFilter, Hooknum: nftables.ChainHookInput, Priority: nftables.ChainPriorityRef(clashAPIPriority), Policy: &accept})
+		toAPI := func() []expr.Any {
+			return append(protocol(unix.IPPROTO_TCP), destinationPort(dataplane.ClashAPIPort)...)
+		}
+		for _, name := range append([]string{"lo"}, plan.ClashAPIInterfaces...) {
+			add(guard, toAPI(), []expr.Any{
+				&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
+				&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: interfaceName(name, 0)},
+			}, returns)
+		}
+		add(guard, toAPI(), []expr.Any{&expr.Counter{}, &expr.Verdict{Kind: expr.VerdictDrop}})
 	}
 	err = conn.Flush()
 	if err != nil {

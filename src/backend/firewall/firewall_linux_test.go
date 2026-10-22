@@ -176,6 +176,33 @@ func TestTableAsTheShellBackendMakesIt(t *testing.T) {
 	}
 }
 
+// The chain that keeps the Clash API of YACD to its devices reads back, by the nft program, as
+// the same chain made with that program; a plan without devices has none.
+func TestClashAPIGuard(t *testing.T) {
+	needNft(t)
+	plan := &Plan{Interfaces: []string{"br-lan"}, ClashAPIInterfaces: []string{"br-lan", "eth1"}}
+	_ = Remove()
+	shellBackendTable(t, plan)
+	table := "inet " + tableName
+	nft(t, "add chain "+table+" clash_api { type filter hook input priority filter - 1; policy accept; }")
+	for _, name := range []string{"lo", "br-lan", "eth1"} {
+		nft(t, "add rule "+table+" clash_api meta l4proto tcp th dport 9090 iifname \""+name+"\" return")
+	}
+	nft(t, "add rule "+table+" clash_api meta l4proto tcp th dport 9090 counter drop")
+	want := dump(t)
+	require.NoError(t, Remove())
+	require.NoError(t, Apply(plan))
+	got := dump(t)
+	require.Equal(t, want, got)
+	require.Contains(t, got, "hook input priority filter - 1")
+
+	// the devices of YACD are rules: a change of them replaces the table, and without them
+	// there is no chain
+	require.NoError(t, Update(plan, &Plan{Interfaces: []string{"br-lan"}}))
+	require.NotContains(t, dump(t), "clash_api")
+	require.NoError(t, Remove())
+}
+
 // A plan that differs only in what a set holds refills that set and leaves the rules in
 // place, their handles and counters with them; a plan with other rules replaces the table.
 func TestUpdate(t *testing.T) {

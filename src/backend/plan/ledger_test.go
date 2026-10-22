@@ -16,7 +16,7 @@ func TestFromShell(t *testing.T) {
 
 	// the shell backend's download_detour becomes the detour of the one HTTP client of
 	// the lists, named the default; independent_cache goes; the key of the settings goes
-	// to the Clash API
+	// to the Clash API, which listens on this host (YACD is off)
 	settings := &model.Config{Settings: model.Settings{UpdateInterval: "1d", YACDSecretKey: "k3y"}, Sections: []model.Section{{Name: "main",
 		RemoteDomainLists: []string{"https://lists.example/a.srs"}}}}
 	shell := []byte(`{"dns":{"final":"dns-server","independent_cache":true},"certificate":{},"endpoints":[],"route":{"rules":[{"action":"route","rule_set":"main-a-remote-domains-ruleset"}],"rule_set":[` +
@@ -58,7 +58,7 @@ func TestFromShell(t *testing.T) {
   },
   "experimental": {
     "clash_api": {
-      "external_controller": "192.168.1.1:9090",
+      "external_controller": "127.0.0.1:9090",
       "secret": "k3y"
     }
   }

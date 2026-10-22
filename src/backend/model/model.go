@@ -33,11 +33,13 @@ type Settings struct {
 	ExcludeNTP              bool
 	RoutingExcludedIPs      []string
 
-	EnableYACD          bool
-	EnableYACDWANAccess bool
-	YACDSecretKey       string
-	EnableUTLSFallback  bool
-	DisableQUIC         bool
+	EnableYACD bool
+	// YACDInterfaces are the devices YACD is opened from; none: those of
+	// SourceNetworkInterfaces
+	YACDInterfaces     []string
+	YACDSecretKey      string
+	EnableUTLSFallback bool
+	DisableQUIC        bool
 
 	UpdateInterval               string
 	DownloadListsViaProxy        bool
@@ -116,7 +118,7 @@ func Load(parsed *uci.Package) (*Config, error) {
 		ExcludeNTP:                   settings.Bool("exclude_ntp", false),
 		RoutingExcludedIPs:           list(settings, "routing_excluded_ips"),
 		EnableYACD:                   settings.Bool("enable_yacd", false),
-		EnableYACDWANAccess:          settings.Bool("enable_yacd_wan_access", false),
+		YACDInterfaces:               list(settings, "yacd_interfaces"),
 		YACDSecretKey:                settings.Get("yacd_secret_key"),
 		EnableUTLSFallback:           settings.Bool("enable_utls_fallback", false),
 		DisableQUIC:                  settings.Bool("disable_quic", false),

@@ -3,6 +3,7 @@
 "require uci";
 "require baseclass";
 "require tools.widgets as widgets";
+"require network";
 "require view.podkop.main as main";
 
 function createSettingsContent(section, singBoxFeatures = []) {
@@ -148,9 +149,7 @@ function createSettingsContent(section, singBoxFeatures = []) {
     }
 
     // Reject lan*
-    if (
-        value.startsWith("lan")
-    ) {
+    if (value.startsWith("lan")) {
       return false;
     }
 
@@ -235,39 +234,95 @@ function createSettingsContent(section, singBoxFeatures = []) {
     form.Flag,
     "enable_yacd",
     _("Enable YACD"),
-    `<a href="${main.getClashUIUrl()}" target="_blank">${main.getClashUIUrl()}</a>`,
+    _(
+      "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only",
+    ),
   );
   o.default = "0";
   o.rmempty = false;
 
+  // The API of YACD listens on every address, and the firewall of the backend lets in only
+  // these devices (and the router itself): no device by default, the choice is the user's
   o = section.option(
-    form.Flag,
-    "enable_yacd_wan_access",
-    _("Enable YACD WAN Access"),
-    _("Allows access to YACD from the WAN. Make sure to open the appropriate port in your firewall."),
+    widgets.DeviceSelect,
+    "yacd_interfaces",
+    _("YACD Network Interfaces"),
+    _(
+      "The devices YACD is opened from. A device of the WAN also needs its port 9090 opened in the firewall of the router",
+    ),
   );
   o.depends("enable_yacd", "1");
-  o.default = "0";
+  o.noaliases = true;
+  o.nobridges = false;
+  o.noinactive = false;
+  o.multiple = true;
+  o.optional = false;
   o.rmempty = false;
+  o.validate = function (section_id) {
+    return L.toArray(this.formvalue(section_id)).length
+      ? true
+      : _("Choose the devices YACD is opened from");
+  };
 
   o = section.option(
     form.Value,
     "yacd_secret_key",
     _("YACD Secret Key"),
-    _("Secret key for authenticating remote access to YACD when WAN access is enabled."),
+    _("The key YACD asks for; the links below carry it"),
   );
-  o.depends("enable_yacd_wan_access", "1");
+  o.depends("enable_yacd", "1");
   o.rmempty = false;
-  // the backend keeps a key in it with WAN access off too, and the page sends it as its
-  // token: hidden, the option must not be deleted by a save
+  // the backend keeps a key in it with YACD off too, and makes one when there is none:
+  // hidden, the option must not be deleted by a save
   o.retain = true;
+
+  // The links that open YACD logged in: an address of each device of YACD, from the
+  // settings as they were saved
+  o = section.option(form.DummyValue, "_yacd_links", _("YACD Links"));
+  o.depends("enable_yacd", "1");
+  o.load = function (section_id) {
+    const enabled = uci.get("podkop", section_id, "enable_yacd") === "1";
+    const secret = uci.get("podkop", section_id, "yacd_secret_key") || "";
+    let names = L.toArray(uci.get("podkop", section_id, "yacd_interfaces"));
+    if (!names.length) {
+      names = L.toArray(
+        uci.get("podkop", section_id, "source_network_interfaces"),
+      );
+    }
+    if (!names.length) {
+      names = ["br-lan"];
+    }
+    return network.getDevices().then((devices) => {
+      const addresses = devices
+        .filter((device) => names.includes(device.getName()))
+        .flatMap((device) => device.getIPAddrs());
+      this.links =
+        enabled && secret ? main.getYacdLinks(addresses, secret) : [];
+    });
+  };
+  o.renderWidget = function () {
+    if (!this.links.length) {
+      return E("em", {}, [_("The links appear here after Save & Apply")]);
+    }
+    return E(
+      "div",
+      {},
+      this.links.map((link) =>
+        E("div", {}, [
+          E("a", { href: link, target: "_blank", rel: "noopener" }, [link]),
+        ]),
+      ),
+    );
+  };
 
   if (singBoxFeatures.includes("tls.utls-fallback")) {
     o = section.option(
       form.Flag,
       "enable_utls_fallback",
       _("Enable uTLS-fallback"),
-      _("When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints"),
+      _(
+        "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints",
+      ),
     );
     o.default = "0";
     o.rmempty = false;
@@ -325,7 +380,11 @@ function createSettingsContent(section, singBoxFeatures = []) {
 
     for (const secName in sections) {
       const sec = sections[secName];
-      if (sec[".type"] === "section" && sec['connection_type'] !== 'block' && sec['connection_type'] !== 'exclusion') {
+      if (
+        sec[".type"] === "section" &&
+        sec["connection_type"] !== "block" &&
+        sec["connection_type"] !== "exclusion"
+      ) {
         this.keylist.push(secName);
         this.vallist.push(secName);
       }
@@ -380,9 +439,7 @@ function createSettingsContent(section, singBoxFeatures = []) {
     form.ListValue,
     "log_level",
     _("Log Level"),
-    _(
-      "Select the log level for sing-box",
-    ),
+    _("Select the log level for sing-box"),
   );
   o.value("trace", "Trace");
   o.value("debug", "Debug");

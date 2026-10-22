@@ -117,3 +117,6 @@ export const COMMAND_SCHEDULING = {
   P9_PRIORITY: 1700, // Idle mode execution
   P10_PRIORITY: 1900, // Lowest priority
 } as const;
+
+// the port of the Clash API, which YACD is served from (dataplane.ClashAPIPort of the backend)
+export const CLASH_API_PORT = 9090;

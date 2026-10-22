@@ -1008,6 +1008,7 @@ var COMMAND_SCHEDULING = {
   P10_PRIORITY: 1900
   // Lowest priority
 };
+var CLASH_API_PORT = 9090;
 
 // src/podkop/methods/fakeip/knockFakeIp.ts
 function knockFakeIp() {
@@ -4813,10 +4814,22 @@ async function onMount(id, previous) {
   });
 }
 
-// src/helpers/getClashApiUrl.ts
-function getClashUIUrl() {
-  const { hostname } = window.location;
-  return `http://${hostname}:9090/ui`;
+// src/helpers/getYacdLinks.ts
+function getYacdLinks(addresses, secret) {
+  const seen = /* @__PURE__ */ new Set();
+  const links = [];
+  for (const address of addresses) {
+    const ip = address.split("/")[0];
+    if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(ip) || seen.has(ip)) continue;
+    seen.add(ip);
+    const query = new URLSearchParams({
+      hostname: ip,
+      port: String(CLASH_API_PORT),
+      secret
+    });
+    links.push(`http://${ip}:${CLASH_API_PORT}/ui/?${query.toString()}`);
+  }
+  return links;
 }
 
 // src/helpers/splitProxyString.ts
@@ -4860,6 +4873,7 @@ return baseclass.extend({
   BOOTSTRAP_DNS_SERVER_OPTIONS,
   BUTTON_FEEDBACK_TIMEOUT,
   CACHE_TIMEOUT,
+  CLASH_API_PORT,
   COMMAND_SCHEDULING,
   COMMAND_TIMEOUT,
   CustomPodkopMethods,
@@ -4885,8 +4899,8 @@ return baseclass.extend({
   bulkValidate,
   coreService,
   executeShellCommand,
-  getClashUIUrl,
   getProxyUrlName,
+  getYacdLinks,
   injectGlobalStyles,
   insertIf,
   insertIfObj,

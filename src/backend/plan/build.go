@@ -136,6 +136,10 @@ type Dataplane struct {
 	// its key; the commands of the user interface ask it.
 	ClashAPI    string
 	ClashSecret string
+	// ClashAPIInterfaces are the devices the firewall lets reach the Clash API, which
+	// listens on every address with YACD on (firewall.Plan.ClashAPIInterfaces): those of
+	// yacd_interfaces, or Interfaces. None with YACD off.
+	ClashAPIInterfaces []string
 }
 
 // defaultInterface is the interface the firewall takes traffic from when the settings
@@ -147,6 +151,12 @@ func (b *builder) dataplane() Dataplane {
 	result := Dataplane{Interfaces: settings.SourceNetworkInterfaces, ExcludeNTP: settings.ExcludeNTP, TakeDNS: !settings.DontTouchDHCP, ClashAPI: b.clashAPI, ClashSecret: b.clashSecret}
 	if len(result.Interfaces) == 0 {
 		result.Interfaces = []string{defaultInterface}
+	}
+	if settings.EnableYACD {
+		result.ClashAPIInterfaces = settings.YACDInterfaces
+		if len(result.ClashAPIInterfaces) == 0 {
+			result.ClashAPIInterfaces = result.Interfaces
+		}
 	}
 	for index := range b.config.Sections {
 		for _, text := range b.config.Sections[index].FullyRoutedIPs {
@@ -681,15 +691,13 @@ func (b *builder) anySectionWithLists(connectionType string) bool {
 func (b *builder) buildExperimental() {
 	settings := &b.config.Settings
 	b.experimental.set("cache_file", newObject("enabled", true, "path", settings.CachePath, "store_fakeip", true))
-	var address string
-	if settings.EnableYACD && settings.EnableYACDWANAccess {
+	// The Clash API is for the router itself (the commands of the page ask it on this host)
+	// unless YACD is on: then it listens on every address, and the firewall lets in only
+	// the devices of YACD (Dataplane.ClashAPIInterfaces). The address of the LAN it used to
+	// follow is not known at a start before the LAN has one, nor is it that of every device.
+	address := "127.0.0.1"
+	if settings.EnableYACD {
 		address = "0.0.0.0"
-	} else {
-		address = b.listenAddress()
-		if address == "" {
-			b.warn("the address for the Clash API is not known: it listens on this host only")
-			address = "127.0.0.1"
-		}
 	}
 	b.clashAPI = address + ":" + strconv.Itoa(dataplane.ClashAPIPort)
 	clashAPI := newObject("external_controller", b.clashAPI)
