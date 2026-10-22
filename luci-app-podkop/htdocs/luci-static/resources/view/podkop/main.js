@@ -709,10 +709,6 @@ var PodkopShellMethods = {
     19e3
   ),
   showSingBoxConfig: async () => callBaseMethod(Podkop.AvailableMethods.SHOW_SING_BOX_CONFIG),
-  checkLogsSince: async (cursor) => callBaseMethod(Podkop.AvailableMethods.CHECK_LOGS, [
-    "--since",
-    cursor
-  ]),
   checkLogs: async () => callBaseMethod(Podkop.AvailableMethods.CHECK_LOGS),
   getSystemInfo: async () => callBaseMethod(
     Podkop.AvailableMethods.GET_SYSTEM_INFO
@@ -1425,10 +1421,19 @@ function downloadAsTxt(text, filename) {
 }
 
 // src/podkop/services/logger.service.ts
+var KEEP_LINES = 1e3;
+function debugging() {
+  try {
+    return localStorage.getItem("podkop-debug") === "1";
+  } catch {
+    return false;
+  }
+}
 var Logger = class {
   constructor() {
     this.logs = [];
     this.levels = ["debug", "info", "warn", "error"];
+    this.verbose = debugging();
   }
   format(level, ...args) {
     return `[${level.toUpperCase()}] ${args.join(" ")}`;
@@ -1437,6 +1442,10 @@ var Logger = class {
     if (!this.levels.includes(level)) level = "info";
     const message = this.format(level, ...args);
     this.logs.push(message);
+    if (this.logs.length > KEEP_LINES) {
+      this.logs.splice(0, this.logs.length - KEEP_LINES);
+    }
+    if (!this.verbose && (level === "debug" || level === "info")) return;
     switch (level) {
       case "error":
         console.error(message);
@@ -1479,96 +1488,96 @@ var Logger = class {
 };
 var logger = new Logger();
 
-// src/podkop/services/podkopLogWatcher.service.ts
-var PodkopLogWatcher = class _PodkopLogWatcher {
-  constructor() {
-    this.intervalMs = 5e3;
-    this.lastLines = /* @__PURE__ */ new Set();
-    this.running = false;
-    this.paused = false;
-    if (typeof document !== "undefined") {
-      document.addEventListener("visibilitychange", () => {
-        if (document.hidden) this.pause();
-        else this.resume();
-      });
-    }
+// src/podkop/services/logWatch.service.ts
+var CURSOR_KEY = "podkop-log-id";
+var POLL_MS = 1e4;
+var FEW_LINES = 20;
+var MANY_LINES = 200;
+var FIRST_WINDOW_MS = 10 * 60 * 1e3;
+function toLine(value) {
+  const line = value;
+  if (typeof line?.msg !== "string") return void 0;
+  return {
+    id: Number(line.id) || 0,
+    time: Number(line.time) || 0,
+    msg: line.msg
+  };
+}
+function catchUp(lines, cursor) {
+  if (!lines.length) return { lines: [], cursor };
+  const newest = lines[lines.length - 1];
+  if (cursor === void 0 || cursor > newest.id) {
+    return {
+      lines: lines.filter((line) => newest.time - line.time < FIRST_WINDOW_MS),
+      cursor: newest.id
+    };
   }
-  static getInstance() {
-    if (!_PodkopLogWatcher.instance) {
-      _PodkopLogWatcher.instance = new _PodkopLogWatcher();
-    }
-    return _PodkopLogWatcher.instance;
+  return {
+    lines: lines.filter((line) => line.id > cursor),
+    cursor: newest.id
+  };
+}
+function missedSome(lines, cursor) {
+  return cursor !== void 0 && lines.length > 0 && lines[0].id > cursor + 1 && lines[lines.length - 1].id >= cursor;
+}
+function isPodkopError(line) {
+  if (!/^podkop(\[\d+\])?:/.test(line.msg)) return false;
+  const text = line.msg.toLowerCase();
+  return text.includes("[error]") || text.includes("[fatal]");
+}
+function readCursor() {
+  try {
+    const value = sessionStorage.getItem(CURSOR_KEY);
+    return value ? Number(value) : void 0;
+  } catch {
+    return void 0;
   }
-  init(fetcher, options) {
-    this.fetcher = fetcher;
-    this.onNewLog = options?.onNewLog;
-    this.intervalMs = options?.intervalMs ?? 5e3;
-    logger.info(
-      "[PodkopLogWatcher]",
-      `initialized (interval: ${this.intervalMs}ms)`
-    );
+}
+function writeCursor(id) {
+  try {
+    sessionStorage.setItem(CURSOR_KEY, String(id));
+  } catch {
   }
-  async checkOnce() {
-    if (!this.fetcher) {
-      logger.warn("[PodkopLogWatcher]", "fetcher not found");
-      return;
-    }
-    if (this.paused) {
-      logger.debug("[PodkopLogWatcher]", "skipped check \u2014 tab not visible");
-      return;
-    }
+}
+var readLog;
+async function lastLines(count) {
+  readLog ?? (readLog = rpc.declare({
+    object: "log",
+    method: "read",
+    params: ["lines", "stream"]
+  }));
+  const reply = await readLog(count, false);
+  return (Array.isArray(reply?.log) ? reply.log : []).map(toLine).filter((line) => line !== void 0);
+}
+function watchLog(onLine) {
+  let cursor = readCursor();
+  let first = true;
+  let busy = false;
+  const turn = async () => {
+    if (busy || document.hidden) return;
+    busy = true;
     try {
-      const raw = await this.fetcher();
-      const lines = raw.split("\n").filter(Boolean);
-      for (const line of lines) {
-        if (!this.lastLines.has(line)) {
-          this.lastLines.add(line);
-          this.onNewLog?.(line);
-        }
+      let lines = await lastLines(first ? MANY_LINES : FEW_LINES);
+      if (missedSome(lines, cursor)) lines = await lastLines(MANY_LINES);
+      first = false;
+      const fresh = catchUp(lines, cursor);
+      if (fresh.cursor !== void 0 && fresh.cursor !== cursor) {
+        cursor = fresh.cursor;
+        writeCursor(fresh.cursor);
       }
-      if (this.lastLines.size > 500) {
-        const arr = Array.from(this.lastLines);
-        this.lastLines = new Set(arr.slice(-500));
-      }
+      fresh.lines.forEach(onLine);
     } catch (err) {
-      logger.error("[PodkopLogWatcher]", "failed to read logs:", err);
+      logger.warn("[LOG]", "the system log is not read:", err);
+    } finally {
+      busy = false;
     }
-  }
-  start() {
-    if (this.running) return;
-    if (!this.fetcher) {
-      logger.warn("[PodkopLogWatcher]", "attempted to start without fetcher");
-      return;
-    }
-    this.running = true;
-    this.timer = setInterval(() => this.checkOnce(), this.intervalMs);
-    logger.info(
-      "[PodkopLogWatcher]",
-      `started (interval: ${this.intervalMs}ms)`
-    );
-  }
-  stop() {
-    if (!this.running) return;
-    this.running = false;
-    if (this.timer) clearInterval(this.timer);
-    logger.info("[PodkopLogWatcher]", "stopped");
-  }
-  pause() {
-    if (!this.running || this.paused) return;
-    this.paused = true;
-    logger.info("[PodkopLogWatcher]", "paused (tab not visible)");
-  }
-  resume() {
-    if (!this.running || !this.paused) return;
-    this.paused = false;
-    logger.info("[PodkopLogWatcher]", "resumed (tab active)");
-    this.checkOnce();
-  }
-  reset() {
-    this.lastLines.clear();
-    logger.info("[PodkopLogWatcher]", "log history reset");
-  }
-};
+  };
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) turn();
+  });
+  setInterval(turn, POLL_MS);
+  turn();
+}
 
 // src/podkop/services/core.service.ts
 function coreService() {
@@ -1581,38 +1590,15 @@ function coreService() {
       }
     });
   });
-  const watcher = PodkopLogWatcher.getInstance();
-  const cursorKey = "podkop-log-cursor";
-  watcher.init(
-    async () => {
-      let cursor = "";
-      try {
-        cursor = sessionStorage.getItem(cursorKey) ?? "";
-      } catch {
-      }
-      const logs = await PodkopShellMethods.checkLogsSince(cursor);
-      if (logs.success && Array.isArray(logs.data?.lines)) {
-        try {
-          sessionStorage.setItem(
-            cursorKey,
-            `${logs.data.run}:${logs.data.next}`
-          );
-        } catch {
-        }
-        return logs.data.lines.join("\n");
-      }
-      return "";
-    },
-    {
-      intervalMs: 3e3,
-      onNewLog: (line) => {
-        if (line.toLowerCase().includes("[error]") || line.toLowerCase().includes("[fatal]")) {
-          ui.addNotification("Podkop Error", E("div", {}, [line]), "error");
-        }
-      }
+  watchLog((line) => {
+    if (isPodkopError(line)) {
+      ui.addNotification(
+        "Podkop Error",
+        E("div", {}, [line.msg.replace(/^podkop(\[\d+\])?:\s*/, "")]),
+        "error"
+      );
     }
-  );
-  watcher.start();
+  });
 }
 
 // src/podkop/services/socket.service.ts
@@ -1666,12 +1652,13 @@ var SocketManager = class _SocketManager {
     }
     this.sockets.set(url, ws);
     this.connected.set(url, false);
+    const current = () => this.sockets.get(url) === ws;
     this.listeners.set(url, /* @__PURE__ */ new Set());
     if (!this.errorListeners.has(url)) {
       this.errorListeners.set(url, /* @__PURE__ */ new Set());
     }
     const connectTimer = setTimeout(() => {
-      if (!this.connected.get(url)) {
+      if (current() && !this.connected.get(url)) {
         logger.error(
           "[SOCKET]",
           `No answer from ${url} in ${CONNECT_TIMEOUT_MS} ms`
@@ -1685,10 +1672,12 @@ var SocketManager = class _SocketManager {
     }, CONNECT_TIMEOUT_MS);
     ws.addEventListener("open", () => {
       clearTimeout(connectTimer);
+      if (!current()) return;
       this.connected.set(url, true);
       logger.info("[SOCKET]", "Connected to", url);
     });
     ws.addEventListener("message", (event) => {
+      if (!current()) return;
       const handlers = this.listeners.get(url);
       if (handlers) {
         for (const handler of handlers) {
@@ -1702,11 +1691,13 @@ var SocketManager = class _SocketManager {
     });
     ws.addEventListener("close", () => {
       clearTimeout(connectTimer);
+      if (!current()) return;
       this.connected.set(url, false);
       logger.warn("[SOCKET]", `Disconnected: ${url}`);
       this.triggerError(url, "Connection closed");
     });
     ws.addEventListener("error", (err) => {
+      if (!current()) return;
       logger.error("[SOCKET]", `Socket error for ${url}:`, err);
       this.triggerError(url, err);
     });
@@ -2343,14 +2334,20 @@ async function onStoreUpdate(next, prev, diff) {
     renderServicesInfoWidget();
   }
 }
+var started = false;
+var mounted = false;
+var remounting = false;
 async function onPageMount() {
   onPageUnmount();
+  mounted = true;
   store.subscribe(onStoreUpdate);
   await fetchDashboardSections();
   await fetchServicesInfo();
+  if (!mounted) return;
   await connectToClashSockets();
 }
 function onPageUnmount() {
+  mounted = false;
   store.unsubscribe(onStoreUpdate);
   store.reset([
     "bandwidthWidget",
@@ -2361,39 +2358,39 @@ function onPageUnmount() {
   ]);
   socket.resetAll();
 }
-function registerLifecycleListeners() {
-  store.subscribe((next, prev, diff) => {
-    if (diff.tabService && next.tabService.current !== prev.tabService.current) {
-      logger.debug(
-        "[DASHBOARD]",
-        "active tab diff event, active tab:",
-        diff.tabService.current
-      );
-      const isDashboardVisible = next.tabService.current === "dashboard";
-      if (isDashboardVisible) {
-        logger.debug(
-          "[DASHBOARD]",
-          "registerLifecycleListeners",
-          "onPageMount"
-        );
-        return onPageMount();
-      }
-      if (!isDashboardVisible) {
-        logger.debug(
-          "[DASHBOARD]",
-          "registerLifecycleListeners",
-          "onPageUnmount"
-        );
-        return onPageUnmount();
-      }
-    }
-  });
+function isCurrent() {
+  return store.get().tabService.current === "dashboard";
 }
 async function initController() {
+  if (started) {
+    if (mounted && !remounting) {
+      remounting = true;
+      onMount(
+        "dashboard-status",
+        document.getElementById("dashboard-status")
+      ).then(() => {
+        remounting = false;
+        if (mounted) onPageMount();
+      });
+    }
+    return;
+  }
+  started = true;
+  store.subscribe((next, prev, diff) => {
+    if (!diff.tabService || next.tabService.current === prev.tabService.current) {
+      return;
+    }
+    logger.debug("[DASHBOARD]", "active tab:", next.tabService.current);
+    if (isCurrent()) {
+      onMount("dashboard-status").then(() => {
+        if (isCurrent() && !mounted) onPageMount();
+      });
+    } else if (mounted) {
+      onPageUnmount();
+    }
+  });
   onMount("dashboard-status").then(() => {
-    logger.debug("[DASHBOARD]", "initController", "onMount");
-    onPageMount();
-    registerLifecycleListeners();
+    if (isCurrent() && !mounted) onPageMount();
   });
 }
 
@@ -3997,14 +3994,70 @@ function getPodkopVersionRow(diagnosticsSystemInfo) {
   };
 }
 
+// src/helpers/getLatestRelease.ts
+var RELEASE_URL = "https://api.github.com/repos/podkop-net/podkop-experimental/releases/latest";
+var CACHE_KEY = "podkop-latest-release";
+var CACHE_MS = 60 * 60 * 1e3;
+var FAILURE_MS = 10 * 60 * 1e3;
+function readCachedRelease(now, raw) {
+  if (!raw) return void 0;
+  try {
+    const cached = JSON.parse(raw);
+    if (typeof cached.tag !== "string" || typeof cached.at !== "number") {
+      return void 0;
+    }
+    if (now - cached.at < (cached.tag ? CACHE_MS : FAILURE_MS)) {
+      return cached.tag;
+    }
+  } catch {
+  }
+  return void 0;
+}
+function keep(tag) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ tag, at: Date.now() }));
+  } catch {
+  }
+}
+async function ask() {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5e3);
+  try {
+    const response = await fetch(RELEASE_URL, { signal: controller.signal });
+    if (!response.ok) return "";
+    const tag = (await response.json()).tag_name;
+    return typeof tag === "string" ? tag : "";
+  } catch {
+    return "";
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function getLatestRelease() {
+  let stored = null;
+  try {
+    stored = localStorage.getItem(CACHE_KEY);
+  } catch {
+  }
+  const cached = readCachedRelease(Date.now(), stored);
+  if (cached !== void 0) return cached;
+  const tag = await ask();
+  keep(tag);
+  return tag;
+}
+
 // src/podkop/tabs/diagnostic/initController.ts
 async function fetchSystemInfo() {
-  const systemInfo = await PodkopShellMethods.getSystemInfo();
+  const [systemInfo, latest] = await Promise.all([
+    PodkopShellMethods.getSystemInfo(),
+    getLatestRelease()
+  ]);
   if (systemInfo.success) {
     store.set({
       diagnosticsSystemInfo: {
         loading: false,
-        ...systemInfo.data
+        ...systemInfo.data,
+        podkop_latest_version: latest || _("unknown")
       }
     });
   } else {
@@ -4414,8 +4467,12 @@ async function runChecks() {
     store.set({ diagnosticsRunAction: { loading: false } });
   }
 }
+var started2 = false;
+var mounted2 = false;
+var remounting2 = false;
 function onPageMount2() {
   onPageUnmount2();
+  mounted2 = true;
   store.subscribe(onStoreUpdate2);
   renderDiagnosticsChecks();
   renderDiagnosticRunActionWidget();
@@ -4426,6 +4483,7 @@ function onPageMount2() {
   fetchSystemInfo();
 }
 function onPageUnmount2() {
+  mounted2 = false;
   store.unsubscribe(onStoreUpdate2);
   store.reset([
     "diagnosticsActions",
@@ -4434,39 +4492,39 @@ function onPageUnmount2() {
     "diagnosticsRunAction"
   ]);
 }
-function registerLifecycleListeners2() {
-  store.subscribe((next, prev, diff) => {
-    if (diff.tabService && next.tabService.current !== prev.tabService.current) {
-      logger.debug(
-        "[DIAGNOSTIC]",
-        "active tab diff event, active tab:",
-        diff.tabService.current
-      );
-      const isDIAGNOSTICVisible = next.tabService.current === "diagnostic";
-      if (isDIAGNOSTICVisible) {
-        logger.debug(
-          "[DIAGNOSTIC]",
-          "registerLifecycleListeners",
-          "onPageMount"
-        );
-        return onPageMount2();
-      }
-      if (!isDIAGNOSTICVisible) {
-        logger.debug(
-          "[DIAGNOSTIC]",
-          "registerLifecycleListeners",
-          "onPageUnmount"
-        );
-        return onPageUnmount2();
-      }
-    }
-  });
+function isCurrent2() {
+  return store.get().tabService.current === "diagnostic";
 }
 async function initController2() {
+  if (started2) {
+    if (mounted2 && !remounting2) {
+      remounting2 = true;
+      onMount(
+        "diagnostic-status",
+        document.getElementById("diagnostic-status")
+      ).then(() => {
+        remounting2 = false;
+        if (mounted2) onPageMount2();
+      });
+    }
+    return;
+  }
+  started2 = true;
+  store.subscribe((next, prev, diff) => {
+    if (!diff.tabService || next.tabService.current === prev.tabService.current) {
+      return;
+    }
+    logger.debug("[DIAGNOSTIC]", "active tab:", next.tabService.current);
+    if (isCurrent2()) {
+      onMount("diagnostic-status").then(() => {
+        if (isCurrent2() && !mounted2) onPageMount2();
+      });
+    } else if (mounted2) {
+      onPageUnmount2();
+    }
+  });
   onMount("diagnostic-status").then(() => {
-    logger.debug("[DIAGNOSTIC]", "initController", "onMount");
-    onPageMount2();
-    registerLifecycleListeners2();
+    if (isCurrent2() && !mounted2) onPageMount2();
   });
 }
 
@@ -4858,30 +4916,33 @@ function getProxyUrlName(url) {
 }
 
 // src/helpers/onMount.ts
-async function onMount(id) {
+async function onMount(id, previous) {
   return new Promise((resolve) => {
-    const el = document.getElementById(id);
-    if (el && el.offsetParent !== null) {
-      return resolve(el);
+    let watched = null;
+    let visibility;
+    const mutations = new MutationObserver(() => check());
+    function done(element) {
+      mutations.disconnect();
+      visibility?.disconnect();
+      resolve(element);
     }
-    const observer = new MutationObserver(() => {
-      const target = document.getElementById(id);
-      if (target) {
-        const io = new IntersectionObserver((entries) => {
-          const visible = entries.some((e) => e.isIntersecting);
-          if (visible) {
-            observer.disconnect();
-            io.disconnect();
-            resolve(target);
-          }
-        });
-        io.observe(target);
+    function check() {
+      const element = document.getElementById(id);
+      if (!element || element === previous) return;
+      if (element.offsetParent !== null) {
+        done(element);
+        return;
       }
-    });
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true
-    });
+      if (element === watched) return;
+      visibility?.disconnect();
+      watched = element;
+      visibility = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) done(element);
+      });
+      visibility.observe(element);
+    }
+    mutations.observe(document.body, { childList: true, subtree: true });
+    check();
   });
 }
 

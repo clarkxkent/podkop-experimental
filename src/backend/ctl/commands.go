@@ -136,7 +136,7 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 			DNSConfigured int    `json:"dns_configured"`
 		}{asNumber(isRunning), asNumber(enabled), status, asNumber(diag.DNSOfLAN(readUCI(env.Paths.DHCP)))})
 	case "get_system_info":
-		return pretty(answerSystem(diag.SystemInfo(ctx, env.Version, env.SingBoxVersion), env.Engine))
+		return pretty(answerSystem(diag.SystemInfo(ctx, env.Version, env.SingBoxVersion, false), env.Engine))
 	case "get_sing_box_features":
 		features := env.Features
 		if features == nil {

@@ -1,10 +1,15 @@
 package diag
 
 import (
+	"context"
+	"io"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -121,4 +126,25 @@ func TestListens(t *testing.T) {
 	require.True(t, listens("/proc/net/udp", net.IPv4(127, 0, 0, 42), udpPort, ""))
 	require.False(t, listens("/proc/net/udp", net.IPv4(127, 0, 0, 1), udpPort, ""))
 	require.False(t, listens(filepath.Join(t.TempDir(), "none"), net.IPv4(127, 0, 0, 1), port, ""))
+}
+
+func TestSystemInfoAsksLatestOnlyWhenTold(t *testing.T) {
+	var asked atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		asked.Add(1)
+		io.WriteString(writer, `{"tag_name": "v0.8.1"}`)
+	}))
+	defer server.Close()
+	saved := latestReleaseURL
+	latestReleaseURL = server.URL
+	defer func() { latestReleaseURL = saved }()
+
+	report := SystemInfo(context.Background(), "0.8.0", "1.14.3", false)
+	require.Equal(t, "unknown", report.PodkopLatestVersion)
+	require.Equal(t, "0.8.0", report.PodkopVersion)
+	require.Zero(t, asked.Load())
+
+	report = SystemInfo(context.Background(), "0.8.0", "1.14.3", true)
+	require.Equal(t, "v0.8.1", report.PodkopLatestVersion)
+	require.EqualValues(t, 1, asked.Load())
 }

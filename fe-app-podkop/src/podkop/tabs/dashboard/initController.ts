@@ -394,9 +394,19 @@ async function onStoreUpdate(
   }
 }
 
+// The controller starts once a page: LuCI asks the value of the dummy field that starts it
+// at every render and after every save, and each start used to add a listener of the tabs that
+// was never taken away (each opening of the tab did its work as many times). It mounts at
+// every opening of the tab and unmounts when another tab opens; a render of LuCI while the tab
+// is open (after a save) mounts it again once, on the new elements.
+let started = false;
+let mounted = false;
+let remounting = false;
+
 async function onPageMount() {
   // Cleanup before mount
   onPageUnmount();
+  mounted = true;
 
   // Add new listener
   store.subscribe(onStoreUpdate);
@@ -404,10 +414,13 @@ async function onPageMount() {
   // Initial sections fetch
   await fetchDashboardSections();
   await fetchServicesInfo();
+  // the tab may have been left while the answers came
+  if (!mounted) return;
   await connectToClashSockets();
 }
 
 function onPageUnmount() {
+  mounted = false;
   // Remove old listener
   store.unsubscribe(onStoreUpdate);
   // Clear store
@@ -421,44 +434,44 @@ function onPageUnmount() {
   socket.resetAll();
 }
 
-function registerLifecycleListeners() {
-  store.subscribe((next, prev, diff) => {
-    if (
-      diff.tabService &&
-      next.tabService.current !== prev.tabService.current
-    ) {
-      logger.debug(
-        '[DASHBOARD]',
-        'active tab diff event, active tab:',
-        diff.tabService.current,
-      );
-      const isDashboardVisible = next.tabService.current === 'dashboard';
-
-      if (isDashboardVisible) {
-        logger.debug(
-          '[DASHBOARD]',
-          'registerLifecycleListeners',
-          'onPageMount',
-        );
-        return onPageMount();
-      }
-
-      if (!isDashboardVisible) {
-        logger.debug(
-          '[DASHBOARD]',
-          'registerLifecycleListeners',
-          'onPageUnmount',
-        );
-        return onPageUnmount();
-      }
-    }
-  });
+function isCurrent() {
+  return store.get().tabService.current === 'dashboard';
 }
 
 export async function initController(): Promise<void> {
+  if (started) {
+    if (mounted && !remounting) {
+      remounting = true;
+      onMount(
+        'dashboard-status',
+        document.getElementById('dashboard-status'),
+      ).then(() => {
+        remounting = false;
+        if (mounted) onPageMount();
+      });
+    }
+    return;
+  }
+  started = true;
+
+  store.subscribe((next, prev, diff) => {
+    if (
+      !diff.tabService ||
+      next.tabService.current === prev.tabService.current
+    ) {
+      return;
+    }
+    logger.debug('[DASHBOARD]', 'active tab:', next.tabService.current);
+    if (isCurrent()) {
+      onMount('dashboard-status').then(() => {
+        if (isCurrent() && !mounted) onPageMount();
+      });
+    } else if (mounted) {
+      onPageUnmount();
+    }
+  });
+
   onMount('dashboard-status').then(() => {
-    logger.debug('[DASHBOARD]', 'initController', 'onMount');
-    onPageMount();
-    registerLifecycleListeners();
+    if (isCurrent() && !mounted) onPageMount();
   });
 }

@@ -45,6 +45,13 @@ declare global {
 
   const _ = (_key: string) => string;
 
+  const L: {
+    env: {
+      sessionid: string;
+      ubuspath: string;
+    };
+  };
+
   const ui = {
     showModal: (_title: stirng, _content: HtmlElement) => undefined,
     hideModal: () => undefined,

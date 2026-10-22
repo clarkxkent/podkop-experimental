@@ -1,30 +1,40 @@
-export async function onMount(id: string): Promise<HTMLElement> {
+// onMount resolves with the element of the id once it is in the page and visible. One
+// IntersectionObserver watches the element (a new one only when LuCI renders a new element
+// of the id); both observers go once it is visible. With previous, only another element of
+// the id counts: LuCI renders the form again while the old one is still in the page.
+export async function onMount(
+  id: string,
+  previous?: HTMLElement | null,
+): Promise<HTMLElement> {
   return new Promise((resolve) => {
-    const el = document.getElementById(id);
+    let watched: HTMLElement | null = null;
+    let visibility: IntersectionObserver | undefined;
 
-    if (el && el.offsetParent !== null) {
-      return resolve(el);
+    const mutations = new MutationObserver(() => check());
+
+    function done(element: HTMLElement) {
+      mutations.disconnect();
+      visibility?.disconnect();
+      resolve(element);
     }
 
-    const observer = new MutationObserver(() => {
-      const target = document.getElementById(id);
-      if (target) {
-        const io = new IntersectionObserver((entries) => {
-          const visible = entries.some((e) => e.isIntersecting);
-          if (visible) {
-            observer.disconnect();
-            io.disconnect();
-            resolve(target);
-          }
-        });
-
-        io.observe(target);
+    function check() {
+      const element = document.getElementById(id);
+      if (!element || element === previous) return;
+      if (element.offsetParent !== null) {
+        done(element);
+        return;
       }
-    });
+      if (element === watched) return;
+      visibility?.disconnect();
+      watched = element;
+      visibility = new IntersectionObserver((entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) done(element);
+      });
+      visibility.observe(element);
+    }
 
-    observer.observe(document.body, {
-      childList: true,
-      subtree: true,
-    });
+    mutations.observe(document.body, { childList: true, subtree: true });
+    check();
   });
 }

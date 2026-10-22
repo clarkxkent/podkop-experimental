@@ -20,15 +20,21 @@ import { showToast } from '../../../helpers/showToast';
 import { renderWikiDisclaimer } from './partials/renderWikiDisclaimer';
 import { runSectionsCheck } from './checks/runSectionsCheck';
 import { getPodkopVersionRow } from './helpers/getPodkopVersionRow';
+import { getLatestRelease } from '../../../helpers/getLatestRelease';
 
 async function fetchSystemInfo() {
-  const systemInfo = await PodkopShellMethods.getSystemInfo();
+  // the latest release is asked of GitHub by the browser, not by the router
+  const [systemInfo, latest] = await Promise.all([
+    PodkopShellMethods.getSystemInfo(),
+    getLatestRelease(),
+  ]);
 
   if (systemInfo.success) {
     store.set({
       diagnosticsSystemInfo: {
         loading: false,
         ...systemInfo.data,
+        podkop_latest_version: latest || _('unknown'),
       },
     });
   } else {
@@ -505,9 +511,16 @@ async function runChecks() {
   }
 }
 
+// The controller starts once a page and mounts at every opening of the tab (see the same
+// in the dashboard: LuCI starts it at every render and after every save).
+let started = false;
+let mounted = false;
+let remounting = false;
+
 function onPageMount() {
   // Cleanup before mount
   onPageUnmount();
+  mounted = true;
 
   // Add new listener
   store.subscribe(onStoreUpdate);
@@ -535,6 +548,7 @@ function onPageMount() {
 }
 
 function onPageUnmount() {
+  mounted = false;
   // Remove old listener
   store.unsubscribe(onStoreUpdate);
 
@@ -547,44 +561,44 @@ function onPageUnmount() {
   ]);
 }
 
-function registerLifecycleListeners() {
-  store.subscribe((next, prev, diff) => {
-    if (
-      diff.tabService &&
-      next.tabService.current !== prev.tabService.current
-    ) {
-      logger.debug(
-        '[DIAGNOSTIC]',
-        'active tab diff event, active tab:',
-        diff.tabService.current,
-      );
-      const isDIAGNOSTICVisible = next.tabService.current === 'diagnostic';
-
-      if (isDIAGNOSTICVisible) {
-        logger.debug(
-          '[DIAGNOSTIC]',
-          'registerLifecycleListeners',
-          'onPageMount',
-        );
-        return onPageMount();
-      }
-
-      if (!isDIAGNOSTICVisible) {
-        logger.debug(
-          '[DIAGNOSTIC]',
-          'registerLifecycleListeners',
-          'onPageUnmount',
-        );
-        return onPageUnmount();
-      }
-    }
-  });
+function isCurrent() {
+  return store.get().tabService.current === 'diagnostic';
 }
 
 export async function initController(): Promise<void> {
+  if (started) {
+    if (mounted && !remounting) {
+      remounting = true;
+      onMount(
+        'diagnostic-status',
+        document.getElementById('diagnostic-status'),
+      ).then(() => {
+        remounting = false;
+        if (mounted) onPageMount();
+      });
+    }
+    return;
+  }
+  started = true;
+
+  store.subscribe((next, prev, diff) => {
+    if (
+      !diff.tabService ||
+      next.tabService.current === prev.tabService.current
+    ) {
+      return;
+    }
+    logger.debug('[DIAGNOSTIC]', 'active tab:', next.tabService.current);
+    if (isCurrent()) {
+      onMount('diagnostic-status').then(() => {
+        if (isCurrent() && !mounted) onPageMount();
+      });
+    } else if (mounted) {
+      onPageUnmount();
+    }
+  });
+
   onMount('diagnostic-status').then(() => {
-    logger.debug('[DIAGNOSTIC]', 'initController', 'onMount');
-    onPageMount();
-    registerLifecycleListeners();
+    if (isCurrent() && !mounted) onPageMount();
   });
 }

@@ -89,7 +89,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 				deviceLines, client = device.run()
 			}
 		},
-		func() { system = diag.SystemInfo(ctx, version, singBoxVersion) },
+		func() { system = diag.SystemInfo(ctx, version, singBoxVersion, true) },
 		func() {
 			dns = diag.CheckDNS(ctx, diag.DNSSettings{Type: settings.DNSType, Server: settings.DNSServer, Bootstrap: settings.BootstrapDNSServer}, dhcp)
 		},

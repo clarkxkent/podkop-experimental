@@ -173,8 +173,9 @@ type System struct {
 	DeviceModel         string
 }
 
-// the releases of podkop-exp; podkop of itdoginfo/podkop is another package
-const latestReleaseURL = "https://api.github.com/repos/podkop-net/podkop-experimental/releases/latest"
+// the releases of podkop-exp; podkop of itdoginfo/podkop is another package (a variable for
+// the tests)
+var latestReleaseURL = "https://api.github.com/repos/podkop-net/podkop-experimental/releases/latest"
 
 var (
 	tagName        = regexp.MustCompile(`"tag_name":\s*"([^"]*)"`)
@@ -183,13 +184,16 @@ var (
 )
 
 // SystemInfo collects the versions and the model of the device: of the backend and of the
-// sing-box it runs, which are one binary. The latest release of podkop is asked from the
-// site that publishes it: the one part of the answer that waits.
-func SystemInfo(ctx context.Context, version string, singBoxVersion string) *System {
+// sing-box it runs, which are one binary. With askLatest, the latest release of podkop is
+// asked from the site that publishes it: the one part of the answer that waits. The page asks
+// it from the browser itself, so only the global check has the router ask.
+func SystemInfo(ctx context.Context, version string, singBoxVersion string, askLatest bool) *System {
 	report := &System{PodkopVersion: version, SingBoxVersion: singBoxVersion, PodkopLatestVersion: "unknown", LuCIAppVersion: "not installed"}
 	report.OpenWrtVersion, report.DeviceModel = Device()
-	if found := tagName.FindSubmatch(get(ctx, latestReleaseURL, webTimeout)); found != nil && len(found[1]) > 0 {
-		report.PodkopLatestVersion = string(found[1])
+	if askLatest {
+		if found := tagName.FindSubmatch(get(ctx, latestReleaseURL, webTimeout)); found != nil && len(found[1]) > 0 {
+			report.PodkopLatestVersion = string(found[1])
+		}
 	}
 	if content, err := os.ReadFile("/www/luci-static/resources/view/podkop/main.js"); err == nil {
 		report.LuCIAppVersion = ""

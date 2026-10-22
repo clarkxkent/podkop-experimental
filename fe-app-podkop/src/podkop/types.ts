@@ -196,12 +196,6 @@ export namespace Podkop {
   }
 
   // the lines of the log a reader has not seen, and the cursor to ask with next
-  export interface LogsSince {
-    run: string;
-    next: number;
-    lines: string[];
-  }
-
   export interface FakeIPClientCheckResult {
     dns: boolean;
     connection: boolean;

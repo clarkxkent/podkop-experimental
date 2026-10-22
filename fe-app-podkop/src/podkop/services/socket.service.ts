@@ -67,6 +67,10 @@ class SocketManager {
 
     this.sockets.set(url, ws);
     this.connected.set(url, false);
+    // a socket closed on purpose (resetAll, disconnect) is no longer in the map: what it
+    // reports after that (its close, a late open or error, the timer) is not about the
+    // socket of the same address opened since, nor an error worth a line
+    const current = () => this.sockets.get(url) === ws;
     this.listeners.set(url, new Set());
     if (!this.errorListeners.has(url)) {
       this.errorListeners.set(url, new Set());
@@ -76,7 +80,7 @@ class SocketManager {
     // refusing, an address the API does not listen on) stays "connecting" for minutes, and
     // the widgets that wait for it stay empty: it is given up after a while
     const connectTimer = setTimeout(() => {
-      if (!this.connected.get(url)) {
+      if (current() && !this.connected.get(url)) {
         logger.error(
           '[SOCKET]',
           `No answer from ${url} in ${CONNECT_TIMEOUT_MS} ms`,
@@ -92,11 +96,13 @@ class SocketManager {
 
     ws.addEventListener('open', () => {
       clearTimeout(connectTimer);
+      if (!current()) return;
       this.connected.set(url, true);
       logger.info('[SOCKET]', 'Connected to', url);
     });
 
     ws.addEventListener('message', (event) => {
+      if (!current()) return;
       const handlers = this.listeners.get(url);
       if (handlers) {
         for (const handler of handlers) {
@@ -111,12 +117,14 @@ class SocketManager {
 
     ws.addEventListener('close', () => {
       clearTimeout(connectTimer);
+      if (!current()) return;
       this.connected.set(url, false);
       logger.warn('[SOCKET]', `Disconnected: ${url}`);
       this.triggerError(url, 'Connection closed');
     });
 
     ws.addEventListener('error', (err) => {
+      if (!current()) return;
       logger.error('[SOCKET]', `Socket error for ${url}:`, err);
       this.triggerError(url, err);
     });
