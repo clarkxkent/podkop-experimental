@@ -6,6 +6,8 @@ import (
 	"context"
 	"os"
 	"os/signal"
+	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -33,6 +35,13 @@ var commandDaemon = &cobra.Command{
 		"What happens is printed a line an event, \"[level] message\".",
 	Args: cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
+		// The page may run /usr/bin/podkop with any arguments (rpcd's file.exec). A backend it
+		// started would be no service of procd: rpcd kills it at its exec timeout, and nothing
+		// gives the router back its DNS, its firewall and its routing.
+		if parentName() == "rpcd" {
+			os.Stderr.WriteString("error: the backend runs as the service (/etc/init.d/podkop start), not as a command of the page\n")
+			os.Exit(1)
+		}
 		// one backend at a time, and a way for the release command to know this one is gone
 		lock, err := takeLock(false)
 		if err != nil {
@@ -228,4 +237,13 @@ func takeLock(patience bool) (*os.File, error) {
 func init() {
 	commandDaemon.Flags().StringVar(&commandDaemonFlagUCI, "uci", "/etc/config/podkop", "The settings file")
 	mainCommand.AddCommand(commandDaemon, commandRelease)
+}
+
+// parentName is the name of the process that started this one, as the kernel has it.
+func parentName() string {
+	content, err := os.ReadFile("/proc/" + strconv.Itoa(os.Getppid()) + "/comm")
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(content))
 }
