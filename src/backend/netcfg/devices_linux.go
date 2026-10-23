@@ -41,7 +41,8 @@ var pppPrefixes = map[string]string{
 //     layer 3 when it is up; when it is not, the device pppd will make for it (PPP), or
 //     its device;
 //   - the device of layer 2 of an interface that is up with another device of layer 3
-//     (the port or VLAN of a PPPoE connection): that device of layer 3;
+//     (the port or VLAN of a PPPoE connection): that device of layer 3; of a PPP interface
+//     that is down: the device pppd will make;
 //   - anything else, a device of its own included (br-lan, wg0, a tun of OpenVPN): itself.
 //
 // The result holds the names that stand for another device. Without netifd it is empty,
@@ -96,21 +97,30 @@ func deviceOf(interfaces []netifdInterface, name string) string {
 	if logical != name {
 		return ""
 	}
-	// a device of layer 2: the interface with an IPv4 address first (the PPPoE "wan" over
-	// "wan6" of DHCPv6 on the same port)
-	var found string
+	// a device of layer 2: the interface that is up with an IPv4 address first (the PPPoE
+	// "wan" over "wan6" of DHCPv6 on the same port), then one that is up, then the device
+	// pppd will make for a PPP interface that is down
+	var found, predicted string
 	for _, candidate := range interfaces {
-		if !candidate.Up || candidate.Device != name || candidate.L3Device == "" || candidate.L3Device == name {
+		if candidate.Device != name {
 			continue
 		}
-		if len(candidate.Addresses) > 0 {
-			return candidate.L3Device
-		}
-		if found == "" {
-			found = candidate.L3Device
+		switch prefix := pppPrefixes[candidate.Proto]; {
+		case candidate.Up && candidate.L3Device != "" && candidate.L3Device != name:
+			if len(candidate.Addresses) > 0 {
+				return candidate.L3Device
+			}
+			if found == "" {
+				found = candidate.L3Device
+			}
+		case !candidate.Up && prefix != "" && predicted == "":
+			predicted = prefix + "-" + candidate.Interface
 		}
 	}
-	return found
+	if found != "" {
+		return found
+	}
+	return predicted
 }
 
 // UsableAddress tells whether an IPv4 address can be the source of what goes out through

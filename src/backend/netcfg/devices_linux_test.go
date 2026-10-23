@@ -28,7 +28,7 @@ func TestDevicesOf(t *testing.T) {
 		Interfaces []netifdInterface `json:"interface"`
 	}
 	require.NoError(t, json.Unmarshal([]byte(dump), &parsed))
-	names := []string{"wan", "@wan", "lan", "guest", "dsl", "eth0.2", "wan6", "br-lan", "wg0", "tun0", "@nothere", "lan6", "pppoe-wan"}
+	names := []string{"wan", "@wan", "lan", "guest", "dsl", "eth0.7", "eth0.2", "wan6", "br-lan", "wg0", "tun0", "@nothere", "lan6", "pppoe-wan"}
 	require.Equal(t, map[string]string{
 		// a logical interface: its device of layer 3, in either form
 		"wan":  "pppoe-wan",
@@ -36,8 +36,9 @@ func TestDevicesOf(t *testing.T) {
 		"lan":  "br-lan",
 		// a Wi-Fi without a bridge has its own device of layer 3
 		"guest": "phy0-ap1",
-		// PPPoE that is down: the device pppd will make
-		"dsl": "pppoe-dsl",
+		// PPPoE that is down, by its name and by its port: the device pppd will make
+		"dsl":    "pppoe-dsl",
+		"eth0.7": "pppoe-dsl",
 		// the VLAN of a PPPoE connection: its device of layer 3
 		"eth0.2": "pppoe-isp2",
 		"wan6":   "wan6-dev",
