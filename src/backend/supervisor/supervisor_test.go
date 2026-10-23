@@ -47,7 +47,11 @@ type recorder struct {
 	secrets []string
 	// bridged is whether bridged packets pass the IP firewall hooks (br_netfilter)
 	bridged bool
+	// devices are what netifd says the interface names stand for
+	devices map[string]string
 }
+
+func (r *recorder) Devices(names []string) map[string]string { return r.devices }
 
 func (r *recorder) AllowBridgedTraffic() []string {
 	if !r.bridged {
@@ -388,6 +392,30 @@ func TestRestoreRouting(t *testing.T) {
 	require.Contains(t, s.restoreRouting(), "br_netfilter")
 	require.True(t, f.logged("net.bridge.bridge-nf-call-iptables was 1 (br_netfilter): set to 0"), "%v", f.lines())
 	require.Equal(t, []string{"dns"}, f.system.take())
+}
+
+// An interface of the settings that comes up after the backend, or gets another device, is
+// taken at the next ifup: the firewall gets the device, and sing-box keeps running when its
+// configuration stays the same.
+func TestDevicesMoved(t *testing.T) {
+	f := newFixture(t)
+	s := f.supervisor
+	f.settings("\tlist source_network_interfaces 'lan'\n", oneName)
+	s.Boot()
+	require.True(t, s.Running(), "%v", f.lines())
+	defer s.Stop()
+	require.Equal(t, []string{"lan"}, f.system.plans[len(f.system.plans)-1].Interfaces)
+	require.Equal(t, "nothing was missing", s.restoreRouting())
+	f.system.take()
+	f.system.devices = map[string]string{"lan": "br-lan"}
+	message := s.restoreRouting()
+	require.Contains(t, message, "lan: br-lan")
+	require.Contains(t, message, "sing-box keeps running")
+	require.Equal(t, []string{"br-lan"}, f.system.plans[len(f.system.plans)-1].Interfaces)
+	require.Contains(t, f.system.take(), "firewall update")
+	require.True(t, f.logged("the interfaces stand for other devices now (lan: br-lan)"), "%v", f.lines())
+	// the same devices at the next ifup: nothing is applied
+	require.Equal(t, "nothing was missing", s.restoreRouting())
 }
 
 // Settings that cannot be used at the boot leave the router without the backend and with

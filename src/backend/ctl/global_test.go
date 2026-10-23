@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/diag"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/stretchr/testify/require"
 )
@@ -63,4 +64,39 @@ func TestCutSettings(t *testing.T) {
 	require.Less(t, len(cut), settingsShown+100)
 	require.True(t, strings.HasPrefix(cut, "config settings 'settings'\n"))
 	require.Contains(t, cut, "bytes more of the settings are left out")
+}
+
+func TestInterfaceLines(t *testing.T) {
+	t.Parallel()
+	settings := &model.Settings{SourceNetworkInterfaces: []string{"lan", "lan1", "guest"}, EnableYACD: true, YACDInterfaces: []string{"wan6only"}, OutputNetworkInterface: "wan"}
+	sections := []model.Section{{Name: "torrents", ConnectionType: "vpn", Interface: "wan"}, {Name: "tunnel", ConnectionType: "vpn", Interface: "awg0"}, {Name: "main", ConnectionType: "proxy", Interface: "ignored"}}
+	devices := map[string]string{"lan": "br-lan", "wan": "pppoe-wan"}
+	addresses := map[string][]netip.Addr{
+		"br-lan":    {netip.MustParseAddr("192.168.1.1")},
+		"lan1":      nil,
+		"pppoe-wan": {netip.MustParseAddr("203.0.113.7")},
+		"wan6only":  {netip.MustParseAddr("2001:db8::1")},
+		"awg0":      {netip.MustParseAddr("169.254.0.2")},
+	}
+	lookup := func(device string) ([]netip.Addr, bool) {
+		found, exists := addresses[device]
+		return found, exists
+	}
+	uses := interfaceUses(settings, sections)
+	require.Equal(t, []string{
+		"✅ Source: lan → br-lan",
+		"⚠️ Source: lan1: no IPv4 address (a port of a bridge, a network that is down, or a wrong name): podkop sees no traffic from it",
+		"⚠️ Source: guest: no such device now (a network that is down, or a wrong name): podkop sees no traffic from it",
+		"✅ YACD: wan6only",
+		"✅ Output: wan → pppoe-wan",
+		"✅ VPN section torrents: wan → pppoe-wan",
+		"⚠️ VPN section tunnel: awg0: no IPv4 address (a port of a bridge, a network that is down, or a wrong name)",
+	}, interfaceLines(uses, devices, lookup))
+
+	// the output down: an error; none chosen: the routing of the router
+	addresses["pppoe-wan"] = nil
+	require.Contains(t, interfaceLines(uses, devices, lookup), "❌ Output: wan → pppoe-wan: no IPv4 address (a port of a bridge, a network that is down, or a wrong name): sing-box cannot go out through it")
+	require.Equal(t, []string{"✅ Output: where the routing of the router sends it"}, interfaceLines(nil, nil, lookup))
+
+	require.Equal(t, []string{"br-lan", "lan1", "guest"}, sourceDevices(&model.Settings{SourceNetworkInterfaces: []string{"lan", "br-lan", "lan1", "guest"}}, devices))
 }

@@ -52,3 +52,47 @@ func TestDataplane(t *testing.T) {
 	result = buildText(t, head+"\tlist source_network_interfaces 'br-guest'\n\toption enable_yacd '1'\n"+proxy, Facts{})
 	require.Equal(t, []string{"br-guest"}, result.Dataplane.ClashAPIInterfaces)
 }
+
+// The interface names of the settings become the devices of layer 3 netifd says they
+// stand for, in the firewall and in sing-box alike; what sing-box opens carries the mark
+// mangle_output lets go by, and is bound only to an interface the settings name.
+func TestDevices(t *testing.T) {
+	const head = "config settings 'settings'\n\toption dns_type 'udp'\n\toption dns_server '8.8.8.8'\n"
+	const proxy = "\nconfig section 'main'\n\toption connection_type 'proxy'\n\toption proxy_config_type 'url'\n\toption proxy_string 'socks5://203.0.113.15:1080'\n"
+	const vpn = "\nconfig section 'torrents'\n\toption connection_type 'vpn'\n\toption interface 'wan'\n"
+	settings := head + "\tlist source_network_interfaces 'lan'\n\tlist source_network_interfaces 'br-lan'\n\tlist source_network_interfaces 'guest'\n" +
+		"\toption enable_yacd '1'\n\tlist yacd_interfaces 'lan'\n\toption yacd_secret_key 'k'\n" + proxy + vpn
+
+	// nothing known of the names: they are used as they are, sing-box goes where the
+	// routing sends it
+	result := buildText(t, settings, Facts{})
+	require.Equal(t, []string{"lan", "br-lan", "guest"}, result.Dataplane.Interfaces)
+	config := string(result.Config)
+	require.Contains(t, config, `"bind_interface": "wan"`)
+	require.Contains(t, config, `"default_mark": 2097152`)
+	require.NotContains(t, config, "auto_detect_interface")
+	require.NotContains(t, config, "default_interface")
+
+	// the devices of layer 3: one device once, in the order of the settings
+	facts := Facts{Devices: map[string]string{"lan": "br-lan", "guest": "phy0-ap1", "wan": "pppoe-wan"}}
+	result = buildText(t, settings, facts)
+	require.Equal(t, []string{"br-lan", "phy0-ap1"}, result.Dataplane.Interfaces)
+	require.Equal(t, []string{"br-lan"}, result.Dataplane.ClashAPIInterfaces)
+	require.Contains(t, string(result.Config), `"bind_interface": "pppoe-wan"`)
+	require.Equal(t, facts.Devices, result.Devices)
+
+	// an output interface binds what sing-box opens, the mark stays
+	result = buildText(t, head+"\toption enable_output_network_interface '1'\n\toption output_network_interface 'wan'\n"+proxy, facts)
+	config = string(result.Config)
+	require.Contains(t, config, `"default_interface": "pppoe-wan"`)
+	require.Contains(t, config, `"default_mark": 2097152`)
+
+	// the names netifd is asked about: each once; the interface of a section that is no
+	// VPN section is none
+	parsed, err := uci.Parse([]byte(head + "\toption output_network_interface 'wwan'\n\tlist source_network_interfaces 'lan'\n\toption enable_yacd '1'\n\tlist yacd_interfaces 'lan'\n\tlist yacd_interfaces 'wan'\n" +
+		proxy + "\toption interface 'ignored'\n" + vpn))
+	require.NoError(t, err)
+	loaded, err := model.Load(parsed)
+	require.NoError(t, err)
+	require.Equal(t, []string{"lan", "wan", "wwan"}, InterfaceNames(loaded))
+}

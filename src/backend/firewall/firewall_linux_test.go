@@ -69,7 +69,7 @@ func shellBackendTable(t *testing.T, plan *Plan) {
 		"add rule "+table+" proxy meta mark & 0x00100000 == 0x00100000 meta l4proto tcp tproxy ip to 127.0.0.1:1602 counter",
 		"add rule "+table+" proxy meta mark & 0x00100000 == 0x00100000 meta l4proto udp tproxy ip to 127.0.0.1:1602 counter",
 		"add rule "+table+" mangle_output ip daddr @localv4 return",
-		"add rule "+table+" mangle_output meta mark 0x00200000 counter return",
+		"add rule "+table+" mangle_output meta mark & 0x00200000 == 0x00200000 counter return",
 		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto tcp meta mark set 0x00100000 counter",
 		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto udp meta mark set 0x00100000 counter",
 		"add rule "+table+" mangle_output ip daddr 198.18.0.0/15 meta l4proto tcp meta mark set 0x00100000 counter",

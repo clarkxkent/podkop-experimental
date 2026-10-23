@@ -57,6 +57,13 @@ import (
 //     firewall lets only the devices of yacd_interfaces reach it (firewall.Plan); the shell
 //     backend listens on the address of the LAN, or on every address with YACD's WAN
 //     access, which this backend does not have.
+// 11. The connections sing-box opens itself are not bound to the interface of the default
+//     route (route.auto_detect_interface of the shell backend): they go where the routing
+//     of the router sends them, mwan3 and the routes of hosts and tunnels included, with
+//     route.default_mark (dataplane.OutboundMark), which mangle_output lets go by. An
+//     interface of the settings still binds them (route.default_interface), as the
+//     interface of a VPN section binds its outbound; the device of layer 3 a name stands
+//     for (Facts.Devices) goes there.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -100,6 +107,12 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 	}
 	route, _ := document.get("route")
 	routeObject, _ := route.(*object)
+	if routeObject != nil {
+		if _, found := routeObject.get("auto_detect_interface"); found {
+			routeObject.insertAfter("auto_detect_interface", "default_mark", dataplane.OutboundMark)
+			routeObject.remove("auto_detect_interface")
+		}
+	}
 	if routeObject != nil && shell.Settings != nil {
 		ruleSets, _ := routeObject.get("rule_set")
 		list, _ := ruleSets.([]any)

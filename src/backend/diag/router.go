@@ -85,6 +85,15 @@ func CheckLANDNS(interfaces []string, listeners []sockets.Listener) []LANDNS {
 	return result
 }
 
+// DeviceAddresses are the addresses of a device, the link-local ones aside, and whether
+// there is a device of the name.
+func DeviceAddresses(name string) ([]netip.Addr, bool) {
+	if _, err := net.InterfaceByName(name); err != nil {
+		return nil, false
+	}
+	return interfaceAddresses(name), true
+}
+
 func interfaceAddresses(name string) []netip.Addr {
 	device, err := net.InterfaceByName(name)
 	if err != nil {

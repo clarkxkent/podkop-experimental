@@ -41,6 +41,9 @@ import (
 type System interface {
 	// LANAddress is the IPv4 address of the LAN, empty when it is not known.
 	LANAddress() string
+	// Devices are the devices of layer 3 interface names stand for now, those that
+	// stand for another device than their own name (netcfg.Devices).
+	Devices(names []string) map[string]string
 	ApplyRouting() error
 	RemoveRouting() error
 	// AllowBridgedTraffic keeps bridged packets out of the IP firewall hooks and names
@@ -539,12 +542,47 @@ func (s *Supervisor) restoreRouting() string {
 			restored = append(restored, "the DNS of the LAN")
 		}
 	}
-	if len(restored) == 0 {
+	var message string
+	if len(restored) > 0 {
+		message = strings.Join(restored, ", ") + " had gone and are back"
+		s.log("warn", "the network changed: ", message)
+	}
+	if moved := s.movedDevices(current); len(moved) > 0 {
+		// an interface came up after podkop, or got another device: the firewall
+		// takes the new device, and sing-box is bound to it (a configuration that is
+		// the same leaves sing-box running)
+		s.log("info", "the interfaces stand for other devices now (", strings.Join(moved, ", "), "): the settings are applied again")
+		result := s.Apply()
+		if message != "" {
+			message += "; "
+		}
+		message += "the settings applied again for " + strings.Join(moved, ", ") + ": " + result.Message
+	}
+	if message == "" {
 		return "nothing was missing"
 	}
-	message := strings.Join(restored, ", ") + " had gone and are back"
-	s.log("warn", "the network changed: ", message)
 	return message
+}
+
+// movedDevices names the interface names of the running settings that stand for another
+// device now than when the settings were applied, as "wan: pppoe-wan".
+func (s *Supervisor) movedDevices(current *running) []string {
+	names := plan.InterfaceNames(current.settings)
+	if len(names) == 0 {
+		return nil
+	}
+	now := s.options.System.Devices(names)
+	var moved []string
+	for _, name := range names {
+		if now[name] != current.result.Devices[name] {
+			device := now[name]
+			if device == "" {
+				device = name
+			}
+			moved = append(moved, name+": "+device)
+		}
+	}
+	return moved
 }
 
 // Probe tells what the backend saw of the check name of a label: whether its DNS question
@@ -776,7 +814,7 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 		return nil, E.Cause(err, "read the settings")
 	}
 	s.clashKey(settings)
-	facts := plan.Facts{LANAddress: s.options.System.LANAddress()}
+	facts := plan.Facts{LANAddress: s.options.System.LANAddress(), Devices: s.options.System.Devices(plan.InterfaceNames(settings))}
 	if s.listChecks == nil {
 		s.listChecks = make(map[listKey]listCheck)
 	}

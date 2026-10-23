@@ -22,6 +22,8 @@ func (Router) LANAddress() string {
 	return address.String()
 }
 
+func (Router) Devices(names []string) map[string]string { return netcfg.Devices(names) }
+
 func (Router) ApplyRouting() error { return netcfg.Apply() }
 
 func (Router) AllowBridgedTraffic() []string { return netcfg.AllowBridgedTraffic() }

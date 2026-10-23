@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/netip"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -57,6 +58,11 @@ type Facts struct {
 	// LANAddress is the IPv4 address of the interface "lan" as netifd reports it, or
 	// empty when there is none: the address the Clash API and the mixed proxies listen on.
 	LANAddress string
+	// Devices are the devices the interface names of the settings stand for now
+	// (netcfg.Devices): the device of layer 3 of a logical interface of netifd for its
+	// name ("wan": "pppoe-wan"), the same for a device of layer 2 under it. A name that is
+	// not in it is used as it is.
+	Devices map[string]string
 }
 
 // Options are the builder's ways to the outside.
@@ -114,6 +120,9 @@ type Result struct {
 	Links []Link
 	// Dataplane is what the router needs around the configuration.
 	Dataplane Dataplane
+	// Devices are the devices the interface names stood for (Facts.Devices): a later
+	// look tells by them whether one stands for another device now.
+	Devices map[string]string
 }
 
 // Dataplane is what the router needs around a configuration, made of the settings: the
@@ -146,14 +155,59 @@ type Dataplane struct {
 // name none: the bridge of the LAN of OpenWrt.
 const defaultInterface = "br-lan"
 
+// InterfaceNames are the names of interfaces the settings use, each once: those of the LAN,
+// of YACD, of the output and of the VPN sections. Facts.Devices is asked about them.
+func InterfaceNames(config *model.Config) []string {
+	settings := &config.Settings
+	names := slices.Clone(settings.SourceNetworkInterfaces)
+	if settings.EnableYACD {
+		names = append(names, settings.YACDInterfaces...)
+	}
+	names = append(names, settings.OutputNetworkInterface)
+	for index := range config.Sections {
+		if config.Sections[index].ConnectionType == "vpn" {
+			names = append(names, config.Sections[index].Interface)
+		}
+	}
+	result := names[:0]
+	for _, name := range names {
+		if name != "" && !slices.Contains(result, name) {
+			result = append(result, name)
+		}
+	}
+	return result
+}
+
+// device is the device an interface name of the settings stands for now (Facts.Devices).
+func (b *builder) device(name string) string {
+	if device := b.facts.Devices[name]; device != "" {
+		return device
+	}
+	return name
+}
+
+func (b *builder) devices(names []string) []string {
+	if len(names) == 0 {
+		return nil
+	}
+	result := make([]string, 0, len(names))
+	for _, name := range names {
+		device := b.device(name)
+		if !slices.Contains(result, device) {
+			result = append(result, device)
+		}
+	}
+	return result
+}
+
 func (b *builder) dataplane() Dataplane {
 	settings := &b.config.Settings
-	result := Dataplane{Interfaces: settings.SourceNetworkInterfaces, ExcludeNTP: settings.ExcludeNTP, TakeDNS: !settings.DontTouchDHCP, ClashAPI: b.clashAPI, ClashSecret: b.clashSecret}
+	result := Dataplane{Interfaces: b.devices(settings.SourceNetworkInterfaces), ExcludeNTP: settings.ExcludeNTP, TakeDNS: !settings.DontTouchDHCP, ClashAPI: b.clashAPI, ClashSecret: b.clashSecret}
 	if len(result.Interfaces) == 0 {
 		result.Interfaces = []string{defaultInterface}
 	}
 	if settings.EnableYACD {
-		result.ClashAPIInterfaces = settings.YACDInterfaces
+		result.ClashAPIInterfaces = b.devices(settings.YACDInterfaces)
 		if len(result.ClashAPIInterfaces) == 0 {
 			result.ClashAPIInterfaces = result.Interfaces
 		}
@@ -307,7 +361,7 @@ func Build(config *model.Config, facts Facts, options Options) (*Result, error) 
 	if err != nil {
 		return nil, E.Cause(err, "encode the configuration")
 	}
-	result := &Result{Config: content, Files: make(map[string][]byte), FileOrder: b.fileOrder, Warnings: b.warnings, Links: b.links, Dataplane: b.dataplane()}
+	result := &Result{Config: content, Files: make(map[string][]byte), FileOrder: b.fileOrder, Warnings: b.warnings, Links: b.links, Dataplane: b.dataplane(), Devices: b.facts.Devices}
 	for _, entry := range b.ruleSets {
 		fields := entry.(*object)
 		tag, _ := fields.get("tag")
@@ -481,7 +535,7 @@ func (b *builder) buildInterfaceOutbound(section *model.Section) error {
 	if section.Interface == "" {
 		return E.New("the VPN interface is not set")
 	}
-	outbound := newObject("type", "direct", "tag", outboundTag(section.Name), "bind_interface", section.Interface)
+	outbound := newObject("type", "direct", "tag", outboundTag(section.Name), "bind_interface", b.device(section.Interface))
 	if section.DomainResolverEnabled {
 		resolverTag := section.Name + "-domain-resolver"
 		// The shell backend asks the bootstrap server for the address of this resolver
@@ -617,10 +671,13 @@ const (
 
 func (b *builder) buildRoute() (*object, error) {
 	settings := &b.config.Settings
+	// What sing-box opens goes where the routing of the router sends it (mwan3, a route
+	// of a host, a tunnel's included), with the mark that keeps it out of the proxy
+	// (ledger item 11). The interface of the settings binds it.
 	route := newObject("rules", nil, "rule_set", nil, "final", tagDirectOutbound,
-		"auto_detect_interface", settings.OutputNetworkInterface == "", "default_domain_resolver", tagDNSServer)
+		"default_mark", dataplane.OutboundMark, "default_domain_resolver", tagDNSServer)
 	if settings.OutputNetworkInterface != "" {
-		route.set("default_interface", settings.OutputNetworkInterface)
+		route.set("default_interface", b.device(settings.OutputNetworkInterface))
 	}
 
 	b.addRouteRule("", newObject("action", "sniff", "inbound", []any{tagTProxyInbound, tagDNSInbound}))

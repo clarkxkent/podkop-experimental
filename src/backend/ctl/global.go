@@ -11,6 +11,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/diag"
 	"github.com/podkop-net/podkop-experimental/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 )
@@ -21,6 +22,9 @@ import (
 // their text.
 
 const rule = "━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+// interfaceDevices is netcfg.Devices; a test has its own
+var interfaceDevices = netcfg.Devices
 
 // the first two octets of the addresses WARP endpoints have
 var warpPrefixes = []string{"8.47", "162.159", "188.114"}
@@ -54,7 +58,7 @@ func counted(value bool, text string) string {
 //
 // engine tells what the sing-box inside is (podkop.Engine); outbounds tests the outbound of
 // every section and the direct one (outboundLines).
-func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, version string, singBoxVersion string, engine string, running bool, routerFakeIP func() (works bool, answered bool), outbounds func() []string, device *deviceCheck) string {
+func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, sections []model.Section, version string, singBoxVersion string, engine string, running bool, routerFakeIP func() (works bool, answered bool), outbounds func() []string, device *deviceCheck) string {
 	var lines []string
 	add := func(text ...string) { lines = append(lines, text...) }
 
@@ -65,6 +69,18 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	dhcp, _ := uci.Parse(dhcpContent)
 	if settings == nil {
 		settings = new(model.Settings)
+	}
+	// the devices of layer 3 the interface names of the settings stand for now: the
+	// firewall and sing-box use those
+	uses := interfaceUses(settings, sections)
+	names := make([]string, 0, len(uses))
+	for _, use := range uses {
+		names = append(names, use.name)
+	}
+	devices := interfaceDevices(names)
+	sources := sourceDevices(settings, devices)
+	if device != nil {
+		device.sources = sources
 	}
 	var (
 		system          *diag.System
@@ -131,7 +147,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		add(blocks(string(dhcpContent), func(fields []string) bool { return fields[1] == "dnsmasq" })...)
 	}
 	// who answers the DNS of each interface the LAN comes in on, and where dnsmasq sends it
-	for _, lan := range diag.CheckLANDNS(settings.SourceNetworkInterfaces, listeners) {
+	for _, lan := range diag.CheckLANDNS(sources, listeners) {
 		add(lanDNSLines(lan, running)...)
 	}
 
@@ -146,6 +162,9 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	for _, taken := range diag.BackendPorts(listeners) {
 		add("❌ " + taken)
 	}
+
+	add(rule, "🔌 Interfaces")
+	add(interfaceLines(uses, devices, diag.DeviceAddresses)...)
 
 	add(rule, "🧱 NFT rules status")
 	add(flag(tables.Table, "Table exist"),
@@ -163,7 +182,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	// where the kernel sends what the firewall marked: to the router itself, where the
 	// transparent proxy inbound is
 	if running {
-		for _, marked := range diag.CheckMarkedRoutes(settings.SourceNetworkInterfaces, client) {
+		for _, marked := range diag.CheckMarkedRoutes(sources, client) {
 			add(markedRouteLine(marked))
 		}
 	}

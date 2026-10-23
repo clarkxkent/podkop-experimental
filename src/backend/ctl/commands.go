@@ -219,7 +219,7 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 				device = &deviceCheck{label: arguments[1], port: uint16(port), probe: client.Probe, sources: settings.SourceNetworkInterfaces}
 			}
 		}
-		io.WriteString(output, globalCheck(ctx, env.Paths, settings, env.Version, env.SingBoxVersion, env.Engine, running(), func() (bool, bool) {
+		io.WriteString(output, globalCheck(ctx, env.Paths, settings, sections, env.Version, env.SingBoxVersion, env.Engine, running(), func() (bool, bool) {
 			result, err := client.ProbeSelf()
 			return err == nil && result.DNS && result.Connection, err == nil
 		}, func() []string { return outboundLines(&clashCaller{client: client}, sections) }, device))

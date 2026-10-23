@@ -33,7 +33,7 @@ const (
 	SetInterfaces = "interfaces"
 
 	markProxy    = dataplane.ProxyMark
-	markOutbound = 0x00200000
+	markOutbound = dataplane.OutboundMark
 	portTProxy   = dataplane.TProxyPort
 	// the bit of a connection's status that says its destination was rewritten
 	// (IPS_DST_NAT of the kernel's nf_conntrack_common.h)
@@ -414,10 +414,12 @@ func Apply(plan *Plan) error {
 		})
 	}
 	// mangle_output: the same marking for what the router itself sends
-	// compat: output-mark
 	add(mangleOutput, ipv4(), addressIn(offsetDestination, SetLocal, idLocal), returns)
+	// what sing-box opens itself, and a tunnel of the router with the mark as its own
+	// (dataplane.OutboundMark), under the mask: mwan3 adds its bits to the mark
 	add(mangleOutput, []expr.Any{
 		&expr.Meta{Key: expr.MetaKeyMARK, Register: 1},
+		&expr.Bitwise{SourceRegister: 1, DestRegister: 1, Len: 4, Mask: binaryutil.NativeEndian.PutUint32(markOutbound), Xor: binaryutil.NativeEndian.PutUint32(0)},
 		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryutil.NativeEndian.PutUint32(markOutbound)},
 		&expr.Counter{},
 	}, returns)

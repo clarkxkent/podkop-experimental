@@ -27,6 +27,14 @@ const (
 	// proxy; the rule of the routing table sends what has it to the table.
 	ProxyMark = 0x00100000
 
+	// OutboundMark is the mark sing-box gives every connection it opens itself
+	// (route.default_mark). mangle_output lets what has it go by: a server of sing-box
+	// whose address is in the subnets of a section, or in FakeIP's, is not sent back into
+	// sing-box. A tunnel of the router with it as its firewall mark (AmneziaWG,
+	// WireGuard) goes by the same way. The rule compares it under its mask: mwan3 adds
+	// its own bits to the mark of what the router sends.
+	OutboundMark = 0x00200000
+
 	// FakeIPRange is the range the FakeIP answers of sing-box come from; the firewall
 	// sends every destination of it to the proxy.
 	FakeIPRange = "198.18.0.0/15"

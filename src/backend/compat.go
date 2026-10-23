@@ -31,11 +31,6 @@ var compat = []compatItem{
 		Until: "no router has a dnsmasq taken by the shell backend",
 	},
 	{
-		Name:  "output-mark",
-		Why:   "mangle_output matches the mark 0x00200000, which nothing sets: the table is the shell backend's rule by rule, and its nft text is compared with it",
-		Until: "the table no longer has to equal the shell backend's",
-	},
-	{
 		Name:  "page-answers",
 		Why:   "the commands print the JSON and the text of the shell backend: the page of podkop 0.7 reads them",
 		Until: "the page asks a typed API",
