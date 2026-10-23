@@ -23,7 +23,9 @@
         ]
       },
       "uci": [
-        "podkop"
+        "podkop",
+        "network",
+        "firewall"
       ]
     },
     "write": {

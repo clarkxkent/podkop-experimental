@@ -4,6 +4,7 @@
 "require ui";
 "require tools.widgets as widgets";
 "require view.podkop.main as main";
+"require view.podkop.devices as devices";
 
 function createSectionContent(section, singBoxFeatures = []) {
   let o = section.option(
@@ -299,51 +300,16 @@ function createSectionContent(section, singBoxFeatures = []) {
   o.depends("connection_type", "proxy");
   o.rmempty = false;
 
+  // a tunnel, or a WAN: a section of a WAN with its mixed proxy sends what is given
+  // to it around the tunnels (the torrent client of the FAQ of podkop)
   o = section.option(
     widgets.DeviceSelect,
     "interface",
     _("Network Interface"),
-    _("Select network interface for VPN connection"),
+    _("The tunnel, or the WAN, the traffic of this section goes out through"),
   );
   o.depends("connection_type", "vpn");
-  o.noaliases = true;
-  o.nobridges = false;
-  o.noinactive = false;
-  o.filter = function (section_id, value) {
-    // Blocked interface names that should never be selectable
-    const blockedInterfaces = [
-      "br-lan",
-      "eth0",
-      "eth1",
-      "wan",
-      "phy0-ap0",
-      "phy1-ap0",
-      "pppoe-wan",
-      "lan",
-    ];
-
-    // Reject immediately if the value matches any blocked interface
-    if (blockedInterfaces.includes(value)) {
-      return false;
-    }
-
-    // Try to find the device object with the given name
-    const device = this.devices.find((dev) => dev.getName() === value);
-
-    // If no device is found, allow the value
-    if (!device) {
-      return true;
-    }
-
-    // Get the device type (e.g., "wifi", "ethernet", etc.)
-    const type = device.getType();
-
-    // Reject wireless-related devices
-    const isWireless =
-      type === "wifi" || type === "wireless" || type.includes("wlan");
-
-    return !isWireless;
-  };
+  devices.forRole(o, "out");
 
   o = section.option(
     form.Flag,

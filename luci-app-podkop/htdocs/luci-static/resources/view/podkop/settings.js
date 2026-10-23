@@ -5,6 +5,7 @@
 "require tools.widgets as widgets";
 "require network";
 "require view.podkop.main as main";
+"require view.podkop.devices as devices";
 
 function createSettingsContent(section, singBoxFeatures = []) {
   let o = section.option(
@@ -91,41 +92,16 @@ function createSettingsContent(section, singBoxFeatures = []) {
     _("Select the network interface from which the traffic will originate"),
   );
   o.default = "br-lan";
-  o.noaliases = true;
-  o.nobridges = false;
-  o.noinactive = false;
   o.multiple = true;
-  o.filter = function (section_id, value) {
-    // Block specific interface names from being selectable
-    const blocked = ["wan", "phy0-ap0", "phy1-ap0", "pppoe-wan"];
-    if (blocked.includes(value)) {
-      return false;
-    }
-
-    // Try to find the device object by its name
-    const device = this.devices.find((dev) => dev.getName() === value);
-
-    // If no device is found, allow the value
-    if (!device) {
-      return true;
-    }
-
-    // Check the type of the device
-    const type = device.getType();
-
-    // Consider any Wi-Fi / wireless / wlan device as invalid
-    const isWireless =
-      type === "wifi" || type === "wireless" || type.includes("wlan");
-
-    // Allow only non-wireless devices
-    return !isWireless;
-  };
+  devices.forRole(o, "lan");
 
   o = section.option(
     form.Flag,
     "enable_output_network_interface",
     _("Enable Output Network Interface"),
-    _("You can select Output Network Interface, by default autodetect"),
+    _(
+      "Without it, podkop's own connections go where the routing of the router sends them (mwan3 included)",
+    ),
   );
   o.default = "0";
   o.rmempty = false;
@@ -134,101 +110,13 @@ function createSettingsContent(section, singBoxFeatures = []) {
     widgets.DeviceSelect,
     "output_network_interface",
     _("Output Network Interface"),
-    _("Select the network interface to which the traffic will originate"),
+    _(
+      "Every connection of podkop goes out through this WAN or tunnel, whatever the routing of the router says",
+    ),
   );
-  o.noaliases = true;
   o.multiple = false;
   o.depends("enable_output_network_interface", "1");
-  o.filter = function (section_id, value) {
-    // Blocked interface names that should never be selectable
-    const blockedInterfaces = ["br-lan"];
-
-    // Reject immediately if the value matches any blocked interface
-    if (blockedInterfaces.includes(value)) {
-      return false;
-    }
-
-    // Reject lan*
-    if (value.startsWith("lan")) {
-      return false;
-    }
-
-    // Reject tun*, wg*, vpn*, awg*, oc*
-    if (
-      value.startsWith("tun") ||
-      value.startsWith("wg") ||
-      value.startsWith("vpn") ||
-      value.startsWith("awg") ||
-      value.startsWith("oc")
-    ) {
-      return false;
-    }
-
-    // Try to find the device object with the given name
-    const device = this.devices.find((dev) => dev.getName() === value);
-
-    // If no device is found, allow the value
-    if (!device) {
-      return true;
-    }
-
-    // Get the device type (e.g., "wifi", "ethernet", etc.)
-    const type = device.getType();
-
-    // Reject wireless-related devices
-    const isWireless =
-      type === "wifi" || type === "wireless" || type.includes("wlan");
-
-    return !isWireless;
-  };
-
-  o = section.option(
-    form.Flag,
-    "enable_badwan_interface_monitoring",
-    _("Interface Monitoring"),
-    _("Interface monitoring for Bad WAN"),
-  );
-  o.default = "0";
-  o.rmempty = false;
-
-  o = section.option(
-    widgets.NetworkSelect,
-    "badwan_monitored_interfaces",
-    _("Monitored Interfaces"),
-    _("Select the WAN interfaces to be monitored"),
-  );
-  o.depends("enable_badwan_interface_monitoring", "1");
-  o.multiple = true;
-  o.filter = function (section_id, value) {
-    // Reject if the value is in the blocked list ['lan', 'loopback']
-    if (["lan", "loopback"].includes(value)) {
-      return false;
-    }
-
-    // Reject if the value starts with '@' (means it's an alias/reference)
-    if (value.startsWith("@")) {
-      return false;
-    }
-
-    // Otherwise allow it
-    return true;
-  };
-
-  o = section.option(
-    form.Value,
-    "badwan_reload_delay",
-    _("Interface Monitoring Delay"),
-    _("Delay in milliseconds before reloading podkop after interface UP"),
-  );
-  o.depends("enable_badwan_interface_monitoring", "1");
-  o.default = "2000";
-  o.rmempty = false;
-  o.validate = function (section_id, value) {
-    if (!value) {
-      return _("Delay value cannot be empty");
-    }
-    return true;
-  };
+  devices.forRole(o, "out");
 
   o = section.option(
     form.Flag,
@@ -252,25 +140,13 @@ function createSettingsContent(section, singBoxFeatures = []) {
     ),
   );
   o.depends("enable_yacd", "1");
-  o.noaliases = true;
-  o.nobridges = false;
-  o.noinactive = false;
   o.multiple = true;
   o.optional = false;
   o.rmempty = false;
-  // Only the devices with an address of their own: the firewall lets in the device a
+  // only the devices with an address of their own: the firewall lets in the device a
   // connection comes in through, which is the one with the address (a bridge, not its
-  // ports). The link-local IPv6 address every device that is up has does not count.
-  o.filter = function (section_id, value) {
-    const device = this.devices.find((dev) => dev.getName() === value);
-    if (!device) {
-      return false;
-    }
-    return (
-      device.getIPAddrs().length > 0 ||
-      device.getIP6Addrs().some((address) => !/^fe80:/i.test(address))
-    );
-  };
+  // ports)
+  devices.forRole(o, "yacd");
   o.validate = function (section_id) {
     return L.toArray(this.formvalue(section_id)).length
       ? true
@@ -305,13 +181,22 @@ function createSettingsContent(section, singBoxFeatures = []) {
     if (!names.length) {
       names = ["br-lan"];
     }
-    return network.getDevices().then((devices) => {
-      const addresses = devices
-        .filter((device) => names.includes(device.getName()))
-        .flatMap((device) => device.getIPAddrs());
-      this.links =
-        enabled && secret ? main.getYacdLinks(addresses, secret) : [];
-    });
+    // a name of a network of netifd stands for its device of layer 3, as in the backend
+    return Promise.all([network.getDevices(), network.getNetworks()]).then(
+      ([all, networks]) => {
+        const addresses = names.flatMap((name) => {
+          const net = networks.find(
+            (candidate) => candidate.getName() === name.replace(/^@/, ""),
+          );
+          const device =
+            (net && net.getL3Device()) ||
+            all.find((candidate) => candidate.getName() === name);
+          return device ? device.getIPAddrs() : [];
+        });
+        this.links =
+          enabled && secret ? main.getYacdLinks(addresses, secret) : [];
+      },
+    );
   };
   o.renderWidget = function () {
     if (!this.links.length) {

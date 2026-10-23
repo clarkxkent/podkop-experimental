@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-22 18:17+0000\n"
-"PO-Revision-Date: 2026-10-22 18:17+0000\n"
+"POT-Creation-Date: 2026-10-23 08:38+0000\n"
+"PO-Revision-Date: 2026-10-23 08:38+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -137,12 +137,6 @@ msgstr "Дашборд сейчас недоступен"
 msgid "Default"
 msgstr "По умолчанию"
 
-msgid "Delay in milliseconds before reloading podkop after interface UP"
-msgstr "Задержка в миллисекундах перед перезагрузкой podkop после поднятия интерфейса"
-
-msgid "Delay value cannot be empty"
-msgstr "Значение задержки не может быть пустым"
-
 msgid "DHCP has DNS server"
 msgstr "DHCP содержит DNS сервер"
 
@@ -266,6 +260,9 @@ msgstr "Каждые 30 секунд"
 msgid "Every 5 minutes"
 msgstr "Каждые 5 минут"
 
+msgid "Every connection of podkop goes out through this WAN or tunnel, whatever the routing of the router says"
+msgstr "Все соединения podkop уходят через этот WAN или туннель, что бы ни говорила маршрутизация роутера"
+
 msgid "Exclude NTP"
 msgstr "Исключить NTP"
 
@@ -295,15 +292,6 @@ msgstr "Глобальная проверка"
 
 msgid "HTTP error"
 msgstr "Ошибка HTTP"
-
-msgid "Interface Monitoring"
-msgstr "Мониторинг интерфейса"
-
-msgid "Interface Monitoring Delay"
-msgstr "Задержка при мониторинге интерфейсов"
-
-msgid "Interface monitoring for Bad WAN"
-msgstr "Мониторинг интерфейса для Bad WAN"
 
 msgid "Invalid DNS server format. Examples: 8.8.8.8 or dns.example.com or dns.example.com/nicedns for DoH"
 msgstr "Неверный формат DNS-сервера. Примеры: 8.8.8.8, dns.example.com или dns.example.com/nicedns для DoH"
@@ -383,9 +371,6 @@ msgstr "нет UUID"
 msgid "Mixed Proxy Port"
 msgstr "Порт смешанного прокси"
 
-msgid "Monitored Interfaces"
-msgstr "Наблюдаемые интерфейсы"
-
 msgid "Must be a number in the range of 50 - 1000"
 msgstr "Должно быть числом от 50 до 1000"
 
@@ -400,6 +385,9 @@ msgstr "нет ни method:password@сервер, ни base64 этой стро�
 
 msgid "Network Interface"
 msgstr "Сетевой интерфейс"
+
+msgid "no IPv4 address now"
+msgstr "сейчас без IPv4-адреса"
 
 msgid "No other marking rules found"
 msgstr "Другие правила маркировки не найдены"
@@ -530,9 +518,6 @@ msgstr "Выберите частоту автоматического обно�
 msgid "Select how to configure the proxy"
 msgstr "Выберите способ настройки прокси"
 
-msgid "Select network interface for VPN connection"
-msgstr "Выберите сетевой интерфейс для VPN подключения"
-
 msgid "Select or enter DNS server address"
 msgstr "Выберите или введите адрес DNS-сервера"
 
@@ -553,12 +538,6 @@ msgstr "Выберите уровень логов для sing-box"
 
 msgid "Select the network interface from which the traffic will originate"
 msgstr "Выберите сетевой интерфейс, с которого будет исходить трафик"
-
-msgid "Select the network interface to which the traffic will originate"
-msgstr "Выберите сетевой интерфейс, на который будет поступать трафик."
-
-msgid "Select the WAN interfaces to be monitored"
-msgstr "Выберите WAN интерфейсы для мониторинга"
 
 msgid "Selector"
 msgstr "Selector"
@@ -655,6 +634,9 @@ msgstr "Максимально допустимая разница во врем
 
 msgid "The settings are not saved. The engine of the router refuses these links:"
 msgstr "Настройки не сохранены. Движок роутера отвергает эти ссылки:"
+
+msgid "The tunnel, or the WAN, the traffic of this section goes out through"
+msgstr "Туннель или WAN, через который уходит трафик этой секции"
 
 msgid "The URL must serve at least 64 KiB or announce a shorter length"
 msgstr "Ссылка должна отдавать не меньше 64 КиБ или сообщать меньшую длину"
@@ -764,6 +746,9 @@ msgstr "Предупреждение: Russia inside может быть испо
 msgid "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints"
 msgstr "Если сервер не отвечает на TLS ClientHello с отпечатком uTLS из ссылки, соединение пробуется с другими отпечатками"
 
+msgid "Without it, podkop's own connections go where the routing of the router sends them (mwan3 included)"
+msgstr "Без этого собственные соединения podkop идут туда, куда их отправляет маршрутизация роутера (в том числе mwan3)"
+
 msgid "YACD Links"
 msgstr "Ссылки YACD"
 
@@ -772,6 +757,3 @@ msgstr "Сетевые интерфейсы YACD"
 
 msgid "YACD Secret Key"
 msgstr "Секретный ключ YACD"
-
-msgid "You can select Output Network Interface, by default autodetect"
-msgstr "Вы можете выбрать выходной сетевой интерфейс, по умолчанию он определяется автоматически."
