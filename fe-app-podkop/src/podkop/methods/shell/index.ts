@@ -50,6 +50,19 @@ export const PodkopShellMethods = {
       group,
       proxy,
     ]),
+  // the dashboard YACD of GitHub in place of the one served: sing-box downloads it
+  upgradeYacd: async () =>
+    callBaseMethod<{ success: boolean; message?: string }>(
+      Podkop.AvailableMethods.CLASH_API,
+      [Podkop.AvailableClashAPIMethods.UPGRADE_UI],
+      '/usr/bin/podkop',
+      190000,
+    ),
+  // the dashboard YACD of the package served again
+  restoreYacd: async () =>
+    callBaseMethod<{ success: boolean; message?: string }>(
+      Podkop.AvailableMethods.YACD_BUILTIN,
+    ),
   restart: async () =>
     callBaseMethod<unknown>(
       Podkop.AvailableMethods.RESTART,

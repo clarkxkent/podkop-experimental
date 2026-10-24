@@ -36,6 +36,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/render"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 	E "github.com/sagernet/sing/common/exceptions"
 )
 
@@ -142,6 +143,9 @@ type Options struct {
 	// DownloadURL is the download test URL of urltest groups whose section does not set
 	// one; none when empty.
 	DownloadURL string
+	// YACDBuiltinDir holds the dashboard YACD of the package, YACDServedDir is where
+	// sing-box serves it (yacd.Ensure); none: the dashboard is left to sing-box.
+	YACDBuiltinDir, YACDServedDir string
 	// ReadyTimeout is how long a started sing-box has to answer the probe.
 	ReadyTimeout time.Duration
 	System       System
@@ -894,8 +898,21 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 		s.listChecks = make(map[listKey]listCheck)
 	}
 	used := make(map[listKey]bool)
+	noExternalUI := false
+	if settings.Settings.EnableYACD && s.options.YACDServedDir != "" {
+		// a dashboard in place before sing-box starts: it downloads one into an empty
+		// directory, within its start
+		served, err := yacd.Ensure(s.options.YACDBuiltinDir, s.options.YACDServedDir)
+		if err != nil {
+			s.log("warn", "put the dashboard YACD in place: ", err)
+		}
+		if !served {
+			s.log("warn", "there is no dashboard YACD to serve: the Clash API runs without it")
+			noExternalUI = true
+		}
+	}
 	build := func(ruleSetDir string) (*plan.Result, error) {
-		options := plan.Options{RuleSetDir: ruleSetDir, DecodeLink: engine.DecodeLink, CheckList: s.checkList(used), DownloadURL: s.options.DownloadURL}
+		options := plan.Options{RuleSetDir: ruleSetDir, DecodeLink: engine.DecodeLink, CheckList: s.checkList(used), DownloadURL: s.options.DownloadURL, NoExternalUI: noExternalUI}
 		if s.options.Watcher != nil {
 			options.CheckNames = plan.CheckNames{Suffix: probe.Suffix, DeadEndAddress: probe.DeadEndAddress, DeadEndPort: probe.DeadEndPort}
 		}

@@ -19,6 +19,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/supervisor"
 	"github.com/podkop-net/podkop-experimental/src/backend/ubus"
+	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 
 	"github.com/spf13/cobra"
 )
@@ -85,9 +86,12 @@ var commandDaemon = &cobra.Command{
 			System:       supervisor.Router{},
 			Watcher:      watcher,
 			StatePath:    statePath,
-			ConfigDir:    configDir,
-			DownloadURL:  downloadURL,
-			Log:          say,
+			// the dashboard of the package, served from a copy sing-box may write
+			YACDBuiltinDir: yacd.BuiltinDir,
+			YACDServedDir:  yacd.ServedDir,
+			ConfigDir:      configDir,
+			DownloadURL:    downloadURL,
+			Log:            say,
 			EngineLog: func(level string, message string) {
 				logs.Write("sing-box", level, message)
 			},

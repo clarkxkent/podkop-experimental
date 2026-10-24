@@ -507,6 +507,7 @@ var Podkop;
     AvailableMethods2["CHECK_LOGS"] = "check_logs";
     AvailableMethods2["GET_SYSTEM_INFO"] = "get_system_info";
     AvailableMethods2["GET_SING_BOX_FEATURES"] = "get_sing_box_features";
+    AvailableMethods2["YACD_BUILTIN"] = "yacd_builtin";
   })(AvailableMethods = Podkop2.AvailableMethods || (Podkop2.AvailableMethods = {}));
   let AvailableClashAPIMethods;
   ((AvailableClashAPIMethods2) => {
@@ -514,6 +515,7 @@ var Podkop;
     AvailableClashAPIMethods2["GET_PROXY_LATENCY"] = "get_proxy_latency";
     AvailableClashAPIMethods2["GET_GROUP_LATENCY"] = "get_group_latency";
     AvailableClashAPIMethods2["SET_GROUP_PROXY"] = "set_group_proxy";
+    AvailableClashAPIMethods2["UPGRADE_UI"] = "upgrade_ui";
   })(AvailableClashAPIMethods = Podkop2.AvailableClashAPIMethods || (Podkop2.AvailableClashAPIMethods = {}));
 })(Podkop || (Podkop = {}));
 
@@ -556,6 +558,17 @@ var PodkopShellMethods = {
     group,
     proxy
   ]),
+  // the dashboard YACD of GitHub in place of the one served: sing-box downloads it
+  upgradeYacd: async () => callBaseMethod(
+    Podkop.AvailableMethods.CLASH_API,
+    [Podkop.AvailableClashAPIMethods.UPGRADE_UI],
+    "/usr/bin/podkop",
+    19e4
+  ),
+  // the dashboard YACD of the package served again
+  restoreYacd: async () => callBaseMethod(
+    Podkop.AvailableMethods.YACD_BUILTIN
+  ),
   restart: async () => callBaseMethod(
     Podkop.AvailableMethods.RESTART,
     [],

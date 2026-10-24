@@ -2,6 +2,7 @@ package ctl
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"io"
@@ -21,6 +22,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
+	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 )
 
 // Environment is what the commands need to know of where they run.
@@ -81,7 +83,8 @@ var Commands = [][2]string{
 	{"check_nft_rules", "[label]: whether the firewall table is there and counts packets; with the label of a check name a device opened a connection to, that connection is waited for where the LAN has not been counted yet"},
 	{"check_fakeip", "Whether a name asked on the router is answered from FakeIP and a connection of the router to it reaches sing-box"},
 	{"check_fakeip_client", "<label> [ms]: what the backend saw of the check name a device opened a connection to"},
-	{"clash_api", "get_proxies | get_proxy_latency <tag> [ms] | get_group_latency <tag> [ms] | set_group_proxy <group> <proxy>"},
+	{"clash_api", "get_proxies | get_proxy_latency <tag> [ms] | get_group_latency <tag> [ms] | set_group_proxy <group> <proxy> | upgrade_ui (the dashboard YACD of GitHub in place of the one served)"},
+	{"yacd_builtin", "The dashboard YACD of the package served again in place of the one upgraded from GitHub"},
 	{"global_check", "[label port]: every check as one report; with the label of a check name and a port the device that asks opens connections to meanwhile, also what came of its DNS question and its connections"},
 	{"check_links", "<link>...: each proxy link as the engine of this build takes it when the settings run, as JSON: [{ok, error}]"},
 	{"check_logs", "[--since RUN:NUMBER]: the log of the backend and of sing-box; with --since, as JSON, only the lines after that number of that run (all of another run), and where to go on from"},
@@ -250,6 +253,15 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		return 0
 	case "check_nft":
 		return printTable(output)
+	case "yacd_builtin":
+		err := yacd.Restore(yacd.BuiltinDir, yacd.ServedDir)
+		if err != nil {
+			message, _ := json.Marshal(err.Error())
+			io.WriteString(output, `{"success":false,"message":`+string(message)+"}\n")
+			return 1
+		}
+		io.WriteString(output, `{"success":true}`+"\n")
+		return 0
 	case "restore_routing":
 		result, err := client.RestoreRouting()
 		if err != nil {
@@ -541,6 +553,21 @@ func clashAPI(client api.Client, arguments []string, output io.Writer) int {
 		return delay("proxies", "proxy_tag", "2000")
 	case "get_group_latency":
 		return delay("group", "group_tag", "5000")
+	case "upgrade_ui":
+		// sing-box downloads the dashboard of GitHub (Yacd-meta) and puts it in place of
+		// the one it serves (POST /upgrade/ui), through its direct outbound
+		status, content := call(http.MethodPost, "/upgrade/ui", "", 3*time.Minute)
+		if status == http.StatusOK {
+			say(`{"success":true}`)
+			return 0
+		}
+		var answer struct {
+			Message string `json:"message"`
+		}
+		_ = json.Unmarshal(content, &answer)
+		message, _ := json.Marshal(cmp.Or(answer.Message, "the Clash API did not answer (YACD off, or podkop not running)"))
+		say(`{"success":false,"http_code":` + strconv.Itoa(status) + `,"message":` + string(message) + `}`)
+		return 1
 	case "set_group_proxy":
 		group, proxy := argument(1), argument(2)
 		if group == "" || proxy == "" {
@@ -574,6 +601,6 @@ func clashAPI(client api.Client, arguments []string, output io.Writer) int {
 		}
 		return 1
 	}
-	say(`{"error":"unknown action","available":["get_proxies","get_proxy_latency","get_group_latency","set_group_proxy"]}`)
+	say(`{"error":"unknown action","available":["get_proxies","get_proxy_latency","get_group_latency","set_group_proxy","upgrade_ui"]}`)
 	return 1
 }

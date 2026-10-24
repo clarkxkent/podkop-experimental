@@ -274,6 +274,15 @@ func TestClashAPI(t *testing.T) {
 			writer.WriteHeader(http.StatusNoContent)
 		}
 	})
+	upgrades := 0
+	mux.HandleFunc("POST /upgrade/ui", func(writer http.ResponseWriter, request *http.Request) {
+		upgrades++
+		if upgrades > 1 {
+			http.Error(writer, `{"message":"download external ui failed: 404 Not Found"}`, http.StatusInternalServerError)
+			return
+		}
+		writer.Write([]byte(`{"status":"ok"}`))
+	})
 	// the commands ask the API where the backend says it listens, with the key it says
 	server := httptest.NewServer(mux)
 	defer server.Close()
@@ -303,6 +312,13 @@ func TestClashAPI(t *testing.T) {
 	output, status = run(env, "clash_api", "what")
 	require.Equal(t, 1, status)
 	require.Contains(t, output, "unknown action")
+	// the dashboard of GitHub, as sing-box downloads it; its failure as sing-box tells it
+	output, status = run(env, "clash_api", "upgrade_ui")
+	require.Zero(t, status)
+	require.Equal(t, "{\n  \"success\": true\n}\n", output)
+	output, status = run(env, "clash_api", "upgrade_ui")
+	require.Equal(t, 1, status)
+	require.Contains(t, output, "download external ui failed: 404 Not Found")
 
 	// nothing runs: no API, and no answer
 	running.facts = api.Facts{}

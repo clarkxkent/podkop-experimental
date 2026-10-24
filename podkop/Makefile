@@ -96,10 +96,13 @@ endef
 # The services are stopped by the prerm OpenWrt gives every package (default_prerm), and
 # the stop of podkop gives back the DNS of the LAN, the firewall table and the routing; a
 # stop of its own here would stop them twice ("Command failed: Not found").
+# The copy of the dashboard YACD that sing-box serves (src/backend/yacd) goes with the
+# package; an upgrade keeps it (opkg runs the old prerm with "upgrade", apk runs none).
 define Package/podkop-exp/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 grep -q "105 podkop" /etc/iproute2/rt_tables 2> /dev/null && sed -i "/105 podkop/d" /etc/iproute2/rt_tables
+[ "$$1" = upgrade ] || rm -rf /usr/share/podkop/ui /usr/share/podkop/ui.new /usr/share/podkop/ui.old /usr/share/podkop/ui.builtin
 exit 0
 endef
 
@@ -108,6 +111,7 @@ define Package/podkop-exp/install
 	$(INSTALL_BIN) $(GO_PKG_BUILD_BIN_DIR)/podkop $(1)/usr/bin/podkop
 
 	$(INSTALL_DIR) $(1)/usr/share/podkop
+	$(CP) ./files/usr/share/podkop/yacd $(1)/usr/share/podkop/
 	$(INSTALL_DIR) $(1)/etc/config
 	$(INSTALL_CONF) ./files/etc/config/podkop $(1)/etc/config/podkop
 	$(INSTALL_DIR) $(1)/etc/init.d

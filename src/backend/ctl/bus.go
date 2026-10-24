@@ -26,6 +26,7 @@ var inProcess = map[string]bool{
 	"check_fakeip":          true,
 	"check_fakeip_client":   true,
 	"clash_api":             true,
+	"yacd_builtin":          true,
 	"check_links":           true,
 	"check_logs":            true,
 	"show_sing_box_config":  true,

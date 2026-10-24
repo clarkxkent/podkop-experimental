@@ -1,0 +1,14 @@
+assets/CNAME
+assets/Twemoji_Mozilla.ttf
+assets/_headers
+assets/apple-touch-icon-precomposed.png
+assets/logo.png
+assets/yacd.ico
+src/components/shared/ThemeSwitcher.tsx
+src/i18n/ru.ts
+src/i18n/vi.ts
+src/i18n/zh-cn.ts
+src/i18n/zh-tw.ts
+src/misc/chart-lib.ts
+src/sw.ts
+src/swRegistration.ts

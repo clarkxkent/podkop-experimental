@@ -90,6 +90,9 @@ type Options struct {
 	// leaves the test at its default. The shell backend leaves that to an environment
 	// variable of the sing-box service: without it the configuration is the one it makes.
 	DownloadURL string
+	// NoExternalUI leaves the dashboard YACD out of the Clash API: there is none to serve,
+	// and sing-box would download one within its start (supervisor, yacd).
+	NoExternalUI bool
 }
 
 // CheckNames is a domain of names made up for checks: none of them exists, every one is
@@ -758,7 +761,7 @@ func (b *builder) buildExperimental() {
 	}
 	b.clashAPI = address + ":" + strconv.Itoa(dataplane.ClashAPIPort)
 	clashAPI := newObject("external_controller", b.clashAPI)
-	if settings.EnableYACD {
+	if settings.EnableYACD && !b.options.NoExternalUI {
 		clashAPI.set("external_ui", "ui")
 	}
 	// the API has the key of the settings whether YACD is on or not: a device of the LAN

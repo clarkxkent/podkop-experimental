@@ -68,6 +68,7 @@ export namespace Podkop {
     CHECK_LOGS = 'check_logs',
     GET_SYSTEM_INFO = 'get_system_info',
     GET_SING_BOX_FEATURES = 'get_sing_box_features',
+    YACD_BUILTIN = 'yacd_builtin',
   }
 
   export enum AvailableClashAPIMethods {
@@ -75,6 +76,7 @@ export namespace Podkop {
     GET_PROXY_LATENCY = 'get_proxy_latency',
     GET_GROUP_LATENCY = 'get_group_latency',
     SET_GROUP_PROXY = 'set_group_proxy',
+    UPGRADE_UI = 'upgrade_ui',
   }
 
   export interface Outbound {
