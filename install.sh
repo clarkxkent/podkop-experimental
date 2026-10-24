@@ -87,12 +87,16 @@ remove() {
     run del $1 || die "$1 could not be removed"
     [ -f /etc/config/podkop ] || cp "$D/podkop.config" /etc/config/podkop 2>/dev/null
 }
-# get NAME: an asset of the release, checked against its digest
+# get NAME: an asset of the release, checked against its digest. Through the API of GitHub first:
+# the wget of OpenWrt (uclient-fetch) cannot read a header line longer than 4 KB and waits for
+# its timeout, and github.com answers the download address with a header of 9 KB; the answers
+# of api.github.com are short. The download address stays for a wget that reads it.
 get() {
+    api=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].url")
     url=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].browser_download_url")
     sum=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].digest")
     for _ in 1 2 3; do
-        if wget -q -O "$D/$1" "$url"; then
+        if wget -q -O "$D/$1" --header='Accept: application/octet-stream' "$api" || wget -q -O "$D/$1" "$url"; then
             [ -z "$sum" ] && return 0
             [ "$sum" = "sha256:$(sha256sum "$D/$1" | cut -d ' ' -f 1)" ] && return 0
         fi
