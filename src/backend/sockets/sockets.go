@@ -65,6 +65,22 @@ func Describe(listeners []Listener) string {
 // List returns the listeners of the system. Root is put before /proc ("/" on a router; a
 // test gives a directory with files of the same shape).
 func List(root string) ([]Listener, error) {
+	listeners, inodes := bound(root)
+	if len(listeners) == 0 {
+		return nil, nil
+	}
+	owners(root, inodes, listeners)
+	return listeners, nil
+}
+
+// Bound returns the listeners of the system without the processes that hold them: the
+// tables of /proc/net alone, cheap enough for a look at every change of the network.
+func Bound(root string) []Listener {
+	listeners, _ := bound(root)
+	return listeners
+}
+
+func bound(root string) ([]Listener, map[uint64][]int) {
 	var listeners []Listener
 	inodes := make(map[uint64][]int)
 	for _, file := range []struct {
@@ -82,11 +98,7 @@ func List(root string) ([]Listener, error) {
 			inodes[entry.inode] = append(inodes[entry.inode], len(listeners)-1)
 		}
 	}
-	if len(listeners) == 0 {
-		return nil, nil
-	}
-	owners(root, inodes, listeners)
-	return listeners, nil
+	return listeners, inodes
 }
 
 type entry struct {

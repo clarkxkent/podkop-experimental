@@ -23,6 +23,12 @@
 #    What does not count: a query the router does not deliver (router_silent); a round in
 #    which the script itself or its query ran late, the processes of the router being
 #    starved (round_late). A kill cures none of these.
+# 3. A start that failed for a passing reason: an address the backend listens on was not
+#    there (the loopback while the network restarted), a port another program held. The
+#    backend gives the router back, says "failed" in its state, and tries again at the next
+#    change of the network (hotplug.d/iface/50-podkop). A cause that no change of the
+#    network ends (a program that held a port and has gone) would leave the proxy off for
+#    good: RETRY seconds after the failure the guard asks the backend to try again.
 # Off: uci set podkop.settings.guard=0 (both parts) or podkop.settings.liveness=0 (the probe
 # only); uci commit podkop; service podkop-guard restart
 
@@ -42,6 +48,7 @@ PROBE_FAILURES=3
 PROBE_NAME=ready.fakeipchecker.podkop.net
 PROBE_SERVER=127.0.0.42
 STUCK=480
+RETRY=300
 
 log() { logger -t podkop-guard "$*"; }
 off() { case "$1" in 0 | off | false | no | disabled) return 0 ;; esac; return 1; }
@@ -184,6 +191,23 @@ if ! off "$(uci -q get podkop.settings.liveness)"; then
 		done
 	) &
 fi
+
+# a start that failed, tried again RETRY seconds after (the state says when it failed last)
+(
+	while kill -0 "$main" 2>/dev/null; do
+		waited=0
+		while [ "$waited" -lt 30 ] && kill -0 "$main" 2>/dev/null; do
+			sleep 5
+			waited=$((waited + 5))
+		done
+		fstate="" fpid="" fsince=""
+		read -r fstate fpid fsince < "$STATE" 2>/dev/null
+		[ "$fstate" = failed ] || continue
+		[ $(($(date +%s) - ${fsince:-0})) -ge "$RETRY" ] || continue
+		log "the backend (pid $fpid) has given the router back since its start failed $(($(date +%s) - fsince)) s ago: it tries again"
+		/usr/bin/podkop restore_routing > /dev/null 2>&1
+	done
+) &
 
 # seconds without an answer after which the probe has just killed the backend, if it has
 liveness_kill() {

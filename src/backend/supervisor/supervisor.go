@@ -9,10 +9,12 @@ package supervisor
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -32,6 +34,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/render"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -44,6 +47,9 @@ type System interface {
 	// Devices are the devices of layer 3 interface names stand for now, those that
 	// stand for another device than their own name (netcfg.Devices).
 	Devices(names []string) map[string]string
+	// Listening are the sockets of the system that listen (sockets.Bound); nil when they
+	// cannot be read, and then they are not looked at.
+	Listening() []sockets.Listener
 	ApplyRouting() error
 	RemoveRouting() error
 	// AllowBridgedTraffic keeps bridged packets out of the IP firewall hooks and names
@@ -193,6 +199,11 @@ type Supervisor struct {
 	firewallTold string
 	// restores are asks to put back what the network took, from another goroutine
 	restores chan chan string
+	// failed tells that the last start of sing-box failed, or the start of the settings
+	// around it (not settings that cannot be used, nor a stop): the router is given back
+	// and the start is tried again at the next change of the network and when the guard
+	// of the package asks (restoreRouting)
+	failed bool
 	// stuck tells that an instance of sing-box did not close: nothing more can run in
 	// this process (see close)
 	stuck bool
@@ -326,10 +337,14 @@ func (s *Supervisor) done(ok bool, replaced bool, message ...any) Result {
 	if s.current != nil {
 		s.live = s.current.instance
 	}
-	if s.current == nil {
-		s.writeState(stateReleased)
-	} else {
+	switch {
+	case s.current != nil:
+		s.failed = false
 		s.writeState(stateRunning)
+	case s.failed:
+		s.writeState(stateFailed)
+	default:
+		s.writeState(stateReleased)
 	}
 	return result
 }
@@ -337,12 +352,14 @@ func (s *Supervisor) done(ok bool, replaced bool, message ...any) Result {
 // What the backend is doing, for a guard outside the process (the liveness probe of the
 // package): it judges the silence of the DNS inbound only of a backend that runs, and of
 // one that has been starting or applying for too long. Released: there is no sing-box, and
-// the DNS of the LAN is the router's own, on purpose.
+// the DNS of the LAN is the router's own, on purpose. Failed: released after a start that
+// failed, which the guard asks to be tried again (Supervisor.failed).
 const (
 	stateBooting  = "booting"
 	stateApplying = "applying"
 	stateRunning  = "running"
 	stateReleased = "released"
+	stateFailed   = "failed"
 	stateStopped  = "stopped"
 )
 
@@ -500,7 +517,14 @@ func (s *Supervisor) RestoreRouting(ctx context.Context) string {
 func (s *Supervisor) restoreRouting() string {
 	current := s.current
 	if current == nil {
-		return "nothing runs"
+		if !s.failed {
+			return "nothing runs"
+		}
+		// an address that was not there (the loopback while the network restarted), a
+		// port another program held: what kept sing-box from starting may be gone
+		s.log("info", "the start failed before: it is tried again")
+		result := s.Boot()
+		return "the start that had failed was tried again: " + result.Message
 	}
 	var restored []string
 	if s.allowBridged() {
@@ -547,16 +571,18 @@ func (s *Supervisor) restoreRouting() string {
 		message = strings.Join(restored, ", ") + " had gone and are back"
 		s.log("warn", "the network changed: ", message)
 	}
-	if moved := s.movedDevices(current); len(moved) > 0 {
-		// an interface came up after podkop, or got another device: the firewall
-		// takes the new device, and sing-box is bound to it (a configuration that is
-		// the same leaves sing-box running)
-		s.log("info", "the interfaces stand for other devices now (", strings.Join(moved, ", "), "): the settings are applied again")
-		result := s.Apply()
+	if changes, lost := s.drift(current); len(changes) > 0 {
+		// The router has changed under the configuration: an interface came up after
+		// podkop or got another device, the LAN got its address or another one (the
+		// mixed proxies listen on it). The firewall takes the new devices, and a
+		// configuration that is the same leaves sing-box running. A socket sing-box
+		// listened on and has lost is listened on again by a new instance.
+		s.log("info", "the network changed under the settings (", strings.Join(changes, "; "), "): they are applied again")
+		result := s.apply(lost)
 		if message != "" {
 			message += "; "
 		}
-		message += "the settings applied again for " + strings.Join(moved, ", ") + ": " + result.Message
+		message += "the settings applied again for " + strings.Join(changes, "; ") + ": " + result.Message
 	}
 	if message == "" {
 		return "nothing was missing"
@@ -564,25 +590,70 @@ func (s *Supervisor) restoreRouting() string {
 	return message
 }
 
-// movedDevices names the interface names of the running settings that stand for another
-// device now than when the settings were applied, as "wan: pppoe-wan".
-func (s *Supervisor) movedDevices(current *running) []string {
-	names := plan.InterfaceNames(current.settings)
-	if len(names) == 0 {
-		return nil
-	}
-	now := s.options.System.Devices(names)
-	var moved []string
-	for _, name := range names {
-		if now[name] != current.result.Devices[name] {
-			device := now[name]
-			if device == "" {
-				device = name
+// drift tells what of the router the running configuration no longer matches: the
+// interface names that stand for another device now than when it was built ("wan:
+// pppoe-wan"), the address of the LAN, and the sockets of its inbounds that nothing
+// listens on any more; lost tells there is one of these.
+func (s *Supervisor) drift(current *running) (changes []string, lost bool) {
+	built := current.result.Facts
+	// netifd that does not answer (busy while the network restarts) tells nothing
+	if names := plan.InterfaceNames(current.settings); len(names) > 0 {
+		now := s.options.System.Devices(names)
+		for _, name := range names {
+			if now == nil {
+				break
 			}
-			moved = append(moved, name+": "+device)
+			if now[name] != built.Devices[name] {
+				device := now[name]
+				if device == "" {
+					device = name
+				}
+				changes = append(changes, name+": "+device)
+			}
 		}
 	}
-	return moved
+	// an address that went away is no change: the sockets bound to it listen again when
+	// it is back, and one that is not there cannot be listened on
+	if address := s.options.System.LANAddress(); address != "" && address != built.LANAddress {
+		changes = append(changes, "the address of the LAN: "+address+" (was "+cmp.Or(built.LANAddress, "none")+")")
+	}
+	if listening := s.options.System.Listening(); listening != nil {
+		for _, inbound := range inboundSockets(current.result.Config) {
+			if len(sockets.Holding(listening, "tcp", inbound.address)) == 0 {
+				changes = append(changes, "nothing listens on "+inbound.address.String()+" ("+inbound.tag+")")
+				lost = true
+			}
+		}
+	}
+	return changes, lost
+}
+
+type inboundSocket struct {
+	tag     string
+	address netip.AddrPort
+}
+
+// inboundSockets are the addresses the inbounds of a configuration listen on.
+func inboundSockets(config []byte) []inboundSocket {
+	var document struct {
+		Inbounds []struct {
+			Tag        string `json:"tag"`
+			Listen     string `json:"listen"`
+			ListenPort uint16 `json:"listen_port"`
+		} `json:"inbounds"`
+	}
+	if json.Unmarshal(config, &document) != nil {
+		return nil
+	}
+	var result []inboundSocket
+	for _, inbound := range document.Inbounds {
+		address, err := netip.ParseAddr(inbound.Listen)
+		if err != nil || inbound.ListenPort == 0 {
+			continue
+		}
+		result = append(result, inboundSocket{tag: inbound.Tag, address: netip.AddrPortFrom(address, inbound.ListenPort)})
+	}
+	return result
 }
 
 // Probe tells what the backend saw of the check name of a label: whether its DNS question
@@ -815,6 +886,10 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 	}
 	s.clashKey(settings)
 	facts := plan.Facts{LANAddress: s.options.System.LANAddress(), Devices: s.options.System.Devices(plan.InterfaceNames(settings))}
+	if facts.Devices == nil && s.current != nil {
+		// netifd did not answer: the devices the names stood for so far, not the names
+		facts.Devices = s.current.result.Facts.Devices
+	}
 	if s.listChecks == nil {
 		s.listChecks = make(map[listKey]listCheck)
 	}
@@ -1040,6 +1115,7 @@ func (s *Supervisor) Boot() Result {
 	next, err := s.prepare()
 	if err != nil {
 		s.log("error", "the settings cannot be used: ", err)
+		s.failed = false
 		s.release()
 		return s.done(false, false, "the settings cannot be used: ", err)
 	}
@@ -1048,6 +1124,7 @@ func (s *Supervisor) Boot() Result {
 		s.log("error", err)
 		s.keepConfig(RejectedConfig, next.result.Config)
 		s.release()
+		s.failed = true
 		return s.done(false, false, err)
 	}
 	s.current = &running{settings: next.settings, result: next.result, instance: instance}
@@ -1055,6 +1132,7 @@ func (s *Supervisor) Boot() Result {
 	if err != nil {
 		s.log("error", err)
 		s.Stop()
+		s.failed = true
 		return s.done(false, false, err)
 	}
 	s.log("info", "running, ", time.Since(started).Milliseconds(), " ms after the start")
@@ -1207,6 +1285,12 @@ func (s *Supervisor) refreshFirewall() {
 // sing-box alone. Another configuration replaces it, and when the new one does not come
 // up the previous one is started again.
 func (s *Supervisor) Apply() Result {
+	return s.apply(false)
+}
+
+// apply is Apply; with force a configuration that is the same replaces sing-box too, as
+// one that is not: the instance that runs has lost a socket it listened on.
+func (s *Supervisor) apply(force bool) Result {
 	if s.current == nil {
 		return s.Boot()
 	}
@@ -1219,7 +1303,7 @@ func (s *Supervisor) Apply() Result {
 	}
 	current := s.current
 	previousFirewall := current.firewall
-	if bytes.Equal(next.result.Config, current.result.Config) {
+	if !force && bytes.Equal(next.result.Config, current.result.Config) {
 		err = s.writeFiles(next.result, current.result)
 		if err != nil {
 			s.log("error", err)
@@ -1263,6 +1347,7 @@ func (s *Supervisor) Apply() Result {
 		s.log("error", "the previous configuration does not come up either: ", err)
 		s.current = nil
 		s.release()
+		s.failed = true
 		return s.done(false, false, "the new configuration does not come up: ", failure, "; the previous one does not either: ", err)
 	}
 	s.current = &running{settings: current.settings, result: current.result, instance: instance}
@@ -1278,6 +1363,7 @@ func (s *Supervisor) Apply() Result {
 func (s *Supervisor) Stop() {
 	current := s.current
 	s.current = nil
+	s.failed = false
 	s.release()
 	if current != nil {
 		s.close(current.instance)

@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -122,10 +123,32 @@ func TestLabelsAreForgotten(t *testing.T) {
 }
 
 func TestDeadEnd(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() { done <- ServeDeadEnd(ctx) }()
 	address := net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort))
+	// the address held by another listener at the start: tried again until it is free
+	held, err := net.Listen("tcp", address)
+	require.NoError(t, err)
+	deadEndRetry = 50 * time.Millisecond
+	defer func() { deadEndRetry = 10 * time.Second }()
+	var said []string
+	var saidAccess sync.Mutex
+	say := func(level string, message string) {
+		saidAccess.Lock()
+		defer saidAccess.Unlock()
+		said = append(said, level+" "+message)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		ServeDeadEnd(ctx, say)
+		close(done)
+	}()
+	require.Eventually(t, func() bool {
+		saidAccess.Lock()
+		defer saidAccess.Unlock()
+		return len(said) == 1
+	}, 5*time.Second, 10*time.Millisecond)
+	time.Sleep(200 * time.Millisecond)
+	held.Close()
 	var connection net.Conn
 	require.Eventually(t, func() bool {
 		var err error
@@ -134,12 +157,18 @@ func TestDeadEnd(t *testing.T) {
 	}, 5*time.Second, 20*time.Millisecond)
 	// accepted and closed: the reader sees the end at once
 	_ = connection.SetReadDeadline(time.Now().Add(5 * time.Second))
-	_, err := connection.Read(make([]byte, 1))
+	_, err = connection.Read(make([]byte, 1))
 	require.Error(t, err)
 	require.False(t, errors.Is(err, os.ErrDeadlineExceeded), "the connection was left open")
 	connection.Close()
+	// the failure told once, while it lasted, and its end
+	saidAccess.Lock()
+	require.Len(t, said, 2, "%v", said)
+	require.Contains(t, said[0], "warn the connections of the FakeIP checks have no place to end")
+	require.Equal(t, "info the connections of the FakeIP checks end at "+address+" again", said[1])
+	saidAccess.Unlock()
 	cancel()
-	require.NoError(t, <-done)
+	<-done
 	_, err = net.DialTimeout("tcp", address, time.Second)
 	require.Error(t, err, "the dead end is still served")
 }

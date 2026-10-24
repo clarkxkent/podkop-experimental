@@ -3,6 +3,7 @@
 package supervisor
 
 import (
+	"cmp"
 	"context"
 	"crypto/tls"
 	"fmt"
@@ -24,6 +25,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 
 	mDNS "github.com/miekg/dns"
 	"github.com/stretchr/testify/require"
@@ -49,9 +51,15 @@ type recorder struct {
 	bridged bool
 	// devices are what netifd says the interface names stand for
 	devices map[string]string
+	// lan is the address of the LAN when it is not 127.0.0.1, noLAN that there is none
+	lan   string
+	noLAN bool
+	// listening are the sockets that listen; nil: not known
+	listening []sockets.Listener
 }
 
 func (r *recorder) Devices(names []string) map[string]string { return r.devices }
+func (r *recorder) Listening() []sockets.Listener            { return r.listening }
 
 func (r *recorder) AllowBridgedTraffic() []string {
 	if !r.bridged {
@@ -65,7 +73,12 @@ func (r *recorder) SetClashSecret(key string) error { r.secrets = append(r.secre
 func (r *recorder) RoutingPresent() (bool, error)   { return !r.routingGone, nil }
 func (r *recorder) FirewallPresent() (bool, error)  { return !r.firewallGone, nil }
 
-func (r *recorder) LANAddress() string    { return "127.0.0.1" }
+func (r *recorder) LANAddress() string {
+	if r.noLAN {
+		return ""
+	}
+	return cmp.Or(r.lan, "127.0.0.1")
+}
 func (r *recorder) ApplyRouting() error   { r.calls = append(r.calls, "routing"); return nil }
 func (r *recorder) RemoveRouting() error  { r.calls = append(r.calls, "no routing"); return nil }
 func (r *recorder) RemoveFirewall() error { r.calls = append(r.calls, "no firewall"); return nil }
@@ -413,7 +426,7 @@ func TestDevicesMoved(t *testing.T) {
 	require.Contains(t, message, "sing-box keeps running")
 	require.Equal(t, []string{"br-lan"}, f.system.plans[len(f.system.plans)-1].Interfaces)
 	require.Contains(t, f.system.take(), "firewall update")
-	require.True(t, f.logged("the interfaces stand for other devices now (lan: br-lan)"), "%v", f.lines())
+	require.True(t, f.logged("the network changed under the settings (lan: br-lan): they are applied again"), "%v", f.lines())
 	// the same devices at the next ifup: nothing is applied
 	require.Equal(t, "nothing was missing", s.restoreRouting())
 }
@@ -576,7 +589,7 @@ func TestProbe(t *testing.T) {
 	f.supervisor.options.Watcher = watcher
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	go func() { _ = probe.ServeDeadEnd(ctx) }()
+	go probe.ServeDeadEnd(ctx, func(string, string) {})
 	s := f.supervisor
 	f.settings("", oneName)
 	done := make(chan struct{})

@@ -74,16 +74,11 @@ var commandDaemon = &cobra.Command{
 		logs := logbuf.New(256 << 10)
 		// the checks with made-up names: who reaches sing-box through FakeIP, see probe
 		watcher := probe.NewWatcher()
-		go func() {
-			err := probe.ServeDeadEnd(ctx)
-			if err != nil {
-				os.Stdout.WriteString("[warn] the connections of the FakeIP checks have no place to end: " + err.Error() + "\n")
-			}
-		}()
 		say := func(level string, message string) {
 			os.Stdout.WriteString("[" + level + "] " + message + "\n")
 			logs.Write("backend", level, message)
 		}
+		go probe.ServeDeadEnd(ctx, say)
 		setClock(ctx, say)
 		backend := supervisor.New(supervisor.Options{
 			SettingsPath: commandDaemonFlagUCI,

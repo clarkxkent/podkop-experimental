@@ -68,6 +68,17 @@ func TestList(t *testing.T) {
 		"udp podkop (pid 4388) on 127.0.0.42:53", "udp dnsmasq (pid 7600) on [::]:53",
 	}, named)
 
+	// the same sockets without their processes
+	var bare []string
+	for _, listener := range Bound(root) {
+		bare = append(bare, listener.Protocol+" "+listener.String())
+	}
+	require.ElementsMatch(t, []string{
+		"tcp a socket without a process on 0.0.0.0:53", "tcp a socket without a process on 127.0.0.1:1602",
+		"udp a socket without a process on 127.0.0.42:53", "udp a socket without a process on [::]:53",
+	}, bare)
+	require.Empty(t, Bound(t.TempDir()))
+
 	// who takes 127.0.0.42:53: the wildcard listener of TCP; for UDP the socket on that
 	// address and the IPv6 wildcard one
 	tcp := Holding(listeners, "tcp", netip.MustParseAddrPort("127.0.0.42:53"))

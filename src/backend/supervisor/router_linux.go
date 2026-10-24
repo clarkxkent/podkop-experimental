@@ -7,6 +7,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/dnsmasq"
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	E "github.com/sagernet/sing/common/exceptions"
 )
@@ -23,6 +24,8 @@ func (Router) LANAddress() string {
 }
 
 func (Router) Devices(names []string) map[string]string { return netcfg.Devices(names) }
+
+func (Router) Listening() []sockets.Listener { return sockets.Bound("/") }
 
 func (Router) ApplyRouting() error { return netcfg.Apply() }
 

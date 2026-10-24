@@ -79,7 +79,7 @@ func TestDevices(t *testing.T) {
 	require.Equal(t, []string{"br-lan", "phy0-ap1"}, result.Dataplane.Interfaces)
 	require.Equal(t, []string{"br-lan"}, result.Dataplane.ClashAPIInterfaces)
 	require.Contains(t, string(result.Config), `"bind_interface": "pppoe-wan"`)
-	require.Equal(t, facts.Devices, result.Devices)
+	require.Equal(t, facts, result.Facts)
 
 	// an output interface binds what sing-box opens, the mark stays
 	result = buildText(t, head+"\toption enable_output_network_interface '1'\n\toption output_network_interface 'wan'\n"+proxy, facts)

@@ -12,6 +12,7 @@ import (
 
 	"github.com/podkop-net/podkop-experimental/src/backend/engine"
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
+	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 
 	"github.com/stretchr/testify/require"
 )
@@ -287,5 +288,80 @@ func TestFakeDeriveOnce(t *testing.T) {
 		}
 	}
 	require.True(t, found)
+	s.Stop()
+}
+
+// A start that fails says "failed" and is tried again at the next change of the network
+// (and when the guard of the package asks): it runs once what kept it down is gone.
+// Settings that cannot be used, and a stop, are not tried again.
+func TestFakeRetryFailedStart(t *testing.T) {
+	s, fake, system, settings := fakeFixture(t)
+	settings("one.lab.example", "60")
+	fake.silent = []string{`"rewrite_ttl": 60`}
+	require.False(t, s.Boot().OK)
+	require.Equal(t, stateFailed, state(t, s))
+	system.take()
+	// still down: tried, failed again
+	require.Contains(t, s.restoreRouting(), "the start that had failed was tried again")
+	require.Equal(t, stateFailed, state(t, s))
+	require.Len(t, fake.built, 2)
+	// what kept it down is gone
+	fake.silent = nil
+	require.Contains(t, s.restoreRouting(), "the start that had failed was tried again: started")
+	require.True(t, s.Running())
+	require.Equal(t, stateRunning, state(t, s))
+	require.Equal(t, []string{"no dns", "no firewall", "no routing", "routing", "firewall", "dns"}, system.take())
+	// a stop is not undone by the network
+	s.Stop()
+	require.Equal(t, "nothing runs", s.restoreRouting())
+	// nor are settings that cannot be used
+	fake.refuse[`"rewrite_ttl": 60`] = os.ErrInvalid
+	require.False(t, s.Boot().OK)
+	require.Equal(t, stateReleased, state(t, s))
+	require.Equal(t, "nothing runs", s.restoreRouting())
+}
+
+// At a change of the network the running configuration is held to the router: a LAN that
+// got another address is applied again (its mixed proxies listen on it), one that lost it
+// is not; a socket of an inbound nothing listens on any more is listened on again by a new
+// instance, though the configuration is the same.
+func TestFakeDrift(t *testing.T) {
+	s, fake, system, settings := fakeFixture(t)
+	settings("one.lab.example", "60")
+	require.True(t, s.Boot().OK)
+	all := func(drop string) []sockets.Listener {
+		var result []sockets.Listener
+		for _, inbound := range inboundSockets(s.current.result.Config) {
+			if inbound.tag != drop {
+				result = append(result, sockets.Listener{Protocol: "tcp", Address: inbound.address})
+			}
+		}
+		return result
+	}
+	require.NotEmpty(t, all(""))
+	system.listening = all("")
+	require.Equal(t, "nothing was missing", s.restoreRouting())
+
+	system.lan = "192.168.2.1"
+	message := s.restoreRouting()
+	require.Contains(t, message, "the address of the LAN: 192.168.2.1 (was 127.0.0.1)")
+	require.Contains(t, message, "sing-box keeps running")
+	require.Len(t, fake.built, 1)
+	require.Equal(t, "nothing was missing", s.restoreRouting())
+	system.noLAN = true
+	require.Equal(t, "nothing was missing", s.restoreRouting(), "an address that went away is no change")
+	system.noLAN = false
+
+	system.listening = all("dns-in")
+	message = s.restoreRouting()
+	require.Contains(t, message, "nothing listens on 127.0.0.42:53 (dns-in)")
+	require.Len(t, fake.built, 2, "a new instance listens again")
+	require.True(t, fake.built[0].closed)
+	require.Equal(t, string(fake.built[0].config), string(fake.built[1].config))
+	system.listening = all("")
+	require.Equal(t, "nothing was missing", s.restoreRouting())
+	// netifd that does not answer moves no name
+	system.devices = nil
+	require.Equal(t, "nothing was missing", s.restoreRouting())
 	s.Stop()
 }

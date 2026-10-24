@@ -120,9 +120,9 @@ type Result struct {
 	Links []Link
 	// Dataplane is what the router needs around the configuration.
 	Dataplane Dataplane
-	// Devices are the devices the interface names stood for (Facts.Devices): a later
-	// look tells by them whether one stands for another device now.
-	Devices map[string]string
+	// Facts are those the configuration was built of: a later look tells by them whether
+	// the router has changed under it (the address of the LAN, the device a name stands for).
+	Facts Facts
 }
 
 // Dataplane is what the router needs around a configuration, made of the settings: the
@@ -361,7 +361,7 @@ func Build(config *model.Config, facts Facts, options Options) (*Result, error) 
 	if err != nil {
 		return nil, E.Cause(err, "encode the configuration")
 	}
-	result := &Result{Config: content, Files: make(map[string][]byte), FileOrder: b.fileOrder, Warnings: b.warnings, Links: b.links, Dataplane: b.dataplane(), Devices: b.facts.Devices}
+	result := &Result{Config: content, Files: make(map[string][]byte), FileOrder: b.fileOrder, Warnings: b.warnings, Links: b.links, Dataplane: b.dataplane(), Facts: b.facts}
 	for _, entry := range b.ruleSets {
 		fields := entry.(*object)
 		tag, _ := fields.get("tag")

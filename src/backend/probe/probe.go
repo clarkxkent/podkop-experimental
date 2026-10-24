@@ -163,25 +163,48 @@ func (w *Watcher) Wait(ctx context.Context, label string) (Arrival, bool) {
 	}
 }
 
+// deadEndRetry is how long ServeDeadEnd waits before it tries an address it could not
+// take again.
+var deadEndRetry = 10 * time.Second
+
 // ServeDeadEnd accepts the connections the configuration sends to the dead end and closes
 // them, until the context ends. Without it sing-box would log a refused connection for
-// every check.
-func ServeDeadEnd(ctx context.Context) error {
-	listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort)))
-	if err != nil {
-		return err
+// every check. The address may not be there when the backend starts (the loopback is down
+// while the network restarts): it is tried again every deadEndRetry until it is taken, and
+// say is told the first failure and the end of it.
+func ServeDeadEnd(ctx context.Context, say func(level string, message string)) {
+	address := net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort))
+	failed := false
+	for ctx.Err() == nil {
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
+		if err != nil {
+			if !failed {
+				failed = true
+				say("warn", "the connections of the FakeIP checks have no place to end, tried again every "+deadEndRetry.String()+": "+err.Error())
+			}
+			select {
+			case <-ctx.Done():
+			case <-time.After(deadEndRetry):
+			}
+			continue
+		}
+		if failed {
+			failed = false
+			say("info", "the connections of the FakeIP checks end at "+address+" again")
+		}
+		serveDeadEnd(ctx, listener)
 	}
-	go func() {
-		<-ctx.Done()
-		_ = listener.Close()
-	}()
+}
+
+// serveDeadEnd closes what comes in until the context ends or the listener breaks.
+func serveDeadEnd(ctx context.Context, listener net.Listener) {
+	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
+	defer stop()
+	defer listener.Close()
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
-			if ctx.Err() != nil {
-				return nil
-			}
-			return err
+			return
 		}
 		_ = connection.Close()
 	}

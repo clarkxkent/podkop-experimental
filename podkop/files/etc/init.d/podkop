@@ -71,7 +71,7 @@ service_started() {
         state=$(cat /var/run/podkop/state 2>/dev/null)
         if [ -n "$pid" ]; then
             case "$state" in
-            "running $pid "* | "released $pid "*) return 0 ;;
+            "running $pid "* | "released $pid "* | "failed $pid "*) return 0 ;;
             esac
         fi
         sleep 1

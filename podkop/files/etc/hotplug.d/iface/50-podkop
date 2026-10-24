@@ -6,7 +6,15 @@
 # restarted. The backend puts back what is gone and nothing else; the firewall does the
 # same for itself in 20-firewall. Every ifup asks: after a restart of the network the
 # loopback comes up last, and at the ifup of another interface it may still be down.
-[ "$ACTION" = ifup ] || exit 0
+# The backend also holds its configuration to the network then: an interface name that
+# stands for another device, the LAN with another address (an ifupdate of addresses
+# brings that without an ifup), a socket of sing-box that no longer listens, a start that
+# failed while an address was not there.
+case "$ACTION" in
+ifup) ;;
+ifupdate) [ "$IFUPDATE_ADDRESSES" = 1 ] || exit 0 ;;
+*) exit 0 ;;
+esac
 [ -S /var/run/podkop/ctl.sock ] || exit 0
 /usr/bin/podkop restore_routing > /dev/null 2>&1 &
 exit 0
