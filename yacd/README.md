@@ -44,6 +44,8 @@ What the patch changes:
   (105 KB in the styles), one icon of 64×64.
 - The charts go through their points (a monotone curve); the first reading of memory, 0 from sing-box,
   is not drawn.
+- The version of the dashboard (Config) reads "0.6.0 · podkop-exp": the one of GitHub, after an upgrade,
+  reads its own.
 - The button that upgrades the dashboard is shown for sing-box too (Yacd-meta shows it only for a core
   that is not "premium"), and the request has a deadline of 5 minutes; the upgrade of the core stays
   hidden.

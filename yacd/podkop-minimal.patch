@@ -2254,7 +2254,7 @@ index aace980..d245d80 100644
    );
  }
 diff --git a/src/components/config/Config.tsx b/src/components/config/Config.tsx
-index b807661..b3035b5 100644
+index b807661..f441972 100644
 --- a/src/components/config/Config.tsx
 +++ b/src/components/config/Config.tsx
 @@ -23,7 +23,6 @@ import {
@@ -2284,7 +2284,7 @@ index b807661..b3035b5 100644
  
    return (
      <div>
-@@ -243,7 +245,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+@@ -243,10 +245,10 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
                      </div>
                    </div>
                  )}
@@ -2292,7 +2292,11 @@ index b807661..b3035b5 100644
 +                {canUpgradeUI && (
                    <div>
                      <div className={s0.label}>Yacd</div>
-                     <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
+-                    <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
++                    <VersionLine version={`${__VERSION__} · podkop-exp`} link={YACD_REPO_URL} />
+                     <Button
+                       start={<DownloadCloud size={16} />}
+                       label={t('upgrade_ui')}
 @@ -311,17 +313,6 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
              {t('dashboard')}
            </div>
@@ -2311,7 +2315,7 @@ index b807661..b3035b5 100644
              <div>
                <div className={s0.label}>{t('chart_style')}</div>
                <Selection2
-@@ -332,7 +323,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+@@ -332,10 +323,10 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
                />
              </div>
  
@@ -2319,7 +2323,11 @@ index b807661..b3035b5 100644
 +            {canUpgradeUI ? null : (
                <div>
                  <div className={s0.label}>Yacd</div>
-                 <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
+-                <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
++                <VersionLine version={`${__VERSION__} · podkop-exp`} link={YACD_REPO_URL} />
+               </div>
+             )}
+ 
 diff --git a/src/components/connections/ConnectionSettingsModal.module.scss b/src/components/connections/ConnectionSettingsModal.module.scss
 index cfb46b2..50c2676 100644
 --- a/src/components/connections/ConnectionSettingsModal.module.scss
