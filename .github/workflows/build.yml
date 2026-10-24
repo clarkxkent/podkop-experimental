@@ -1,4 +1,6 @@
 name: Build packages
+# the title of a run: GitHub shows the message of the last commit, the tag or branch tells more
+run-name: ${{ github.event_name == 'push' && format('Release {0}', github.ref_name) || format('Test build of {0}', github.ref_name) }}
 on:
   push:
     tags:
