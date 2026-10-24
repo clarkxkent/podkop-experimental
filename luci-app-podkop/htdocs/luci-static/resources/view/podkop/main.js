@@ -750,9 +750,15 @@ async function getDashboardSections() {
       outbounds: []
     };
   });
+  const withDetours = data.map((group) => {
+    const section = configSections.find(
+      (item) => item[".name"] === group.displayName
+    );
+    return section?.connection_type === "proxy" && section.detour ? { ...group, detour: section.detour } : group;
+  });
   return {
     success: true,
-    data
+    data: withDetours
   };
 }
 
@@ -1560,7 +1566,12 @@ function renderDefaultState({
         {
           class: "pdk_dashboard-page__outbound-section__title-section__title"
         },
-        [section.displayName]
+        [
+          section.displayName,
+          section.detour ? E("span", { style: "font-weight: normal; opacity: 0.7" }, [
+            ` ${_("through %s").format(section.detour)}`
+          ]) : ""
+        ]
       ),
       latencyFetching ? E("div", { class: "skeleton", style: "width: 99px; height: 28px" }) : E(
         "button",

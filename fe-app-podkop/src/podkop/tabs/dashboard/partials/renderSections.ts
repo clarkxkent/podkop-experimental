@@ -91,7 +91,14 @@ export function renderDefaultState({
         {
           class: 'pdk_dashboard-page__outbound-section__title-section__title',
         },
-        [section.displayName],
+        [
+          section.displayName,
+          section.detour
+            ? E('span', { style: 'font-weight: normal; opacity: 0.7' }, [
+                ` ${_('through %s').format(section.detour)}`,
+              ])
+            : '',
+        ],
       ),
       latencyFetching
         ? E('div', { class: 'skeleton', style: 'width: 99px; height: 28px' })

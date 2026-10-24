@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-23 08:38+0000\n"
-"PO-Revision-Date: 2026-10-23 08:38+0000\n"
+"POT-Creation-Date: 2026-10-24 12:38+0000\n"
+"PO-Revision-Date: 2026-10-24 12:38+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -28,6 +28,9 @@ msgstr "✘ Отключено"
 
 msgid "✘ Stopped"
 msgstr "✘ Остановлен"
+
+msgid "A loop: %s"
+msgstr "Петля: %s"
 
 msgid "Active Connections"
 msgstr "Активные соединения"
@@ -113,6 +116,9 @@ msgstr "Настройки сервиса Podkop"
 msgid "Configuration Type"
 msgstr "Тип конфигурации"
 
+msgid "Connect through"
+msgstr "Подключаться через"
+
 msgid "Connection Type"
 msgstr "Тип подключения"
 
@@ -145,6 +151,9 @@ msgstr "Диагностика"
 
 msgid "Direct (without a proxy)"
 msgstr "Напрямую (без прокси)"
+
+msgid "Directly"
+msgstr "Напрямую"
 
 msgid "Disable autostart"
 msgstr "Отключить автостарт"
@@ -392,6 +401,9 @@ msgstr "сейчас без IPv4-адреса"
 msgid "No other marking rules found"
 msgstr "Другие правила маркировки не найдены"
 
+msgid "not available"
+msgstr "недоступна"
+
 msgid "Not implement yet"
 msgstr "Ещё не реализовано"
 
@@ -418,6 +430,9 @@ msgstr "Устаревшая"
 
 msgid "Output Network Interface"
 msgstr "Выходной сетевой интерфейс"
+
+msgid "Path"
+msgstr "Путь"
 
 msgid "Path cannot be empty"
 msgstr "Путь не может быть пустым"
@@ -449,6 +464,9 @@ msgstr "Настройки podkop"
 msgid "Podkop will not modify your DHCP configuration"
 msgstr "Podkop не будет изменять вашу конфигурацию DHCP."
 
+msgid "Proxy"
+msgstr "Прокси"
+
 msgid "Proxy Configuration URL"
 msgstr "URL конфигурации прокси"
 
@@ -466,6 +484,9 @@ msgstr "Разрешение реальных IP-адресов"
 
 msgid "Restart podkop"
 msgstr "Перезапустить Podkop"
+
+msgid "router"
+msgstr "роутер"
 
 msgid "Router DNS is not routed through podkop"
 msgstr "DNS роутера не проходит через podkop"
@@ -499,6 +520,9 @@ msgstr "Запустить диагностику"
 
 msgid "Russia inside restrictions"
 msgstr "Ограничения Russia inside"
+
+msgid "Section %s is not a proxy or VPN section"
+msgstr "Секция %s — не прокси и не VPN"
 
 msgid "Sections"
 msgstr "Секции"
@@ -560,6 +584,9 @@ msgstr "Показать"
 msgid "Show sing-box config"
 msgstr "Показать sing-box конфигурацию"
 
+msgid "site"
+msgstr "сайт"
+
 msgid "Some proxy links cannot be used"
 msgstr "Некоторые ссылки на прокси нельзя использовать"
 
@@ -611,6 +638,9 @@ msgstr "Текстовый список"
 msgid "the base64 of the link is no JSON"
 msgstr "в base64 ссылки не JSON"
 
+msgid "The connection to the server of this section goes through the chosen section: the server sees the address of the server of that section, not the one of the router"
+msgstr "Соединение с сервером этой секции идёт через выбранную секцию: сервер видит адрес сервера той секции, а не роутера"
+
 msgid "The devices YACD is opened from. A device of the WAN also needs its port 9090 opened in the firewall of the router"
 msgstr "Устройства, с которых открывается YACD. Для устройства WAN порт 9090 нужно также открыть в межсетевом экране роутера"
 
@@ -649,6 +679,9 @@ msgstr "пользователь должен быть UUID и паролем"
 
 msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
 msgstr "Веб-панель sing-box, открывается с устройств, выбранных ниже; без неё API панели доступен только с самого роутера"
+
+msgid "through %s"
+msgstr "через %s"
 
 msgid "Time in seconds for DNS record caching (default: 60)"
 msgstr "Время в секундах для кэширования DNS записей (по умолчанию: 60)"

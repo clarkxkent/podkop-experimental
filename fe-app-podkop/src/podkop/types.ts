@@ -90,6 +90,8 @@ export namespace Podkop {
     code: string;
     displayName: string;
     outbounds: Outbound[];
+    // the section the connections of this one go through (option detour)
+    detour?: string;
   }
 
   export interface ConfigProxyUrlTestSection {
@@ -145,6 +147,7 @@ export namespace Podkop {
     '.name': string;
     '.type': 'settings' | 'section';
     yacd_secret_key?: string;
+    detour?: string;
   };
 
   export interface MethodSuccessResponse<T> {

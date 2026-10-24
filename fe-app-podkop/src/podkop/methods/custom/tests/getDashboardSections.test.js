@@ -89,3 +89,50 @@ describe('getDashboardSections, urltest section', () => {
     expect(await tileNames()).toEqual(['Fastest', 'A', 'main-fallback-1-out']);
   });
 });
+
+describe('getDashboardSections, a section that connects through another', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('tells the section it goes through, and only for a proxy section', async () => {
+    getConfigSections.mockResolvedValue([
+      {
+        '.name': 'main',
+        '.type': 'section',
+        connection_type: 'proxy',
+        proxy_config_type: 'url',
+        proxy_string: 'socks5://203.0.113.15:1080',
+        detour: 'entry',
+      },
+      {
+        '.name': 'entry',
+        '.type': 'section',
+        connection_type: 'proxy',
+        proxy_config_type: 'url',
+        proxy_string: 'socks5://203.0.113.16:1080',
+      },
+      {
+        '.name': 'awg',
+        '.type': 'section',
+        connection_type: 'vpn',
+        interface: 'awg0',
+        detour: 'entry',
+      },
+    ]);
+    PodkopShellMethods.getClashApiProxies.mockResolvedValue({
+      success: true,
+      data: {
+        proxies: {
+          'main-out': proxy('main-out'),
+          'entry-out': proxy('entry-out'),
+          'awg-out': proxy('awg-out'),
+        },
+      },
+    });
+    const result = await getDashboardSections();
+    expect(result.data.map((group) => group.detour)).toEqual([
+      'entry',
+      undefined,
+      undefined,
+    ]);
+  });
+});

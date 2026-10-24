@@ -190,8 +190,18 @@ export async function getDashboardSections(): Promise<IGetDashboardSectionsRespo
       };
     });
 
+  // a proxy section that connects through another one says so
+  const withDetours = data.map((group) => {
+    const section = configSections.find(
+      (item) => item['.name'] === group.displayName,
+    );
+    return section?.connection_type === 'proxy' && section.detour
+      ? { ...group, detour: section.detour }
+      : group;
+  });
+
   return {
     success: true,
-    data,
+    data: withDetours,
   };
 }

@@ -2,9 +2,111 @@
 "require form";
 "require baseclass";
 "require ui";
+"require uci";
 "require tools.widgets as widgets";
 "require view.podkop.main as main";
 "require view.podkop.devices as devices";
+
+// The value an option of a section has in the form now: what is being edited, else what is
+// saved. An option that is not shown has no value in the form.
+function currentValue(section, section_id, option) {
+  const value = section.formvalue(section_id, option);
+  return value != null ? value : uci.get("podkop", section_id, option);
+}
+
+// The sections a connection goes through from a section on, in order, while each is a proxy
+// section with a detour; it stops at a section met before.
+function detourChain(section, from) {
+  const chain = [];
+  let next = from;
+  while (next && !chain.includes(next)) {
+    chain.push(next);
+    if (currentValue(section, next, "connection_type") !== "proxy") {
+      break;
+    }
+    next = currentValue(section, next, "detour");
+  }
+  return { chain, loopsAt: next && chain.includes(next) ? next : null };
+}
+
+const PROXY_CONFIG_LABELS = {
+  url: "Connection URL",
+  selector: "Selector",
+  urltest: "URLTest",
+  outbound: "Outbound Config",
+};
+
+// The sections a section can connect through: proxy and VPN sections other than itself whose
+// own way does not lead back to it, each named with what it is.
+function detourCandidates(section, section_id) {
+  return uci
+    .sections("podkop", "section")
+    .map((item) => item[".name"])
+    .filter((name) => name !== section_id)
+    .filter((name) => {
+      const type = currentValue(section, name, "connection_type");
+      return (
+        (type === "proxy" || type === "vpn") &&
+        !detourChain(section, name).chain.includes(section_id)
+      );
+    })
+    .map((name) => {
+      const type = currentValue(section, name, "connection_type");
+      const what =
+        type === "vpn"
+          ? "VPN, " + (currentValue(section, name, "interface") || "?")
+          : _("Proxy") +
+            ", " +
+            _(
+              PROXY_CONFIG_LABELS[
+                currentValue(section, name, "proxy_config_type") || "url"
+              ] || "Connection URL",
+            );
+      return { name, label: name + " — " + what };
+    });
+}
+
+// The lists of "Connect through" of the sections follow a change of one of them: a section
+// whose way leads back is no longer offered. A choice that is no longer offered stays, marked,
+// and validate tells why.
+function refreshDetourLists(section) {
+  const prefix = "widget.cbid.podkop.";
+  document
+    .querySelectorAll('select[id^="' + prefix + '"][id$=".detour"]')
+    .forEach((select) => {
+      const section_id = select.id.slice(prefix.length, -".detour".length);
+      const chosen = select.value;
+      const offered = [
+        { name: "", label: _("Directly") },
+        ...detourCandidates(section, section_id),
+      ];
+      if (chosen && !offered.some((item) => item.name === chosen)) {
+        offered.push({
+          name: chosen,
+          label: chosen + " (" + _("not available") + ")",
+        });
+      }
+      select.replaceChildren(
+        ...offered.map(({ name, label }) =>
+          E("option", { value: name }, [label]),
+        ),
+      );
+      select.value = chosen;
+    });
+}
+
+// The way of the traffic of a section that connects through another one, as a line.
+function detourPath(section, section_id, detour) {
+  if (!detour) {
+    return _("Path") + ": " + [_("router"), section_id, _("site")].join(" → ");
+  }
+  const { chain } = detourChain(section, detour);
+  return (
+    _("Path") +
+    ": " +
+    [_("router"), ...chain.reverse(), section_id, _("site")].join(" → ")
+  );
+}
 
 function createSectionContent(section, singBoxFeatures = []) {
   let o = section.option(
@@ -299,6 +401,76 @@ function createSectionContent(section, singBoxFeatures = []) {
   o.default = "0";
   o.depends("connection_type", "proxy");
   o.rmempty = false;
+
+  // the section the connections to the servers of this one go through (detour of sing-box):
+  // offered from the sections of the form as they are now, a loop left out
+  o = section.option(
+    form.ListValue,
+    "detour",
+    _("Connect through"),
+    _(
+      "The connection to the server of this section goes through the chosen section: the server sees the address of the server of that section, not the one of the router",
+    ),
+  );
+  o.depends("connection_type", "proxy");
+  o.renderWidget = function (section_id, option_index, cfgvalue) {
+    this.keylist = [];
+    this.vallist = [];
+    this.value("", _("Directly"));
+    detourCandidates(this.section, section_id).forEach(({ name, label }) =>
+      this.value(name, label),
+    );
+    // a saved choice that is no longer offered stays shown, and validate tells why
+    if (cfgvalue && !this.keylist.includes(cfgvalue)) {
+      this.value(cfgvalue, cfgvalue + " (" + _("not available") + ")");
+    }
+    const widget = form.ListValue.prototype.renderWidget.call(
+      this,
+      section_id,
+      option_index,
+      cfgvalue,
+    );
+    return E("div", {}, [
+      widget,
+      E(
+        "div",
+        { class: "cbi-value-description", id: "pdk-detour-path-" + section_id },
+        // a text node: the names of the sections are no HTML
+        [detourPath(this.section, section_id, cfgvalue)],
+      ),
+    ]);
+  };
+  o.onchange = function (ev, section_id, value) {
+    const path = document.getElementById("pdk-detour-path-" + section_id);
+    if (path) {
+      path.textContent = detourPath(this.section, section_id, value);
+    }
+    refreshDetourLists(this.section);
+  };
+  o.validate = function (section_id, value) {
+    if (!value) {
+      return true;
+    }
+    const type = currentValue(this.section, value, "connection_type");
+    if (type !== "proxy" && type !== "vpn") {
+      return _("Section %s is not a proxy or VPN section").format(value);
+    }
+    const { chain, loopsAt } = detourChain(this.section, value);
+    // back to this section, or round among the sections it leads to
+    if (chain.includes(section_id)) {
+      return _("A loop: %s").format(
+        [section_id, ...chain.slice(0, chain.indexOf(section_id) + 1)].join(
+          " → ",
+        ),
+      );
+    }
+    if (loopsAt) {
+      return _("A loop: %s").format(
+        [...chain.slice(chain.indexOf(loopsAt)), loopsAt].join(" → "),
+      );
+    }
+    return true;
+  };
 
   // a tunnel, or a WAN: a section of a WAN with its mixed proxy sends what is given
   // to it around the tunnels (the torrent client of the FAQ of podkop)
