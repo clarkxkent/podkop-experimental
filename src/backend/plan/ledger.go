@@ -69,6 +69,9 @@ import (
 // 12. Settings with two mixed proxies on one port are refused: sing-box would fail to start
 //     on the second socket, and so would every try of the start again. The shell backend
 //     wrote the configuration.
+// 13. A proxy section connects through another section (option detour): the outbounds of
+//     its servers get the detour of the outbound of that section. The shell backend has no
+//     such option.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,

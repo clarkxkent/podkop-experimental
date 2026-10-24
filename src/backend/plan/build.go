@@ -290,6 +290,10 @@ type builder struct {
 
 	// the DNS rule that sends the names of the lists to FakeIP
 	fakeIPRule *rule
+
+	// detours are the sections the servers of a proxy section are reached through, by the
+	// name of the section (checkDetours)
+	detours map[string]string
 }
 
 // rule is a route or a DNS rule while it is built: later steps find it by its name to add
@@ -410,6 +414,10 @@ func outboundTag(section string) string {
 }
 
 func (b *builder) buildOutbounds() error {
+	err := b.checkDetours()
+	if err != nil {
+		return err
+	}
 	b.outbounds = append(b.outbounds, newObject("type", "direct", "tag", tagDirectOutbound))
 	for index := range b.config.Sections {
 		section := &b.config.Sections[index]
@@ -431,6 +439,85 @@ func (b *builder) buildOutbounds() error {
 	return nil
 }
 
+// checkDetours takes the section each proxy section connects through (its option detour):
+// the servers of the section are reached through the outbound of that one, a proxy or a VPN
+// section, a group of either kind included. A detour to a section that is not there, has no
+// outbound or leads back round is refused here, in the words of the settings: sing-box would
+// refuse the configuration in terms of outbounds.
+func (b *builder) checkDetours() error {
+	sections := make(map[string]*model.Section, len(b.config.Sections))
+	for index := range b.config.Sections {
+		sections[b.config.Sections[index].Name] = &b.config.Sections[index]
+	}
+	b.detours = make(map[string]string)
+	for index := range b.config.Sections {
+		section := &b.config.Sections[index]
+		if section.Detour == "" {
+			continue
+		}
+		if section.ConnectionType != "proxy" {
+			b.warn("section ", section.Name, ": the connection through ", section.Detour, " is left out: only a proxy section connects through another")
+			continue
+		}
+		target := sections[section.Detour]
+		switch {
+		case section.Detour == section.Name:
+			return E.New("section ", section.Name, " connects through itself")
+		case target == nil:
+			return E.New("section ", section.Name, " connects through ", section.Detour, ", and there is no such section")
+		case target.ConnectionType != "proxy" && target.ConnectionType != "vpn":
+			return E.New("section ", section.Name, " connects through ", section.Detour, ", a section of the type ", target.ConnectionType, " that has no outbound")
+		}
+		b.detours[section.Name] = section.Detour
+	}
+	for name := range b.detours {
+		path := []string{name}
+		for next := b.detours[name]; next != ""; next = b.detours[next] {
+			if slices.Contains(path, next) {
+				return E.New("section ", name, " connects round in a loop: ", strings.Join(append(path, next), " → "))
+			}
+			path = append(path, next)
+		}
+	}
+	return nil
+}
+
+// isTransit tells whether another section connects through this one.
+func (b *builder) isTransit(name string) bool {
+	for _, detour := range b.detours {
+		if detour == name {
+			return true
+		}
+	}
+	return false
+}
+
+// setDetour makes an outbound of a section reach its server through the section it connects
+// through. tls.spoof needs the socket of its own connection: through a proxy it is refused at
+// every connection (common/tls of the engine), so it is said once here.
+func (b *builder) setDetour(section *model.Section, name string, outbound *object) {
+	detour := b.detours[section.Name]
+	if detour == "" {
+		return
+	}
+	if _, has := outbound.get("detour"); !has {
+		outbound.set("detour", outboundTag(detour))
+	}
+	value, _ := outbound.get("tls")
+	tls, isObject := value.(*object)
+	if !isObject {
+		return
+	}
+	if spoof, _ := tls.get("spoof"); spoof == nil || spoof == "" {
+		return
+	}
+	for _, other := range b.config.Sections {
+		if other.Name == detour && other.ConnectionType == "proxy" {
+			b.warn("proxy link of ", name, ": tls.spoof does not work through the proxy section ", detour, ": its connections will fail; it works through a VPN section")
+		}
+	}
+}
+
 func (b *builder) buildProxyOutbounds(section *model.Section) error {
 	switch section.ProxyConfigType {
 	case "url":
@@ -449,6 +536,11 @@ func (b *builder) buildProxyOutbounds(section *model.Section) error {
 			return E.New("the outbound is not a JSON object")
 		}
 		outbound.set("tag", outboundTag(section.Name))
+		if outboundType, _ := outbound.get("type"); b.detours[section.Name] != "" && (outboundType == "selector" || outboundType == "urltest") {
+			// a group dials nothing itself: its members connect through another outbound
+			return E.New("the outbound JSON is a ", outboundType, ", which connects through nothing: set detour in the outbounds it chooses from")
+		}
+		b.setDetour(section, section.Name, outbound)
 		b.outbounds = append(b.outbounds, outbound)
 	case "selector":
 		if len(section.SelectorProxyLinks) == 0 {
@@ -534,6 +626,7 @@ func (b *builder) addLinkOutbound(section *model.Section, name string, link stri
 	if section.EnableUDPOverTCP && (outboundType == "socks" || outboundType == "shadowsocks") {
 		outbound.set("udp_over_tcp", newObject("enabled", true, "version", versionUDPOverTCP))
 	}
+	b.setDetour(section, name, outbound)
 	b.outbounds = append(b.outbounds, outbound)
 	b.links = append(b.links, Link{Section: section.Name, Name: name, Text: link})
 	return nil

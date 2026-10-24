@@ -32,6 +32,9 @@ func describeConfig(next *candidate) string {
 		case "vpn":
 			what = "interface " + section.Interface
 		}
+		if section.ConnectionType == "proxy" && section.Detour != "" {
+			what += " through " + section.Detour
+		}
 		sections = append(sections, section.Name+" ("+what+")")
 	}
 	downloaded, files := 0, 0

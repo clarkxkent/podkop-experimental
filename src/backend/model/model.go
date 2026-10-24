@@ -69,6 +69,8 @@ type Section struct {
 	URLTestDownloadCheck string // default, off, custom
 	URLTestDownloadURL   string
 	EnableUDPOverTCP     bool
+	// Detour is the section the connections to the servers of this one go through ("": none)
+	Detour string
 
 	Interface               string
 	DomainResolverEnabled   bool
@@ -146,6 +148,7 @@ func Load(parsed *uci.Package) (*Config, error) {
 			URLTestDownloadCheck:    get(section, "urltest_download_check", "default"),
 			URLTestDownloadURL:      section.Get("urltest_download_url"),
 			EnableUDPOverTCP:        section.Get("enable_udp_over_tcp") == "1",
+			Detour:                  section.Get("detour"),
 			Interface:               section.Get("interface"),
 			DomainResolverEnabled:   isOne(section.Get("domain_resolver_enabled")),
 			DomainResolverDNSType:   section.Get("domain_resolver_dns_type"),

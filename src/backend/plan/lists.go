@@ -19,7 +19,10 @@ func ruleSetTag(section string, name string, kind string) string {
 // buildSectionLists makes the rule sets of a section and the route rule they belong to.
 func (b *builder) buildSectionLists(section *model.Section) error {
 	if !section.HasEnabledLists() {
-		b.warn("section ", section.Name, " has no list: no route rule for it")
+		// a section only other sections connect through needs none
+		if !b.isTransit(section.Name) {
+			b.warn("section ", section.Name, " has no list: no route rule for it")
+		}
 		return nil
 	}
 	var target *rule
