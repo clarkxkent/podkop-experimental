@@ -95,14 +95,20 @@ get() {
     api=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].url")
     url=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].browser_download_url")
     sum=$(jsonfilter -i "$D/release.json" -e "@.assets[@.name=\"$1\"].digest")
-    for _ in 1 2 3; do
-        if wget -q -O "$D/$1" --header='Accept: application/octet-stream' "$api" || wget -q -O "$D/$1" "$url"; then
+    # what wget says goes to a file, its last line into the message of a failure: a connection
+    # that breaks off (through a proxy, say) is tried again, and a download is taken only when
+    # its digest matches
+    for try in 1 2 3; do
+        if wget -O "$D/$1" --header='Accept: application/octet-stream' "$api" 2>"$D/wget.log" ||
+            wget -O "$D/$1" "$url" 2>>"$D/wget.log"; then
             [ -z "$sum" ] && return 0
             [ "$sum" = "sha256:$(sha256sum "$D/$1" | cut -d ' ' -f 1)" ] && return 0
+            echo "the file does not match its digest" >>"$D/wget.log"
         fi
+        [ "$try" -lt 3 ] && msg "The download of $1 failed, trying again..."
         sleep 3
     done
-    die "$1 could not be downloaded"
+    die "$1 could not be downloaded: $(grep . "$D/wget.log" | tail -n 1)"
 }
 
 # a dropped SSH session does not stop it between the removal and the install
