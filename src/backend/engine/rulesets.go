@@ -2,6 +2,7 @@ package engine
 
 import (
 	"bytes"
+	"encoding/binary"
 	"net/netip"
 	"sort"
 	"strconv"
@@ -12,6 +13,8 @@ import (
 	"github.com/sagernet/sing-box/common/srs"
 	C "github.com/sagernet/sing-box/constant"
 	"github.com/sagernet/sing-box/option"
+
+	"go4.org/netipx"
 )
 
 // The formats of a rule-set file: sing-box's binary and source formats, and a list
@@ -34,15 +37,17 @@ func CheckRuleSet(format string, content []byte) (int, string, error) {
 		}
 		return skipped.Count, skipped.First, err
 	}
-	_, err := readRuleSet(format, content)
+	_, err := readRuleSet(format, content, false)
 	return 0, "", err
 }
 
 // AddressRule is a rule of a rule set that names IPv4 destinations, as a firewall that
 // hands sing-box what its rules could match sees it. Inverted rules name none.
 type AddressRule struct {
-	// Prefixes are the IPv4 destinations the rule names.
-	Prefixes []netip.Prefix
+	// Ranges are the IPv4 destinations the rule names, packed as the sets of sing-box keep
+	// them (cidrset.Set.Ranges4): the first address in the high 32 bits, the last in the
+	// low ones. They may be the slice of the set they were read from: not to be changed.
+	Ranges []uint64
 	// Nested tells that the rule is a part of a logical rule.
 	Nested bool
 	// Narrow tells that the rule has, besides its addresses, exactly one protocol and
@@ -59,9 +64,10 @@ type PortRange struct {
 }
 
 // RuleSetAddresses reads the content of a rule-set file in its format and returns its
-// rules that name addresses, in their order.
+// rules that name addresses, in their order. The names of domains are not built: a rule
+// keeps the first of them, which tell that it has some.
 func RuleSetAddresses(format string, content []byte) ([]AddressRule, error) {
-	rules, err := readRuleSet(format, content)
+	rules, err := readRuleSet(format, content, true)
 	if err != nil {
 		return nil, err
 	}
@@ -70,15 +76,20 @@ func RuleSetAddresses(format string, content []byte) ([]AddressRule, error) {
 	return result, nil
 }
 
-func readRuleSet(format string, content []byte) ([]option.HeadlessRule, error) {
+// readRuleSet reads a rule-set file as sing-box reads it; addresses: without building the
+// names of its domains (the trie a list of the source format makes), for its addresses.
+// The addresses come as sets of ranges (cidrset), as sing-box keeps them.
+func readRuleSet(format string, content []byte, addresses bool) ([]option.HeadlessRule, error) {
 	var compat option.PlainRuleSetCompat
 	var err error
-	switch format {
-	case RuleSetFormatBinary:
-		compat, err = srs.Read(bytes.NewReader(content), false)
-	case RuleSetFormatText:
-		// the addresses only: the domains of the list are not built
+	switch {
+	case format == RuleSetFormatBinary:
+		compat, err = srs.ReadSets(bytes.NewReader(content))
+	case format == RuleSetFormatText:
+		// the domains are checked and counted, not built
 		compat, _, err = ruletext.ReadAddresses(content)
+	case addresses:
+		compat, err = domainset.ReadSourceAddresses(content)
 	default:
 		compat, err = domainset.ReadSource(content)
 	}
@@ -105,20 +116,20 @@ func collectAddresses(rules []option.HeadlessRule, nested bool, result *[]Addres
 		if fields.Invert {
 			continue
 		}
-		prefixes := addresses(fields)
-		if len(prefixes) == 0 {
+		ranges := addresses(fields)
+		if len(ranges) == 0 {
 			continue
 		}
-		entry := AddressRule{Prefixes: prefixes, Nested: nested}
+		entry := AddressRule{Ranges: ranges, Nested: nested}
 		entry.Network, entry.Ports, entry.Narrow = portsOnly(fields)
 		*result = append(*result, entry)
 	}
 }
 
-// addresses returns the IPv4 destinations of a rule: written as text in a source rule
-// set, as a set of ranges in a binary one.
-func addresses(fields *option.DefaultHeadlessRule) []netip.Prefix {
-	var prefixes []netip.Prefix
+// addresses returns the IPv4 destinations of a rule, packed (AddressRule.Ranges): the ranges
+// of its set as the set keeps them, when that is all it has; written as text, they are read.
+func addresses(fields *option.DefaultHeadlessRule) []uint64 {
+	var ranges []uint64
 	for _, text := range fields.IPCIDR {
 		prefix, err := netip.ParsePrefix(text)
 		if err != nil {
@@ -129,24 +140,28 @@ func addresses(fields *option.DefaultHeadlessRule) []netip.Prefix {
 			prefix = netip.PrefixFrom(address, address.BitLen())
 		}
 		if prefix.Addr().Is4() {
-			prefixes = append(prefixes, prefix.Masked())
+			ranges = append(ranges, packRange(netipx.RangeOfPrefix(prefix.Masked())))
 		}
 	}
 	if fields.IPSet != nil {
-		for _, prefix := range fields.IPSet.Prefixes() {
-			if prefix.Addr().Is4() {
-				prefixes = append(prefixes, prefix)
+		for _, item := range fields.IPSet.Ranges() {
+			if item.From().Is4() {
+				ranges = append(ranges, packRange(item))
 			}
 		}
 	}
 	if fields.IPRanges != nil {
-		for _, prefix := range fields.IPRanges.Prefixes() {
-			if prefix.Addr().Is4() {
-				prefixes = append(prefixes, prefix)
-			}
+		if len(ranges) == 0 {
+			return fields.IPRanges.Ranges4()
 		}
+		ranges = append(ranges, fields.IPRanges.Ranges4()...)
 	}
-	return prefixes
+	return ranges
+}
+
+func packRange(item netipx.IPRange) uint64 {
+	from, to := item.From().As4(), item.To().As4()
+	return uint64(binary.BigEndian.Uint32(from[:]))<<32 | uint64(binary.BigEndian.Uint32(to[:]))
 }
 
 // portsOnly tells whether the conditions of a rule besides its addresses are exactly one

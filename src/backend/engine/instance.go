@@ -166,7 +166,9 @@ func (i *Instance) Start() error {
 	// late: a test of the instance before may still end and write its result while that
 	// one closes
 	history.forgetChanged(i.dialers)
-	err := i.box.Start()
+	// a start that failed is closed here, within a bound: box.Start would close it itself,
+	// for as long as a component takes, and the caller would never learn it is stuck
+	err := i.box.StartWithoutClose()
 	if err != nil {
 		closeErr := i.Close(C.FatalStopTimeout)
 		if closeErr == ErrStuck {

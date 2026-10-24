@@ -51,11 +51,11 @@ func describeConfig(next *candidate) string {
 
 // describeFirewall tells what the sets of the firewall send to the proxy by address.
 func describeFirewall(plan *firewall.Plan) string {
-	text := "firewall: " + strconv.Itoa(len(plan.Subnets)) + " subnets of the lists go to the proxy by address"
+	text := "firewall: " + strconv.Itoa(len(plan.Subnets)) + " address ranges of the lists go to the proxy by address"
 	if len(plan.Groups) > 0 {
 		count := 0
 		for _, group := range plan.Groups {
-			count += len(group.Prefixes)
+			count += len(group.Ranges)
 		}
 		text += ", " + strconv.Itoa(count) + " more for some ports only (" + strconv.Itoa(len(plan.Groups)) + " groups of ports)"
 	}

@@ -10,14 +10,16 @@ import (
 // the next one: the previous plan keeps its ranges). Run with -cpuprofile
 // and -memprofile to see where it goes.
 func BenchmarkOneAddressMore(b *testing.B) {
-	var previous []netip.Prefix
+	var previous []Range
 	for index := 0; index < 100000; index++ {
-		previous = append(previous, netip.PrefixFrom(netip.AddrFrom4([4]byte{11 + byte(index/32768), byte(index / 128), byte(index%128) * 2, 0}), 24))
+		item, _ := RangeOf(netip.PrefixFrom(netip.AddrFrom4([4]byte{11 + byte(index/32768), byte(index / 128), byte(index%128) * 2, 0}), 24))
+		previous = append(previous, item)
 	}
 	b.ReportAllocs()
 	b.ResetTimer()
 	for range b.N {
-		next := append(append([]netip.Prefix{}, previous...), netip.MustParsePrefix("100.71.99.8/32"))
+		one, _ := RangeOf(netip.MustParsePrefix("100.71.99.8/32"))
+		next := append(append([]Range{}, previous...), one)
 		gone, came := rangesDiffer(merge(previous), merge(next))
 		if len(gone) != 0 || len(came) != 1 {
 			b.Fatal(len(gone), len(came))

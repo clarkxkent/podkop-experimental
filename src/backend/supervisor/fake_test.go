@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/engine"
+	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
 	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
+	E "github.com/sagernet/sing/common/exceptions"
 
 	"github.com/stretchr/testify/require"
 )
@@ -24,18 +26,19 @@ import (
 type fakeEngine struct {
 	// refuse is the error of Check for a configuration that has it in its text
 	refuse map[string]error
-	// broken are the texts of configurations whose build fails, silent those whose
-	// instance never answers, stuck those whose instance does not close
-	broken, silent, stuck []string
-	built                 []*fakeInstance
+	// broken are the texts of configurations whose build fails, failing those whose start
+	// fails, silent those whose instance never answers, stuck those whose instance does not
+	// close
+	broken, failing, silent, stuck []string
+	built                          []*fakeInstance
 	// checked counts the checks of whole configurations
 	checked int
 }
 
 type fakeInstance struct {
-	config          []byte
-	started, closed bool
-	silent, stuck   bool
+	config                 []byte
+	started, closed        bool
+	failing, silent, stuck bool
 }
 
 func has(config []byte, texts []string) bool {
@@ -61,7 +64,7 @@ func (e *fakeEngine) Build(config []byte, sink engine.LogSink, hooks ...engine.C
 	if has(config, e.broken) {
 		return nil, os.ErrInvalid
 	}
-	instance := &fakeInstance{config: config, silent: has(config, e.silent), stuck: has(config, e.stuck)}
+	instance := &fakeInstance{config: config, failing: has(config, e.failing), silent: has(config, e.silent), stuck: has(config, e.stuck)}
 	e.built = append(e.built, instance)
 	return instance, nil
 }
@@ -77,7 +80,20 @@ func (e *fakeEngine) Ready(ctx context.Context) error {
 func (e *fakeEngine) Notes() []string { return nil }
 
 func (i *fakeInstance) OnRuleSetUpdate(tags []string, updated func(tag string)) {}
-func (i *fakeInstance) Start() error                                            { i.started = true; return nil }
+
+// Start fails as engine.Instance.Start does: it closes the instance, and tells when that
+// does not end.
+func (i *fakeInstance) Start() error {
+	if !i.failing {
+		i.started = true
+		return nil
+	}
+	if i.stuck {
+		return E.Errors(os.ErrPermission, engine.ErrStuck)
+	}
+	i.closed = true
+	return os.ErrPermission
+}
 func (i *fakeInstance) Close(time.Duration) error {
 	if i.stuck {
 		return engine.ErrStuck
@@ -213,6 +229,31 @@ func TestFakeStuck(t *testing.T) {
 	require.ErrorIs(t, s.stuckError(), engine.ErrStuck)
 }
 
+// A start that fails and whose instance does not close then is stuck too: the router is
+// given back, and Run ends with engine.ErrStuck; at the boot and at an apply.
+func TestFakeStartStuck(t *testing.T) {
+	s, fake, system, settings := fakeFixture(t)
+	settings("one.lab.example", "60")
+	fake.failing = []string{`"rewrite_ttl": 60`}
+	fake.stuck = []string{`"rewrite_ttl": 60`}
+	require.False(t, s.Boot().OK)
+	require.False(t, s.Running())
+	require.ErrorIs(t, s.stuckError(), engine.ErrStuck)
+	require.Contains(t, system.take(), "no dns")
+
+	s, fake, system, settings = fakeFixture(t)
+	settings("one.lab.example", "60")
+	fake.failing = []string{`"rewrite_ttl": 61`}
+	fake.stuck = []string{`"rewrite_ttl": 61`}
+	require.True(t, s.Boot().OK)
+	system.take()
+	settings("one.lab.example", "61")
+	require.False(t, s.Apply().OK)
+	require.False(t, s.Running())
+	require.Equal(t, []string{"no dns", "no firewall", "no routing"}, system.take())
+	require.ErrorIs(t, s.stuckError(), engine.ErrStuck)
+}
+
 // An apply of the settings and the local lists the running configuration was checked
 // with does not build that configuration again; a local list that changed, or another
 // configuration, is checked. A list is read once an apply.
@@ -280,8 +321,8 @@ func TestFakeDeriveOnce(t *testing.T) {
 	withLocal("\toption user_subnet_list_type 'dynamic'\n\tlist user_subnets '100.71.99.8'\n")
 	require.True(t, s.Apply().OK)
 	last := system.plans[len(system.plans)-1]
-	require.Contains(t, last.Subnets, netip.MustParsePrefix("100.71.99.8/32"))
-	require.Contains(t, last.Subnets, netip.MustParsePrefix("11.0.2.0/24"))
+	require.Contains(t, firewall.RangeStrings(last.Subnets), "100.71.99.8/32")
+	require.Contains(t, firewall.RangeStrings(last.Subnets), "11.0.2.0/24")
 	found := false
 	for key, read := range s.read {
 		if key.sum == sum {

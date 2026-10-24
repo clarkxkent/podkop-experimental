@@ -89,14 +89,11 @@ func shellBackendTable(t *testing.T, plan *Plan) {
 			"insert rule "+table+" mangle ip saddr "+address+" ip daddr @localv4 return",
 		)
 	}
-	elements := func(set string, prefixes []netip.Prefix) {
-		if len(prefixes) == 0 {
+	elements := func(set string, ranges []Range) {
+		if len(ranges) == 0 {
 			return
 		}
-		texts := make([]string, len(prefixes))
-		for index, prefix := range prefixes {
-			texts[index] = prefix.String()
-		}
+		texts := RangeStrings(ranges)
 		lines = append(lines, "add element "+table+" "+set+" { "+strings.Join(texts, ", ")+" }")
 	}
 	for _, group := range plan.Groups {
@@ -108,7 +105,7 @@ func shellBackendTable(t *testing.T, plan *Plan) {
 			"add set "+table+" "+group.Set+" { type ipv4_addr; flags interval; auto-merge; }",
 			"add rule "+table+" mangle iifname @interfaces ip daddr @"+group.Set+" udp dport { "+strings.Join(ports, ", ")+" } meta mark set 0x00100000 counter",
 		)
-		elements(group.Set, group.Prefixes)
+		elements(group.Set, group.Ranges)
 	}
 	elements(SetSubnets, plan.Subnets)
 	for _, line := range lines {
@@ -135,17 +132,17 @@ func prefixes(texts ...string) []netip.Prefix {
 func TestTableAsTheShellBackendMakesIt(t *testing.T) {
 	needNft(t)
 	discord := Group{Set: "podkop_discord_subnets", Protocol: 17, Ports: []PortRange{{19000, 20000}, {50000, 65535}},
-		Prefixes: prefixes("104.16.0.0/12", "138.128.136.0/21", "162.158.0.0/15", "66.22.192.0/18")}
+		Ranges: RangesOf(prefixes("104.16.0.0/12", "138.128.136.0/21", "162.158.0.0/15", "66.22.192.0/18"))}
 	for name, plan := range map[string]*Plan{
 		"one interface":    {Interfaces: []string{"br-lan"}},
 		"nothing":          {},
 		"interfaces, NTP":  {Interfaces: []string{"br-lan", "eth1", "wlan0.20"}, ExcludeNTP: true},
-		"subnets":          {Interfaces: []string{"br-lan"}, Subnets: prefixes("203.0.112.0/24", "198.51.99.7/32", "8.8.8.0/24", "8.8.9.0/24", "8.8.8.128/25", "9.0.0.0/8")},
+		"subnets":          {Interfaces: []string{"br-lan"}, Subnets: RangesOf(prefixes("203.0.112.0/24", "198.51.99.7/32", "8.8.8.0/24", "8.8.9.0/24", "8.8.8.128/25", "9.0.0.0/8"))},
 		"devices":          {Interfaces: []string{"br-lan"}, Sources: prefixes("192.168.1.60/32", "192.168.1.64/30", "192.168.1.70/32")},
 		"devices, NTP":     {Interfaces: []string{"br-lan"}, ExcludeNTP: true, Sources: prefixes("192.168.1.60/32")},
 		"a group of ports": {Interfaces: []string{"br-lan"}, Groups: []Group{discord}},
 		"everything at once": {Interfaces: []string{"br-lan", "eth1"}, ExcludeNTP: true, Sources: prefixes("192.168.1.60/32", "10.7.0.0/24"),
-			Subnets: prefixes("149.154.160.0/20", "91.108.4.0/22", "91.108.8.0/22", "91.108.12.0/22"), Groups: []Group{discord}},
+			Subnets: RangesOf(prefixes("149.154.160.0/20", "91.108.4.0/22", "91.108.8.0/22", "91.108.12.0/22")), Groups: []Group{discord}},
 	} {
 		_ = Remove()
 		shellBackendTable(t, plan)
@@ -208,15 +205,15 @@ func TestClashAPIGuard(t *testing.T) {
 func TestUpdate(t *testing.T) {
 	needNft(t)
 	_ = Remove()
-	first := &Plan{Interfaces: []string{"br-lan"}, Subnets: prefixes("8.8.8.0/24"),
-		Groups: []Group{{Set: "voice", Protocol: 17, Ports: []PortRange{{50000, 65535}}, Prefixes: prefixes("66.22.192.0/18")}}}
+	first := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(prefixes("8.8.8.0/24")),
+		Groups: []Group{{Set: "voice", Protocol: 17, Ports: []PortRange{{50000, 65535}}, Ranges: RangesOf(prefixes("66.22.192.0/18"))}}}
 	if err := Update(nil, first); err != nil {
 		t.Fatal(err)
 	}
 	rules := func() string { return nft(t, "-a", "list", "chain", "inet", tableName, "mangle") }
 	before := rules()
-	second := &Plan{Interfaces: []string{"br-lan"}, Subnets: prefixes("8.8.8.0/24", "1.1.1.0/24"),
-		Groups: []Group{{Set: "voice", Protocol: 17, Ports: []PortRange{{50000, 65535}}, Prefixes: prefixes("66.22.192.0/18", "5.5.0.0/16")}}}
+	second := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(prefixes("8.8.8.0/24", "1.1.1.0/24")),
+		Groups: []Group{{Set: "voice", Protocol: 17, Ports: []PortRange{{50000, 65535}}, Ranges: RangesOf(prefixes("66.22.192.0/18", "5.5.0.0/16"))}}}
 	if err := Update(first, second); err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +339,7 @@ func TestFillTheSubnetSet(t *testing.T) {
 		runtime.GC()
 		runtime.ReadMemStats(&before)
 		started := time.Now()
-		ranges, err := ReplaceSet(SetSubnets, list, 0)
+		ranges, err := ReplaceSet(SetSubnets, RangesOf(list), 0)
 		whole := time.Since(started)
 		runtime.ReadMemStats(&after)
 		if err != nil {
@@ -353,7 +350,7 @@ func TestFillTheSubnetSet(t *testing.T) {
 
 		// over netlink, a thousand ranges a transaction
 		started = time.Now()
-		_, err = ReplaceSet(SetSubnets, list, 1000)
+		_, err = ReplaceSet(SetSubnets, RangesOf(list), 1000)
 		lots := time.Since(started)
 		if err != nil {
 			t.Fatalf("%d prefixes over netlink in lots: %v", count, err)
@@ -431,12 +428,10 @@ func rangesOfSet(t *testing.T, name string) []netipx.IPRange {
 	return result
 }
 
-func wantRanges(t *testing.T, prefixes []netip.Prefix) []netipx.IPRange {
+func wantRanges(t *testing.T, ranges []Range) []netipx.IPRange {
 	var builder netipx.IPSetBuilder
-	for _, prefix := range prefixes {
-		if prefix.Addr().Is4() {
-			builder.AddPrefix(prefix)
-		}
+	for _, item := range ranges {
+		builder.AddRange(netipx.IPRangeFrom(address4(uint32(item>>32)), address4(uint32(item))))
 	}
 	set, err := builder.IPSet()
 	if err != nil {
@@ -470,7 +465,7 @@ func sameRanges(t *testing.T, want []netipx.IPRange, got []netipx.IPRange, messa
 func TestMergeAsASetBuilder(t *testing.T) {
 	for _, count := range []int{0, 1, 2, 10, 1000, 20000} {
 		list := subnets(count)
-		sameRanges(t, wantRanges(t, list), rangesOfSpans(merge(list)), "%d prefixes", count)
+		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfSpans(merge(RangesOf(list))), "%d prefixes", count)
 	}
 	for _, list := range [][]netip.Prefix{
 		prefixes("0.0.0.0/0"),
@@ -479,13 +474,13 @@ func TestMergeAsASetBuilder(t *testing.T) {
 		prefixes("1.1.1.0/24", "1.1.2.0/24", "1.1.4.0/24", "1.1.1.128/25", "2001:db8::/32", "1.1.3.0/24"),
 		prefixes("::ffff:1.2.3.4/128", "9.9.9.9/32", "9.9.9.9/32"),
 	} {
-		sameRanges(t, wantRanges(t, list), rangesOfSpans(merge(list)), "%v", list)
+		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfSpans(merge(RangesOf(list))), "%v", list)
 	}
 	// what differs of two lists, by one walk, is what differs of the two sets
-	before, after := merge(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24")), merge(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24"))
+	before, after := merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24"))), merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24")))
 	gone, came := rangesDiffer(before, after)
-	require.Equal(t, merge(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24"))[0:3], gone)
-	require.Equal(t, merge(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24")), came)
+	require.Equal(t, merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24")))[0:3], gone)
+	require.Equal(t, merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24"))), came)
 }
 
 // A change of the lists reaches the set by what differs, and the set holds what a set
@@ -497,7 +492,7 @@ func TestUpdateByDifference(t *testing.T) {
 	_ = Remove()
 	defer Remove()
 	base := subnets(3000)
-	first := &Plan{Interfaces: []string{"br-lan"}, Subnets: append(prefixes("1.1.1.0/24", "2.2.2.0/24"), base...)}
+	first := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(append(prefixes("1.1.1.0/24", "2.2.2.0/24"), base...))}
 	if err := Update(nil, first); err != nil {
 		t.Fatal(err)
 	}
@@ -505,13 +500,13 @@ func TestUpdateByDifference(t *testing.T) {
 	// 1.1.1.0/24 grows into its neighbour: the start of the range stays, its end moves;
 	// 2.2.2.0/24 goes and 2.2.3.0/24 comes, which begins where the one that went ended;
 	// a part of the rest goes, and new ones come
-	second := &Plan{Interfaces: []string{"br-lan"}, Subnets: append(prefixes("1.1.1.0/24", "1.1.2.0/24", "2.2.3.0/24"), append(base[500:], subnets(3500)[3000:]...)...)}
+	second := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(append(prefixes("1.1.1.0/24", "1.1.2.0/24", "2.2.3.0/24"), append(base[500:], subnets(3500)[3000:]...)...))}
 	if err := Update(first, second); err != nil {
 		t.Fatal(err)
 	}
 	require.Equal(t, wantRanges(t, second.Subnets), rangesOfSet(t, SetSubnets))
 	// the kernel has another set than the previous plan says: filled anew
-	if _, err := ReplaceSet(SetSubnets, prefixes("9.9.9.0/24"), 0); err != nil {
+	if _, err := ReplaceSet(SetSubnets, RangesOf(prefixes("9.9.9.0/24")), 0); err != nil {
 		t.Fatal(err)
 	}
 	if err := Update(first, second); err != nil {
@@ -530,14 +525,14 @@ func TestBigSetInLots(t *testing.T) {
 		// /24 networks with a gap between each two: they do not merge
 		big = append(big, netip.PrefixFrom(netip.AddrFrom4([4]byte{11 + byte(index/32768), byte(index / 128), byte(index%128) * 2, 0}), 24))
 	}
-	plan := &Plan{Interfaces: []string{"br-lan"}, Subnets: big}
+	plan := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(big)}
 	if err := Apply(plan); err != nil {
 		t.Fatal(err)
 	}
 	require.Len(t, rangesOfSet(t, SetSubnets), fillLot*2+500)
-	require.Equal(t, wantRanges(t, big), rangesOfSet(t, SetSubnets))
+	require.Equal(t, wantRanges(t, RangesOf(big)), rangesOfSet(t, SetSubnets))
 	// one item more is one element more, not a set filled anew
-	next := &Plan{Interfaces: []string{"br-lan"}, Subnets: append(prefixes("200.0.0.0/24"), big...)}
+	next := &Plan{Interfaces: []string{"br-lan"}, Subnets: RangesOf(append(prefixes("200.0.0.0/24"), big...))}
 	if err := Update(plan, next); err != nil {
 		t.Fatal(err)
 	}

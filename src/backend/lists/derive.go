@@ -5,7 +5,6 @@ package lists
 
 import (
 	"fmt"
-	"net/netip"
 	"sort"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/engine"
@@ -26,7 +25,7 @@ type Source struct {
 // Destinations is what the firewall has to send to the proxy by address.
 type Destinations struct {
 	// Subnets go there whatever the port is.
-	Subnets []netip.Prefix
+	Subnets []firewall.Range
 	// Groups go there for some ports of one protocol.
 	Groups []firewall.Group
 }
@@ -53,7 +52,7 @@ func Derive(sources []Source) (*Destinations, []error) {
 // it read of a rule set that did not change reads only the ones that did.
 func DeriveWith(sources []Source, read func(Source) ([]engine.AddressRule, error)) (*Destinations, []error) {
 	var problems []error
-	var subnets []netip.Prefix
+	var subnets []firewall.Range
 	groups := make(map[string]*firewall.Group)
 	for _, source := range sources {
 		rules, err := read(source)
@@ -65,7 +64,7 @@ func DeriveWith(sources []Source, read func(Source) ([]engine.AddressRule, error
 			// the parts of a logical rule are not told apart: all their addresses are
 			// for the common set
 			if rule.Nested || !rule.Narrow {
-				subnets = append(subnets, rule.Prefixes...)
+				subnets = append(subnets, rule.Ranges...)
 				continue
 			}
 			protocol := byte(unix.IPPROTO_TCP)
@@ -82,7 +81,7 @@ func DeriveWith(sources []Source, read func(Source) ([]engine.AddressRule, error
 				group = &firewall.Group{Protocol: protocol, Ports: ports}
 				groups[key] = group
 			}
-			group.Prefixes = append(group.Prefixes, rule.Prefixes...)
+			group.Ranges = append(group.Ranges, rule.Ranges...)
 		}
 	}
 	result := &Destinations{Subnets: subnets}

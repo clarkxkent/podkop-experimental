@@ -68,7 +68,7 @@ func init() {
 		Run: func(cmd *cobra.Command, args []string) {
 			started := time.Now()
 			previous, err := nftRead(commandNftFlagFrom)
-			var next []netip.Prefix
+			var next []firewall.Range
 			if err == nil {
 				next, err = nftRead(commandNftFlagFile)
 			}
@@ -95,23 +95,29 @@ func init() {
 
 // nftRead reads addresses and prefixes, one a line; what is neither is left out, as
 // the shell backend leaves it out.
-func nftRead(path string) ([]netip.Prefix, error) {
+func nftRead(path string) ([]firewall.Range, error) {
 	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close()
-	var prefixes []netip.Prefix
+	var ranges []firewall.Range
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if prefix, err := netip.ParsePrefix(line); err == nil {
-			prefixes = append(prefixes, prefix.Masked())
-		} else if address, err := netip.ParseAddr(line); err == nil {
-			prefixes = append(prefixes, netip.PrefixFrom(address, address.BitLen()))
+		prefix, err := netip.ParsePrefix(line)
+		if err != nil {
+			address, addressErr := netip.ParseAddr(line)
+			if addressErr != nil {
+				continue
+			}
+			prefix = netip.PrefixFrom(address, address.BitLen())
+		}
+		if item, ok := firewall.RangeOf(prefix); ok {
+			ranges = append(ranges, item)
 		}
 	}
-	return prefixes, scanner.Err()
+	return ranges, scanner.Err()
 }
 
 func nftDone(err error, what string, started time.Time) {

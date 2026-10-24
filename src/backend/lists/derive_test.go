@@ -13,6 +13,7 @@ import (
 	"github.com/sagernet/sing/common/json"
 
 	"github.com/stretchr/testify/require"
+	"go4.org/netipx"
 )
 
 // the community list of Discord as its file is (a part of the addresses)
@@ -24,10 +25,18 @@ const discord = `{"version": 3, "rules": [
 
 const telegram = `{"version": 3, "rules": [{"domain_suffix": ["telegram.org", "t.me"], "ip_cidr": ["149.154.160.0/20", "91.108.4.0/22", "2001:67c:4e8::/48"]}]}`
 
-func texts(prefixes []netip.Prefix) []string {
-	result := make([]string, len(prefixes))
-	for index, prefix := range prefixes {
-		result[index] = prefix.String()
+func addr4(value uint32) netip.Addr {
+	return netip.AddrFrom4([4]byte{byte(value >> 24), byte(value >> 16), byte(value >> 8), byte(value)})
+}
+
+// texts writes ranges as the prefixes they are made of, sorted.
+func texts(ranges []firewall.Range) []string {
+	var result []string
+	for _, item := range ranges {
+		from, to := addr4(uint32(item>>32)), addr4(uint32(item))
+		for _, prefix := range netipx.IPRangeFrom(from, to).Prefixes() {
+			result = append(result, prefix.String())
+		}
 	}
 	sort.Strings(result)
 	return result
@@ -76,10 +85,10 @@ func TestDerive(t *testing.T) {
 			byPorts[group.Set] = group
 		}
 		// the same ports in two rule sets are one group
-		require.Equal(t, firewall.Group{Set: "podkop_subnets_udp_1", Protocol: 17, Ports: []firewall.PortRange{{From: 19000, To: 20000}}, Prefixes: byPorts["podkop_subnets_udp_1"].Prefixes}, byPorts["podkop_subnets_udp_1"])
-		require.Equal(t, []string{"104.16.0.0/12"}, texts(byPorts["podkop_subnets_udp_1"].Prefixes))
+		require.Equal(t, firewall.Group{Set: "podkop_subnets_udp_1", Protocol: 17, Ports: []firewall.PortRange{{From: 19000, To: 20000}}, Ranges: byPorts["podkop_subnets_udp_1"].Ranges}, byPorts["podkop_subnets_udp_1"])
+		require.Equal(t, []string{"104.16.0.0/12"}, texts(byPorts["podkop_subnets_udp_1"].Ranges))
 		require.Equal(t, []firewall.PortRange{{From: 50000, To: 65535}}, byPorts["podkop_subnets_udp_2"].Ports)
-		require.Equal(t, []string{"192.0.2.0/24", "34.0.0.0/14", "5.200.14.128/25", "66.22.192.0/18"}, texts(byPorts["podkop_subnets_udp_2"].Prefixes))
+		require.Equal(t, []string{"192.0.2.0/24", "34.0.0.0/14", "5.200.14.128/25", "66.22.192.0/18"}, texts(byPorts["podkop_subnets_udp_2"].Ranges))
 		require.Equal(t, byte(6), byPorts["podkop_subnets_tcp_3"].Protocol)
 		// 443 is within 0-1023: one range, as the interval set of nftables takes them
 		require.Equal(t, []firewall.PortRange{{From: 0, To: 1023}, {From: 8443, To: 8443}, {From: 9000, To: 65535}}, byPorts["podkop_subnets_tcp_3"].Ports)

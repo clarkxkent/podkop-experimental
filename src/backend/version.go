@@ -17,8 +17,8 @@ var EngineRelease = ""
 
 // Engine tells what the sing-box inside is, for a person: its version, the release of
 // podkop-engine and the build (slim or full), and the commit of podkop-engine, from the
-// version sing-box reports ("1.14.3-pdk-6678b03c0edd"):
-// "sing-box 1.14.3, podkop-engine r16, slim (6678b03c0edd)".
+// version sing-box reports ("1.14.3-pdk-ae09bd696dff"):
+// "sing-box 1.14.3, podkop-engine r16, slim (ae09bd696dff)".
 func Engine(singBoxVersion string) string {
 	base, commit, _ := strings.Cut(singBoxVersion, "-pdk-")
 	text := "sing-box " + base

@@ -82,7 +82,7 @@ type Plan struct {
 	// destination is, the local networks excepted.
 	Sources []netip.Prefix
 	// Subnets are the destinations that go to the proxy by address.
-	Subnets []netip.Prefix
+	Subnets []Range
 	// Groups are destinations that go to the proxy only for some ports.
 	Groups []Group
 	// ClashAPIInterfaces are the devices that reach the Clash API, which listens on every
@@ -91,11 +91,11 @@ type Plan struct {
 	// API listens on this host only.
 	ClashAPIInterfaces []string
 
-	// the ranges of Subnets, merged once (rangesOf)
+	// the ranges of Subnets, merged once
 	subnets merged
 }
 
-// merged keeps the ranges a list of prefixes merged into: a plan that is the previous one of
+// merged keeps the ranges a list of ranges merged into: a plan that is the previous one of
 // an update has them from when it was the next one.
 type merged struct {
 	done   bool
@@ -118,9 +118,9 @@ func spansOf(ranges []netipx.IPRange) []span {
 	return result
 }
 
-func (m *merged) of(prefixes []netip.Prefix) []span {
+func (m *merged) of(ranges []Range) []span {
 	if !m.done {
-		m.ranges, m.done = merge(prefixes), true
+		m.ranges, m.done = merge(ranges), true
 	}
 	return m.ranges
 }
@@ -132,10 +132,10 @@ type Group struct {
 	// Protocol is unix.IPPROTO_UDP or unix.IPPROTO_TCP.
 	Protocol byte
 	// Ports are the destination ports the group is about.
-	Ports    []PortRange
-	Prefixes []netip.Prefix
+	Ports  []PortRange
+	Ranges []Range
 
-	prefixes merged
+	spans merged
 }
 
 // PortRange is a range of ports, both ends included.
@@ -168,7 +168,7 @@ func Update(previous *Plan, next *Plan) error {
 	}
 	for index := range next.Groups {
 		before, after := &previous.Groups[index], &next.Groups[index]
-		err = updateSet(after.Set, before.prefixes.of(before.Prefixes), after.prefixes.of(after.Prefixes))
+		err = updateSet(after.Set, before.spans.of(before.Ranges), after.spans.of(after.Ranges))
 		if err != nil {
 			return err
 		}
@@ -258,21 +258,15 @@ func rangesDifferUpTo(before []span, after []span, limit int) (gone []span, came
 	return gone, came, true
 }
 
-// merge makes ranges of the IPv4 prefixes, in order: overlapping and adjacent ones become
-// one range. The kernel takes ranges that do not overlap, and the merging the nft program
-// offers ("auto-merge") is done by that program, not by the kernel. The prefixes become
-// pairs of numbers sorted in place: a list of a hundred thousand subnets is merged in a
-// few megabytes, where a set builder allocated a hundred.
-func merge(prefixes []netip.Prefix) []span {
-	spans := make([]span, 0, len(prefixes))
-	for _, prefix := range prefixes {
-		if !prefix.Addr().Is4() {
-			continue
-		}
-		prefix = prefix.Masked()
-		address := prefix.Addr().As4()
-		from := binary.BigEndian.Uint32(address[:])
-		spans = append(spans, span{from, from | uint32(uint64(1)<<(32-prefix.Bits())-1)})
+// merge makes the ranges one list, in order: overlapping and adjacent ones become one range.
+// The kernel takes ranges that do not overlap, and the merging the nft program offers
+// ("auto-merge") is done by that program, not by the kernel. The ranges become pairs of
+// numbers sorted in place: a list of a hundred thousand subnets is merged in a few
+// megabytes, where a set builder allocated a hundred.
+func merge(ranges []Range) []span {
+	spans := make([]span, len(ranges))
+	for index, item := range ranges {
+		spans[index] = span{uint32(item >> 32), uint32(item)}
 	}
 	slices.SortFunc(spans, func(left span, right span) int { return cmp.Compare(left[0], right[0]) })
 	// merged in place: what is written is behind what is read
@@ -433,7 +427,7 @@ func Apply(plan *Plan) error {
 		group := &plan.Groups[index]
 		nextID++
 		groupID := nextID
-		err = addSet(group.Set, groupID, group.prefixes.of(group.Prefixes))
+		err = addSet(group.Set, groupID, group.spans.of(group.Ranges))
 		if err != nil {
 			return err
 		}
@@ -503,15 +497,15 @@ func Remove() error {
 	return conn.Flush()
 }
 
-// ReplaceSet makes a set of the table hold exactly these prefixes.
+// ReplaceSet makes a set of the table hold exactly these ranges.
 //
 // With lot zero the set is emptied and filled in one transaction: a packet sees the old
 // set or the new one. A positive lot sends that many ranges a transaction, which bounds
 // what the kernel holds at once at the price of a set that is half filled for a moment.
 // It returns the number of ranges the set holds.
-func ReplaceSet(name string, prefixes []netip.Prefix, lot int) (int, error) {
-	ranges := merge(prefixes)
-	return len(ranges), replaceRanges(name, ranges, lot)
+func ReplaceSet(name string, ranges []Range, lot int) (int, error) {
+	spans := merge(ranges)
+	return len(spans), replaceRanges(name, spans, lot)
 }
 
 func replaceRanges(name string, ranges []span, lot int) error {

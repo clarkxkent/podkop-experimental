@@ -493,7 +493,7 @@ func TestFirewallFollowsTheRuleSets(t *testing.T) {
 	require.Equal(t, []string{"br-lan", "eth1"}, first.Interfaces)
 	require.True(t, first.ExcludeNTP)
 	require.Equal(t, "[192.168.1.60/32]", fmt.Sprint(first.Sources))
-	require.Equal(t, "[198.51.100.8/30]", fmt.Sprint(first.Subnets))
+	require.Equal(t, "[198.51.100.8/30]", fmt.Sprint(firewall.RangeStrings(first.Subnets)))
 
 	// the list changes: the settings are applied, and sing-box tells of the file it read again
 	f.settings("\tlist source_network_interfaces 'br-lan'\n\tlist source_network_interfaces 'eth1'\n\toption exclude_ntp '1'\n",
@@ -501,7 +501,7 @@ func TestFirewallFollowsTheRuleSets(t *testing.T) {
 	instance := s.current.instance
 	s.Apply()
 	require.Same(t, instance, s.current.instance)
-	require.Equal(t, "[203.0.113.0/24]", fmt.Sprint(f.system.plans[len(f.system.plans)-1].Subnets))
+	require.Equal(t, "[203.0.113.0/24]", fmt.Sprint(firewall.RangeStrings(f.system.plans[len(f.system.plans)-1].Subnets)))
 	select {
 	case <-s.derive:
 	case <-time.After(10 * time.Second):
@@ -510,7 +510,7 @@ func TestFirewallFollowsTheRuleSets(t *testing.T) {
 	before := len(f.system.plans)
 	s.refreshFirewall()
 	require.Len(t, f.system.plans, before+1)
-	require.Equal(t, "[203.0.113.0/24]", fmt.Sprint(f.system.plans[len(f.system.plans)-1].Subnets))
+	require.Equal(t, "[203.0.113.0/24]", fmt.Sprint(firewall.RangeStrings(f.system.plans[len(f.system.plans)-1].Subnets)))
 }
 
 // An update asked for from outside downloads again every list: the rule set files and the

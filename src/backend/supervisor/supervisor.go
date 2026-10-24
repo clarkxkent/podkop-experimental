@@ -15,6 +15,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -1085,6 +1086,13 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	if err != nil {
 		if taken := takenBy(err); taken != "" {
 			s.log("error", taken)
+		}
+		if errors.Is(err, engine.ErrStuck) {
+			// what it holds is let go only by the end of the process, as in close
+			s.log("error", "sing-box does not close after its start failed: giving the router back; the process has to end")
+			s.current = nil
+			s.release()
+			s.stuck = true
 		}
 		return nil, E.Cause(err, "start sing-box")
 	}
