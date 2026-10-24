@@ -21,8 +21,9 @@ function detourChain(section, from) {
   let next = from;
   while (next && !chain.includes(next)) {
     chain.push(next);
+    // a VPN section ends the way: it connects through nothing (no loop at it)
     if (currentValue(section, next, "connection_type") !== "proxy") {
-      break;
+      return { chain, loopsAt: null };
     }
     next = currentValue(section, next, "detour");
   }
