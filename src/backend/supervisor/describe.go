@@ -33,7 +33,7 @@ func describeConfig(next *candidate) string {
 			what = "interface " + section.Interface
 		}
 		if section.ConnectionType == "proxy" && section.Detour != "" {
-			what += " through " + section.Detour
+			what += " via " + section.Detour
 		}
 		sections = append(sections, section.Name+" ("+what+")")
 	}

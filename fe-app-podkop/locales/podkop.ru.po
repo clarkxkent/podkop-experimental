@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-24 12:38+0000\n"
-"PO-Revision-Date: 2026-10-24 12:38+0000\n"
+"POT-Creation-Date: 2026-10-24 13:17+0000\n"
+"PO-Revision-Date: 2026-10-24 13:17+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -680,9 +680,6 @@ msgstr "пользователь должен быть UUID и паролем"
 msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
 msgstr "Веб-панель sing-box, открывается с устройств, выбранных ниже; без неё API панели доступен только с самого роутера"
 
-msgid "through %s"
-msgstr "через %s"
-
 msgid "Time in seconds for DNS record caching (default: 60)"
 msgstr "Время в секундах для кэширования DNS записей (по умолчанию: 60)"
 
@@ -763,6 +760,9 @@ msgstr "Валидно"
 
 msgid "Validation errors:"
 msgstr "Ошибки валидации:"
+
+msgid "via %s"
+msgstr "через %s"
 
 msgid "View logs"
 msgstr "Посмотреть логи"

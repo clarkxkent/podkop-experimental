@@ -95,7 +95,7 @@ export function renderDefaultState({
           section.displayName,
           section.detour
             ? E('span', { style: 'font-weight: normal; opacity: 0.7' }, [
-                ` ${_('through %s').format(section.detour)}`,
+                ` (${_('via %s').format(section.detour)})`,
               ])
             : '',
         ],

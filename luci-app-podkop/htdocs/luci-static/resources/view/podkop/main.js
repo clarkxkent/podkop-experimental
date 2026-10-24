@@ -1569,7 +1569,7 @@ function renderDefaultState({
         [
           section.displayName,
           section.detour ? E("span", { style: "font-weight: normal; opacity: 0.7" }, [
-            ` ${_("through %s").format(section.detour)}`
+            ` (${_("via %s").format(section.detour)})`
           ]) : ""
         ]
       ),
@@ -3676,7 +3676,7 @@ async function runSectionsCheck() {
       const { latency, success } = await getLatency();
       return {
         state: success ? "success" : "error",
-        key: section.displayName,
+        key: section.detour ? `${section.displayName} (${_("via %s").format(section.detour)})` : section.displayName,
         value: latency
       };
     })

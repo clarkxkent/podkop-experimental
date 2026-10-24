@@ -112,9 +112,12 @@ export async function runSectionsCheck() {
 
       const { latency, success } = await getLatency();
 
+      // a section that connects through another one says so: its test goes through it
       return {
         state: success ? 'success' : 'error',
-        key: section.displayName,
+        key: section.detour
+          ? `${section.displayName} (${_('via %s').format(section.detour)})`
+          : section.displayName,
         value: latency,
       };
     }),
