@@ -28,7 +28,9 @@
 #    backend gives the router back, says "failed" in its state, and tries again at the next
 #    change of the network (hotplug.d/iface/50-podkop). A cause that no change of the
 #    network ends (a program that held a port and has gone) would leave the proxy off for
-#    good: RETRY seconds after the failure the guard asks the backend to try again.
+#    good: from RETRY seconds after the failure the guard asks the backend that failed to
+#    try again, every RETRY seconds. The backend tries when a try is due: after the first
+#    few, it waits longer after each failure, up to an hour.
 # Off: uci set podkop.settings.guard=0 (both parts) or podkop.settings.liveness=0 (the probe
 # only); uci commit podkop; service podkop-guard restart
 
@@ -192,8 +194,11 @@ if ! off "$(uci -q get podkop.settings.liveness)"; then
 	) &
 fi
 
-# a start that failed, tried again RETRY seconds after (the state says when it failed last)
+# a start that failed: the backend that failed asked to try again every RETRY seconds from
+# RETRY seconds after the failure (the state says when it failed last); told once a failure
 (
+	asked=0
+	told=""
 	while kill -0 "$main" 2>/dev/null; do
 		waited=0
 		while [ "$waited" -lt 30 ] && kill -0 "$main" 2>/dev/null; do
@@ -201,10 +206,17 @@ fi
 			waited=$((waited + 5))
 		done
 		fstate="" fpid="" fsince=""
-		read -r fstate fpid fsince < "$STATE" 2>/dev/null
+		{ read -r fstate fpid fsince < "$STATE"; } 2>/dev/null
 		[ "$fstate" = failed ] || continue
-		[ $(($(date +%s) - ${fsince:-0})) -ge "$RETRY" ] || continue
-		log "the backend (pid $fpid) has given the router back since its start failed $(($(date +%s) - fsince)) s ago: it tries again"
+		now=$(date +%s)
+		[ $((now - ${fsince:-0})) -ge "$RETRY" ] && [ $((now - asked)) -ge "$RETRY" ] || continue
+		# not a backend that has gone (procd gave up on it) and left its state behind
+		pid=$(backend_pid) && [ -n "$pid" ] && [ "$pid" = "$fpid" ] || continue
+		asked=$now
+		if [ "$told" != "$fsince" ]; then
+			told=$fsince
+			log "the backend (pid $fpid) has given the router back since its start failed $((now - fsince)) s ago: it is asked to try again"
+		fi
 		/usr/bin/podkop restore_routing > /dev/null 2>&1
 	done
 ) &

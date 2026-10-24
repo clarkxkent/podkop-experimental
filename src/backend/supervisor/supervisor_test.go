@@ -56,6 +56,8 @@ type recorder struct {
 	noLAN bool
 	// listening are the sockets that listen; nil: not known
 	listening []sockets.Listener
+	// routingError is what setting up the routing fails with
+	routingError error
 }
 
 func (r *recorder) Devices(names []string) map[string]string { return r.devices }
@@ -79,7 +81,7 @@ func (r *recorder) LANAddress() string {
 	}
 	return cmp.Or(r.lan, "127.0.0.1")
 }
-func (r *recorder) ApplyRouting() error   { r.calls = append(r.calls, "routing"); return nil }
+func (r *recorder) ApplyRouting() error   { r.calls = append(r.calls, "routing"); return r.routingError }
 func (r *recorder) RemoveRouting() error  { r.calls = append(r.calls, "no routing"); return nil }
 func (r *recorder) RemoveFirewall() error { r.calls = append(r.calls, "no firewall"); return nil }
 func (r *recorder) TakeOverDNS() (bool, error) {
@@ -428,6 +430,12 @@ func TestDevicesMoved(t *testing.T) {
 	require.Contains(t, f.system.take(), "firewall update")
 	require.True(t, f.logged("the network changed under the settings (lan: br-lan): they are applied again"), "%v", f.lines())
 	// the same devices at the next ifup: nothing is applied
+	require.Equal(t, "nothing was missing", s.restoreRouting())
+	// netifd that does not answer: an apply keeps the devices the names stood for, and no
+	// name moves
+	f.system.devices = nil
+	require.True(t, s.Apply().OK, "%v", f.lines())
+	require.Equal(t, []string{"br-lan"}, f.system.plans[len(f.system.plans)-1].Interfaces)
 	require.Equal(t, "nothing was missing", s.restoreRouting())
 }
 

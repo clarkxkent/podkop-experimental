@@ -27,6 +27,8 @@ const PODKOP = '/usr/bin/podkop';
 // its object "podkop" on ubus answers them without a program started for a call, in the form
 // of file.exec. When the backend does not run (no such object), or does not answer that
 // command itself (a status: the actions on the service, the global check), the program runs.
+// A call that got no answer (LuCI gave up waiting) is not run again by the program: the
+// backend may still be running it.
 async function askBackend(
   args: string[],
 ): Promise<ExecuteShellCommandResponse | undefined> {
@@ -39,8 +41,10 @@ async function askBackend(
   try {
     const reply = await backendRun(args[0], args.slice(1));
     return typeof reply === 'object' && reply !== null ? reply : undefined;
-  } catch {
-    return undefined;
+  } catch (err) {
+    // the errors of rpc.js for an answer that came: "RPC call to podkop/run failed with ..."
+    if (/^RPC call to /.test((err as Error)?.message ?? '')) return undefined;
+    throw err;
   }
 }
 

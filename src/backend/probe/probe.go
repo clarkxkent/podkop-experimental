@@ -167,44 +167,50 @@ func (w *Watcher) Wait(ctx context.Context, label string) (Arrival, bool) {
 // take again.
 var deadEndRetry = 10 * time.Second
 
+// deadEndListen is where ServeDeadEnd listens; a test takes a port of its own.
+var deadEndListen = net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort))
+
 // ServeDeadEnd accepts the connections the configuration sends to the dead end and closes
 // them, until the context ends. Without it sing-box would log a refused connection for
 // every check. The address may not be there when the backend starts (the loopback is down
-// while the network restarts): it is tried again every deadEndRetry until it is taken, and
-// say is told the first failure and the end of it.
+// while the network restarts), and the listener may break (no file left to accept with):
+// it is listened on again every deadEndRetry until that works, and say is told the first
+// failure and the end of it.
 func ServeDeadEnd(ctx context.Context, say func(level string, message string)) {
-	address := net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort))
 	failed := false
 	for ctx.Err() == nil {
-		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", address)
-		if err != nil {
-			if !failed {
-				failed = true
-				say("warn", "the connections of the FakeIP checks have no place to end, tried again every "+deadEndRetry.String()+": "+err.Error())
+		listener, err := (&net.ListenConfig{}).Listen(ctx, "tcp", deadEndListen)
+		if err == nil {
+			if failed {
+				failed = false
+				say("info", "the connections of the FakeIP checks end at "+deadEndListen+" again")
 			}
-			select {
-			case <-ctx.Done():
-			case <-time.After(deadEndRetry):
+			err = serveDeadEnd(ctx, listener)
+			if ctx.Err() != nil {
+				return
 			}
-			continue
 		}
-		if failed {
-			failed = false
-			say("info", "the connections of the FakeIP checks end at "+address+" again")
+		if !failed {
+			failed = true
+			say("warn", "the connections of the FakeIP checks have no place to end, tried again every "+deadEndRetry.String()+": "+err.Error())
 		}
-		serveDeadEnd(ctx, listener)
+		select {
+		case <-ctx.Done():
+		case <-time.After(deadEndRetry):
+		}
 	}
 }
 
-// serveDeadEnd closes what comes in until the context ends or the listener breaks.
-func serveDeadEnd(ctx context.Context, listener net.Listener) {
+// serveDeadEnd closes what comes in until the context ends or the listener breaks; it
+// tells what broke it.
+func serveDeadEnd(ctx context.Context, listener net.Listener) error {
 	stop := context.AfterFunc(ctx, func() { _ = listener.Close() })
 	defer stop()
 	defer listener.Close()
 	for {
 		connection, err := listener.Accept()
 		if err != nil {
-			return
+			return err
 		}
 		_ = connection.Close()
 	}

@@ -97,12 +97,13 @@ endef
 # the stop of podkop gives back the DNS of the LAN, the firewall table and the routing; a
 # stop of its own here would stop them twice ("Command failed: Not found").
 # The copy of the dashboard YACD that sing-box serves (src/backend/yacd) goes with the
-# package; an upgrade keeps it (opkg runs the old prerm with "upgrade", apk runs none).
+# package; an upgrade keeps it. opkg runs the old prerm at an upgrade too, with PKG_UPGRADE=1
+# ($1 is not "upgrade": default_prerm sources the script, $1 is its path); apk runs none.
 define Package/podkop-exp/prerm
 #!/bin/sh
 [ -n "$${IPKG_INSTROOT}" ] && exit 0
 grep -q "105 podkop" /etc/iproute2/rt_tables 2> /dev/null && sed -i "/105 podkop/d" /etc/iproute2/rt_tables
-[ "$$1" = upgrade ] || rm -rf /usr/share/podkop/ui /usr/share/podkop/ui.new /usr/share/podkop/ui.old /usr/share/podkop/ui.builtin
+[ "$${PKG_UPGRADE}" = 1 ] || rm -rf /usr/share/podkop/ui /usr/share/podkop/ui.new /usr/share/podkop/ui.old /usr/share/podkop/ui.builtin
 exit 0
 endef
 

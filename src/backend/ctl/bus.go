@@ -27,6 +27,7 @@ var inProcess = map[string]bool{
 	"check_fakeip_client":   true,
 	"clash_api":             true,
 	"yacd_builtin":          true,
+	"yacd_status":           true,
 	"check_links":           true,
 	"check_logs":            true,
 	"show_sing_box_config":  true,
@@ -50,6 +51,7 @@ type ExecResult struct {
 // "params") and answers ExecResult; a command that is not answered here is StatusNotSupported,
 // and the page runs the program instead.
 func BusObject(env Environment) ubus.Object {
+	env.InProcess = true
 	return ubus.Object{
 		Name: "podkop",
 		Methods: map[string]ubus.Method{

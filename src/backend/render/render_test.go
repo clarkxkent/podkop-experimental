@@ -157,6 +157,12 @@ func TestCases(t *testing.T) {
 			outcome, err := Run(placeCase(t, name, root))
 			want := wanted(t, name, "want")
 			wantConfig, taken := want["config.json"]
+			if reason, now := refusedNow[name]; now {
+				if err == nil {
+					t.Fatalf("taken, the generator refuses them on purpose (%s)", reason)
+				}
+				return
+			}
 			if reason, now := takenNow[name]; now {
 				// the shell backend refused these settings, the generator takes them on
 				// purpose (plan/ledger.go)
@@ -241,6 +247,12 @@ func TestCases(t *testing.T) {
 var takenNow = map[string]string{
 	"neg-same-remote-name":     "4: two lists of one name get numbers",
 	"ed-remote-same-url-twice": "4: two lists of one name get numbers",
+}
+
+// refusedNow are the cases whose settings the shell backend took and the generator refuses
+// on purpose, with the item of plan/ledger.go that says why.
+var refusedNow = map[string]string{
+	"ed-mixed-same-port": "12: two mixed proxies on one port",
 }
 
 // A second run over what the first one left changes nothing and says so.

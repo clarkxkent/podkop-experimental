@@ -21,6 +21,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"syscall"
+	"time"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -29,9 +32,10 @@ import (
 var (
 	// BuiltinDir holds the dashboard of the package, with Marker naming its build.
 	BuiltinDir = dataplane.DataDir + "/yacd"
-	// ServedDir is what sing-box serves: "ui" of its working directory (plan,
-	// external_ui).
+	// ServedDir is what sing-box serves (plan, external_ui).
 	ServedDir = dataplane.DataDir + "/ui"
+	// lockPath serializes the copies of the backend and of a program run beside it.
+	lockPath = dataplane.RunDir + "/yacd.lock"
 )
 
 // Marker is the file of BuiltinDir that names the build of the package.
@@ -41,12 +45,31 @@ const Marker = ".podkop-builtin"
 // its index.html.
 func record(served string) string { return served + ".builtin" }
 
+// access keeps the copies of one process apart; lock those of two.
+var access sync.Mutex
+
+func lock() func() {
+	access.Lock()
+	file, err := os.OpenFile(lockPath, os.O_CREATE|os.O_RDWR, 0o644)
+	if err != nil {
+		// no lock file (no run directory, a test): the copies of this process are apart
+		return access.Unlock
+	}
+	_ = syscall.Flock(int(file.Fd()), syscall.LOCK_EX)
+	return func() {
+		_ = syscall.Flock(int(file.Fd()), syscall.LOCK_UN)
+		_ = file.Close()
+		access.Unlock()
+	}
+}
+
 // Ensure gives the served directory the dashboard of the package when it has none, when it
-// has an older build of the package, and when it has one podkop-exp did not put there
-// (sing-box downloaded it into an empty directory before podkop-exp brought one); a
-// dashboard upgraded from GitHub over the copy (its index.html changed) is kept. It tells
-// whether the directory has a dashboard now.
+// has another build of the package (by its name or by its index.html), and when it has one
+// podkop-exp did not put there (sing-box downloaded it into an empty directory before
+// podkop-exp brought one); a dashboard upgraded from GitHub over the copy (its index.html
+// changed) is kept. It tells whether the directory has a dashboard now.
 func Ensure(builtin string, served string) (bool, error) {
+	defer lock()()
 	build, err := os.ReadFile(filepath.Join(builtin, Marker))
 	if err != nil {
 		// no dashboard in the package: what is served, if anything, stays
@@ -60,18 +83,24 @@ func Ensure(builtin string, served string) (bool, error) {
 		case hash != hashOf(filepath.Join(served, "index.html")):
 			// upgraded from GitHub
 			return true, nil
-		case copied == strings.TrimSpace(string(build)):
+		case copied == strings.TrimSpace(string(build)) && hash == hashOf(filepath.Join(builtin, "index.html")):
 			return true, nil
 		}
 	}
-	err = Restore(builtin, served)
+	err = restore(builtin, served)
 	return hasFiles(served), err
 }
 
 // Restore puts the dashboard of the package into the served directory, whatever it held.
-// The copy is made beside it and put in its place at once: sing-box serves the one or the
-// other, never half of one.
 func Restore(builtin string, served string) error {
+	defer lock()()
+	return restore(builtin, served)
+}
+
+// restore makes the copy beside the served directory and puts it in its place at once:
+// sing-box serves the one or the other, never half of one. The record goes first and comes
+// back last: a copy cut short is no copy of the package, and the next Ensure makes it again.
+func restore(builtin string, served string) error {
 	build, err := os.ReadFile(filepath.Join(builtin, Marker))
 	if err != nil || !hasFiles(builtin) {
 		return E.New("the package has no dashboard in ", builtin)
@@ -85,6 +114,11 @@ func Restore(builtin string, served string) error {
 		_ = os.RemoveAll(next)
 		return E.Cause(err, "copy the dashboard")
 	}
+	err = os.Remove(record(served))
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		_ = os.RemoveAll(next)
+		return E.Cause(err, "remove the record of the dashboard")
+	}
 	err = os.Rename(served, previous)
 	if err != nil && !errors.Is(err, fs.ErrNotExist) {
 		_ = os.RemoveAll(next)
@@ -96,15 +130,67 @@ func Restore(builtin string, served string) error {
 		_ = os.RemoveAll(next)
 		return E.Cause(err, "put the dashboard in place")
 	}
-	_ = os.RemoveAll(previous)
 	content := strings.TrimSpace(string(build)) + "\n" + hashOf(filepath.Join(served, "index.html")) + "\n"
-	return os.WriteFile(record(served), []byte(content), 0o644)
+	err = os.WriteFile(record(served)+".new", []byte(content), 0o644)
+	if err == nil {
+		err = os.Rename(record(served)+".new", record(served))
+	}
+	_ = os.RemoveAll(previous)
+	return err
 }
 
 // Remove deletes the served directory and what tells about it (the package is removed).
 func Remove(served string) error {
+	defer lock()()
 	_ = os.Remove(record(served))
 	return os.RemoveAll(served)
+}
+
+// Upgrade is an upgrade of the dashboard from GitHub that runs in the background: sing-box
+// downloads it within the request, longer than the user interface waits for an answer.
+type Upgrade struct {
+	access  sync.Mutex
+	running bool
+	last    UpgradeResult
+}
+
+// UpgradeResult is what the last upgrade came to.
+type UpgradeResult struct {
+	Done    bool   `json:"done"`
+	Success bool   `json:"success"`
+	Message string `json:"message,omitempty"`
+	At      int64  `json:"at,omitempty"`
+}
+
+// Upgrades is the upgrade of the backend.
+var Upgrades Upgrade
+
+// Start runs the upgrade in the background unless one runs; it tells whether it started.
+func (u *Upgrade) Start(upgrade func() error) bool {
+	u.access.Lock()
+	defer u.access.Unlock()
+	if u.running {
+		return false
+	}
+	u.running = true
+	go func() {
+		err := upgrade()
+		result := UpgradeResult{Done: true, Success: err == nil, At: time.Now().Unix()}
+		if err != nil {
+			result.Message = err.Error()
+		}
+		u.access.Lock()
+		u.running, u.last = false, result
+		u.access.Unlock()
+	}()
+	return true
+}
+
+// Status tells whether an upgrade runs and what the last one came to.
+func (u *Upgrade) Status() (bool, UpgradeResult) {
+	u.access.Lock()
+	defer u.access.Unlock()
+	return u.running, u.last
 }
 
 func readRecord(served string) (build string, hash string, known bool) {
@@ -113,7 +199,7 @@ func readRecord(served string) (build string, hash string, known bool) {
 		return "", "", false
 	}
 	lines := strings.Split(strings.TrimSpace(string(content)), "\n")
-	if len(lines) != 2 {
+	if len(lines) != 2 || lines[1] == "" {
 		return "", "", false
 	}
 	return lines[0], lines[1], true

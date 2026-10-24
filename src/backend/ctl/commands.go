@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/url"
@@ -47,6 +48,9 @@ type Environment struct {
 	// CheckLink tells why the engine of this build cannot use a proxy link, as the
 	// configuration would refuse it (engine.CheckLink); nil returns are links it can use.
 	CheckLink func(link string) error
+	// InProcess tells that the command runs inside the backend (BusObject): one that takes
+	// longer than the page waits for an answer runs in the background there.
+	InProcess bool
 }
 
 // LinkCheck is what check_links tells of a link: whether the engine takes it, and why not.
@@ -85,6 +89,7 @@ var Commands = [][2]string{
 	{"check_fakeip_client", "<label> [ms]: what the backend saw of the check name a device opened a connection to"},
 	{"clash_api", "get_proxies | get_proxy_latency <tag> [ms] | get_group_latency <tag> [ms] | set_group_proxy <group> <proxy> | upgrade_ui (the dashboard YACD of GitHub in place of the one served)"},
 	{"yacd_builtin", "The dashboard YACD of the package served again in place of the one upgraded from GitHub"},
+	{"yacd_status", "Whether an upgrade of the dashboard YACD from GitHub asked of the page runs, and what the last one came to, as JSON"},
 	{"global_check", "[label port]: every check as one report; with the label of a check name and a port the device that asks opens connections to meanwhile, also what came of its DNS question and its connections"},
 	{"check_links", "<link>...: each proxy link as the engine of this build takes it when the settings run, as JSON: [{ok, error}]"},
 	{"check_logs", "[--since RUN:NUMBER]: the log of the backend and of sing-box; with --since, as JSON, only the lines after that number of that run (all of another run), and where to go on from"},
@@ -212,7 +217,7 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		}
 		return pretty(result)
 	case "clash_api":
-		return clashAPI(client, arguments[1:], output)
+		return clashAPI(client, arguments[1:], output, env.InProcess)
 	case "global_check":
 		// with the label of a check name and a port: the device that asks opens
 		// connections to them while the report is made
@@ -262,6 +267,12 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		}
 		io.WriteString(output, `{"success":true}`+"\n")
 		return 0
+	case "yacd_status":
+		running, last := yacd.Upgrades.Status()
+		return compact(struct {
+			Running bool `json:"running"`
+			yacd.UpgradeResult
+		}{running, last})
 	case "restore_routing":
 		result, err := client.RestoreRouting()
 		if err != nil {
@@ -508,7 +519,7 @@ func showConfig(env Environment, rejected bool, output io.Writer, errorOutput io
 // gets the outbounds, their delays and the choice of a group from. The answers are
 // printed as the shell backend prints them. Where the API listens and its key are what
 // the backend that runs tells (api.Facts): with no backend there is no API.
-func clashAPI(client api.Client, arguments []string, output io.Writer) int {
+func clashAPI(client api.Client, arguments []string, output io.Writer, background bool) int {
 	say := func(text string) {
 		content, err := plan.Pretty([]byte(text))
 		if err == nil {
@@ -555,18 +566,47 @@ func clashAPI(client api.Client, arguments []string, output io.Writer) int {
 		return delay("group", "group_tag", "5000")
 	case "upgrade_ui":
 		// sing-box downloads the dashboard of GitHub (Yacd-meta) and puts it in place of
-		// the one it serves (POST /upgrade/ui), through its direct outbound
-		status, content := call(http.MethodPost, "/upgrade/ui", "", 3*time.Minute)
+		// the one it serves (POST /upgrade/ui), through its direct outbound. That takes
+		// longer than the page waits for an answer: inside the backend it runs in the
+		// background, and yacd_status tells its end.
+		upgrade := func() (int, string) {
+			status, content := call(http.MethodPost, "/upgrade/ui", "", 3*time.Minute)
+			if status == http.StatusOK {
+				return status, ""
+			}
+			if status == 0 {
+				return status, "the Clash API did not answer (YACD off, or podkop not running)"
+			}
+			// sing-box empties the directory when the download or the unpacking fails: the
+			// dashboard of the package is put back
+			_, _ = yacd.Ensure(yacd.BuiltinDir, yacd.ServedDir)
+			var answer struct {
+				Message string `json:"message"`
+			}
+			_ = json.Unmarshal(content, &answer)
+			return status, cmp.Or(answer.Message, http.StatusText(status))
+		}
+		if background {
+			started := yacd.Upgrades.Start(func() error {
+				if status, message := upgrade(); status != http.StatusOK {
+					return errors.New(message)
+				}
+				return nil
+			})
+			if !started {
+				say(`{"success":false,"busy":true,"message":"an upgrade of the dashboard runs already"}`)
+				return 1
+			}
+			say(`{"success":true,"started":true}`)
+			return 0
+		}
+		status, message := upgrade()
 		if status == http.StatusOK {
 			say(`{"success":true}`)
 			return 0
 		}
-		var answer struct {
-			Message string `json:"message"`
-		}
-		_ = json.Unmarshal(content, &answer)
-		message, _ := json.Marshal(cmp.Or(answer.Message, "the Clash API did not answer (YACD off, or podkop not running)"))
-		say(`{"success":false,"http_code":` + strconv.Itoa(status) + `,"message":` + string(message) + `}`)
+		quoted, _ := json.Marshal(message)
+		say(`{"success":false,"http_code":` + strconv.Itoa(status) + `,"message":` + string(quoted) + `}`)
 		return 1
 	case "set_group_proxy":
 		group, proxy := argument(1), argument(2)

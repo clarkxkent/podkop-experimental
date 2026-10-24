@@ -16,6 +16,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/api"
 	"github.com/podkop-net/podkop-experimental/src/backend/diag"
 	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
+	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 
 	"github.com/stretchr/testify/require"
 )
@@ -319,6 +320,30 @@ func TestClashAPI(t *testing.T) {
 	output, status = run(env, "clash_api", "upgrade_ui")
 	require.Equal(t, 1, status)
 	require.Contains(t, output, "download external ui failed: 404 Not Found")
+	require.Contains(t, output, "\"http_code\": 500")
+	// inside the backend in the background: started, then told by yacd_status
+	release := make(chan struct{})
+	block := yacd.Upgrades.Start(func() error { <-release; return nil })
+	require.True(t, block)
+	inside := env
+	inside.InProcess = true
+	output, status = run(inside, "clash_api", "upgrade_ui")
+	require.Equal(t, 1, status)
+	require.Contains(t, output, "an upgrade of the dashboard runs already")
+	output, _ = run(inside, "yacd_status")
+	require.Equal(t, `{"running":true,"done":false,"success":false}`+"\n", output)
+	close(release)
+	ended := func() bool {
+		output, _ := run(inside, "yacd_status")
+		return strings.HasPrefix(output, `{"running":false`)
+	}
+	require.Eventually(t, ended, 5*time.Second, 10*time.Millisecond)
+	output, status = run(inside, "clash_api", "upgrade_ui")
+	require.Zero(t, status)
+	require.Equal(t, "{\n  \"success\": true,\n  \"started\": true\n}\n", output)
+	require.Eventually(t, ended, 5*time.Second, 10*time.Millisecond)
+	output, _ = run(inside, "yacd_status")
+	require.Contains(t, output, `"done":true,"success":false,"message":"download external ui failed: 404 Not Found"`)
 
 	// nothing runs: no API, and no answer
 	running.facts = api.Facts{}

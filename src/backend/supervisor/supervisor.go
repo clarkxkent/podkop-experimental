@@ -208,6 +208,13 @@ type Supervisor struct {
 	// and the start is tried again at the next change of the network and when the guard
 	// of the package asks (restoreRouting)
 	failed bool
+	// failures are the starts that failed in a row, the last at failedAt: after the first
+	// few, a try waits longer each time (retryPause)
+	failures int
+	failedAt time.Time
+	// unapplied is the change of the network the settings were last applied again for
+	// without taking: the same change is not tried again at every event of the network
+	unapplied string
 	// stuck tells that an instance of sing-box did not close: nothing more can run in
 	// this process (see close)
 	stuck bool
@@ -343,7 +350,7 @@ func (s *Supervisor) done(ok bool, replaced bool, message ...any) Result {
 	}
 	switch {
 	case s.current != nil:
-		s.failed = false
+		s.failed, s.failures = false, 0
 		s.writeState(stateRunning)
 	case s.failed:
 		s.writeState(stateFailed)
@@ -524,9 +531,12 @@ func (s *Supervisor) restoreRouting() string {
 		if !s.failed {
 			return "nothing runs"
 		}
+		if wait := retryPause(s.failures) - time.Since(s.failedAt); wait > 0 {
+			return "the start failed " + strconv.Itoa(s.failures) + " times in a row: it is tried again from " + time.Now().Add(wait).Format(time.TimeOnly)
+		}
 		// an address that was not there (the loopback while the network restarted), a
 		// port another program held: what kept sing-box from starting may be gone
-		s.log("info", "the start failed before: it is tried again")
+		s.log("info", "the start failed before (", s.failures, " in a row): it is tried again")
 		result := s.Boot()
 		return "the start that had failed was tried again: " + result.Message
 	}
@@ -581,12 +591,23 @@ func (s *Supervisor) restoreRouting() string {
 		// mixed proxies listen on it). The firewall takes the new devices, and a
 		// configuration that is the same leaves sing-box running. A socket sing-box
 		// listened on and has lost is listened on again by a new instance.
-		s.log("info", "the network changed under the settings (", strings.Join(changes, "; "), "): they are applied again")
-		result := s.apply(lost)
+		change := strings.Join(changes, "; ")
 		if message != "" {
 			message += "; "
 		}
-		message += "the settings applied again for " + strings.Join(changes, "; ") + ": " + result.Message
+		if !lost && change == s.unapplied {
+			// the settings did not take for it before; a change of the settings or another
+			// one of the network tries again
+			message += "the settings did not take for " + change + " before: not applied again"
+		} else {
+			s.log("info", "the network changed under the settings (", change, "): they are applied again")
+			result := s.apply(lost)
+			s.unapplied = ""
+			if !result.OK {
+				s.unapplied = change
+			}
+			message += "the settings applied again for " + change + ": " + result.Message
+		}
 	}
 	if message == "" {
 		return "nothing was missing"
@@ -623,8 +644,8 @@ func (s *Supervisor) drift(current *running) (changes []string, lost bool) {
 	}
 	if listening := s.options.System.Listening(); listening != nil {
 		for _, inbound := range inboundSockets(current.result.Config) {
-			if len(sockets.Holding(listening, "tcp", inbound.address)) == 0 {
-				changes = append(changes, "nothing listens on "+inbound.address.String()+" ("+inbound.tag+")")
+			if !listensOn(listening, inbound.protocol, inbound.address) {
+				changes = append(changes, "nothing listens on "+inbound.protocol+" "+inbound.address.String()+" ("+inbound.tag+")")
 				lost = true
 			}
 		}
@@ -632,18 +653,32 @@ func (s *Supervisor) drift(current *running) (changes []string, lost bool) {
 	return changes, lost
 }
 
-type inboundSocket struct {
-	tag     string
-	address netip.AddrPort
+// listensOn tells whether a socket listens on exactly this address: sing-box binds the
+// address of an inbound as it is, and a wildcard socket of another program (dnsmasq on
+// [::]:53) is not one of its own.
+func listensOn(listening []sockets.Listener, protocol string, at netip.AddrPort) bool {
+	return slices.ContainsFunc(listening, func(listener sockets.Listener) bool {
+		return listener.Protocol == protocol && listener.Address.Port() == at.Port() && listener.Address.Addr().Unmap() == at.Addr().Unmap()
+	})
 }
 
-// inboundSockets are the addresses the inbounds of a configuration listen on.
+type inboundSocket struct {
+	tag      string
+	protocol string
+	address  netip.AddrPort
+}
+
+// inboundSockets are the sockets the inbounds of a configuration listen on: TCP, and UDP
+// too for the transparent proxy and the DNS inbound (types tproxy and direct) unless their
+// network says otherwise.
 func inboundSockets(config []byte) []inboundSocket {
 	var document struct {
 		Inbounds []struct {
+			Type       string `json:"type"`
 			Tag        string `json:"tag"`
 			Listen     string `json:"listen"`
 			ListenPort uint16 `json:"listen_port"`
+			Network    string `json:"network"`
 		} `json:"inbounds"`
 	}
 	if json.Unmarshal(config, &document) != nil {
@@ -655,7 +690,13 @@ func inboundSockets(config []byte) []inboundSocket {
 		if err != nil || inbound.ListenPort == 0 {
 			continue
 		}
-		result = append(result, inboundSocket{tag: inbound.Tag, address: netip.AddrPortFrom(address, inbound.ListenPort)})
+		at := netip.AddrPortFrom(address, inbound.ListenPort)
+		if inbound.Network != "udp" {
+			result = append(result, inboundSocket{tag: inbound.Tag, protocol: "tcp", address: at})
+		}
+		if (inbound.Type == "tproxy" || inbound.Type == "direct") && inbound.Network != "tcp" {
+			result = append(result, inboundSocket{tag: inbound.Tag, protocol: "udp", address: at})
+		}
 	}
 	return result
 }
@@ -769,6 +810,11 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 		case reply := <-s.statuses:
 			reply <- s.listStatus()
 		case reply := <-s.restores:
+			if ctx.Err() != nil {
+				// a start tried again would hold up the stop
+				reply <- "the backend stops"
+				continue
+			}
 			reply <- s.restoreRouting()
 		case <-s.derive:
 			if merge == nil {
@@ -898,21 +944,13 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 		s.listChecks = make(map[listKey]listCheck)
 	}
 	used := make(map[listKey]bool)
-	noExternalUI := false
-	if settings.Settings.EnableYACD && s.options.YACDServedDir != "" {
-		// a dashboard in place before sing-box starts: it downloads one into an empty
-		// directory, within its start
-		served, err := yacd.Ensure(s.options.YACDBuiltinDir, s.options.YACDServedDir)
-		if err != nil {
-			s.log("warn", "put the dashboard YACD in place: ", err)
-		}
-		if !served {
-			s.log("warn", "there is no dashboard YACD to serve: the Clash API runs without it")
-			noExternalUI = true
-		}
+	noExternalUI := s.noDashboard(settings)
+	if noExternalUI {
+		s.log("warn", "there is no dashboard YACD to serve: the Clash API runs without it")
 	}
 	build := func(ruleSetDir string) (*plan.Result, error) {
-		options := plan.Options{RuleSetDir: ruleSetDir, DecodeLink: engine.DecodeLink, CheckList: s.checkList(used), DownloadURL: s.options.DownloadURL, NoExternalUI: noExternalUI}
+		options := plan.Options{RuleSetDir: ruleSetDir, DecodeLink: engine.DecodeLink, CheckList: s.checkList(used), DownloadURL: s.options.DownloadURL,
+			ExternalUI: s.options.YACDServedDir, NoExternalUI: noExternalUI}
 		if s.options.Watcher != nil {
 			options.CheckNames = plan.CheckNames{Suffix: probe.Suffix, DeadEndAddress: probe.DeadEndAddress, DeadEndPort: probe.DeadEndPort}
 		}
@@ -961,6 +999,20 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 	return &candidate{settings: settings, result: result}, nil
 }
 
+// noDashboard puts the dashboard YACD of the package in place for settings that turn it on
+// (yacd.Ensure): sing-box serves what is there, and downloads one within its start into an
+// empty directory. It tells whether there is none to serve.
+func (s *Supervisor) noDashboard(settings *model.Config) bool {
+	if !settings.Settings.EnableYACD || s.options.YACDServedDir == "" {
+		return false
+	}
+	served, err := yacd.Ensure(s.options.YACDBuiltinDir, s.options.YACDServedDir)
+	if err != nil {
+		s.log("warn", "put the dashboard YACD in place: ", err)
+	}
+	return !served
+}
+
 // forgetLists keeps what the checks found only of the lists of this apply.
 func (s *Supervisor) forgetLists(used map[listKey]bool) {
 	for key := range s.listChecks {
@@ -999,6 +1051,9 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 			s.log("warn", "make the directory of the cache file: ", err)
 		}
 	}
+	// the dashboard checked again: the previous configuration started after a new one
+	// failed was prepared before an upgrade of it from GitHub that failed and emptied it
+	s.noDashboard(next.settings)
 	// what the instance before and the check left is given back before this one reads its
 	// lists
 	debug.FreeOSMemory()
@@ -1132,7 +1187,7 @@ func (s *Supervisor) Boot() Result {
 	next, err := s.prepare()
 	if err != nil {
 		s.log("error", "the settings cannot be used: ", err)
-		s.failed = false
+		s.failed, s.failures = false, 0
 		s.release()
 		return s.done(false, false, "the settings cannot be used: ", err)
 	}
@@ -1141,7 +1196,7 @@ func (s *Supervisor) Boot() Result {
 		s.log("error", err)
 		s.keepConfig(RejectedConfig, next.result.Config)
 		s.release()
-		s.failed = true
+		s.startFailed()
 		return s.done(false, false, err)
 	}
 	s.current = &running{settings: next.settings, result: next.result, instance: instance}
@@ -1149,11 +1204,32 @@ func (s *Supervisor) Boot() Result {
 	if err != nil {
 		s.log("error", err)
 		s.Stop()
-		s.failed = true
+		s.startFailed()
 		return s.done(false, false, err)
 	}
 	s.log("info", "running, ", time.Since(started).Milliseconds(), " ms after the start")
 	return s.done(true, true, "started in ", time.Since(started).Milliseconds(), " ms")
+}
+
+// startFailed records a start of sing-box, or of the settings around it, that failed: the
+// router is given back, and the start is tried again (restoreRouting).
+func (s *Supervisor) startFailed() {
+	s.failed = true
+	s.failures++
+	s.failedAt = time.Now()
+}
+
+// retryPause is how long after the last of the starts that failed in a row the next try
+// waits: the first few at once (an address that comes back with the network: a restart
+// of the network brings several events), then a minute, doubled each time up to an hour
+// (a port another program holds for good). The events of the network and the guard ask
+// as they come; a start that is not due is not tried.
+func retryPause(failures int) time.Duration {
+	const atOnce = 3
+	if failures <= atOnce {
+		return 0
+	}
+	return min(time.Minute<<min(failures-atOnce-1, 6), time.Hour)
 }
 
 // surround does what a running sing-box needs around it, in the order that never leaves
@@ -1302,23 +1378,31 @@ func (s *Supervisor) refreshFirewall() {
 // sing-box alone. Another configuration replaces it, and when the new one does not come
 // up the previous one is started again.
 func (s *Supervisor) Apply() Result {
+	// the settings may have changed: a start that failed is tried at once, and a change of
+	// the network they did not take for is tried again
+	s.failures, s.unapplied = 0, ""
 	return s.apply(false)
 }
 
 // apply is Apply; with force a configuration that is the same replaces sing-box too, as
-// one that is not: the instance that runs has lost a socket it listened on.
+// one that is not: the instance that runs has lost a socket it listened on. Then settings
+// that cannot be used start the configuration that runs again.
 func (s *Supervisor) apply(force bool) Result {
 	if s.current == nil {
 		return s.Boot()
 	}
 	started := time.Now()
 	s.writeState(stateApplying)
+	current := s.current
 	next, err := s.prepare()
 	if err != nil {
-		s.log("error", "the settings cannot be used, nothing is changed: ", err)
-		return s.done(false, false, "the settings cannot be used, nothing is changed: ", err)
+		if !force {
+			s.log("error", "the settings cannot be used, nothing is changed: ", err)
+			return s.done(false, false, "the settings cannot be used, nothing is changed: ", err)
+		}
+		s.log("error", "the settings cannot be used: ", err, "; the configuration that runs is started again for the socket it lost")
+		next = &candidate{settings: current.settings, result: current.result}
 	}
-	current := s.current
 	previousFirewall := current.firewall
 	if !force && bytes.Equal(next.result.Config, current.result.Config) {
 		err = s.writeFiles(next.result, current.result)
@@ -1364,7 +1448,7 @@ func (s *Supervisor) apply(force bool) Result {
 		s.log("error", "the previous configuration does not come up either: ", err)
 		s.current = nil
 		s.release()
-		s.failed = true
+		s.startFailed()
 		return s.done(false, false, "the new configuration does not come up: ", failure, "; the previous one does not either: ", err)
 	}
 	s.current = &running{settings: current.settings, result: current.result, instance: instance}

@@ -1,3 +1,24 @@
+diff --git a/assets/sw.js b/assets/sw.js
+new file mode 100644
+index 0000000..5ed2c70
+--- /dev/null
++++ b/assets/sw.js
+@@ -0,0 +1,15 @@
++// The dashboard of podkop-exp has no service worker. One that Yacd-meta registered at this
++// address before (on https or localhost) serves its own copy from its cache; when the browser
++// looks for an update of it, it gets this one: the caches are emptied, the worker goes, and
++// the open pages are loaded again from the router.
++self.addEventListener('install', () => self.skipWaiting());
++self.addEventListener('activate', (event) => {
++  event.waitUntil(
++    (async () => {
++      for (const key of await caches.keys()) await caches.delete(key);
++      await self.registration.unregister();
++      for (const client of await self.clients.matchAll({ type: 'window' }))
++        client.navigate(client.url);
++    })(),
++  );
++});
 diff --git a/assets/yacd.png b/assets/yacd.png
 index cbb3fcbf293ab72a7776270f285c82be6c993caf..3b4f5d2dfaa39eace54235aab5e420e4a3c7ee5f 100644
 GIT binary patch
@@ -2218,7 +2239,7 @@ index aace980..d245d80 100644
    );
  }
 diff --git a/src/components/config/Config.tsx b/src/components/config/Config.tsx
-index b807661..388a797 100644
+index b807661..c167afe 100644
 --- a/src/components/config/Config.tsx
 +++ b/src/components/config/Config.tsx
 @@ -23,7 +23,6 @@ import {
@@ -2238,25 +2259,7 @@ index b807661..388a797 100644
  
    const { selectChartStyleIndex, updateAppConfig } = useStoreActions();
    const {
-@@ -67,6 +66,8 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
-   const coreMeta = getCoreVersionMeta(version);
-   // 只有 mihomo 支持在线升级内核和面板；版本号跟着升级按钮走，其它内核的版本号放在当前后端里
-   const canUpgrade = version.meta && !version.premium;
-+  // podkop-exp build: sing-box (premium) upgrades the dashboard too (POST /upgrade/ui)
-+  const canUpgradeUI = version.meta;
- 
-   return (
-     <div>
-@@ -243,7 +244,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
-                     </div>
-                   </div>
-                 )}
--                {canUpgrade && (
-+                {canUpgradeUI && (
-                   <div>
-                     <div className={s0.label}>Yacd</div>
-                     <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
-@@ -311,17 +312,6 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+@@ -311,17 +310,6 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
              {t('dashboard')}
            </div>
            <div className={s0.section}>
@@ -2274,15 +2277,6 @@ index b807661..388a797 100644
              <div>
                <div className={s0.label}>{t('chart_style')}</div>
                <Selection2
-@@ -332,7 +322,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
-               />
-             </div>
- 
--            {canUpgrade ? null : (
-+            {canUpgradeUI ? null : (
-               <div>
-                 <div className={s0.label}>Yacd</div>
-                 <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
 diff --git a/src/components/connections/ConnectionSettingsModal.module.scss b/src/components/connections/ConnectionSettingsModal.module.scss
 index cfb46b2..50c2676 100644
 --- a/src/components/connections/ConnectionSettingsModal.module.scss
@@ -2428,7 +2422,7 @@ index 1d0d5e4..b27cd4f 100644
  
              <div className={s.columnsPane}>
 diff --git a/src/components/home/MemoryChart.tsx b/src/components/home/MemoryChart.tsx
-index 344dedd..7da20c2 100644
+index 344dedd..ba5eb3f 100644
 --- a/src/components/home/MemoryChart.tsx
 +++ b/src/components/home/MemoryChart.tsx
 @@ -1,15 +1,12 @@
@@ -2452,7 +2446,7 @@ index 344dedd..7da20c2 100644
  
  /** 内存读数很平稳，量程上下各留 2% 的余量，免得细微波动被放大成剧烈起伏 */
  const PAD_RATIO = 0.02;
-@@ -21,64 +18,19 @@ type Props = {
+@@ -21,64 +18,26 @@ type Props = {
    styleIndex: number;
  };
  
@@ -2518,7 +2512,14 @@ index 344dedd..7da20c2 100644
 -
 -  return <Line ref={chartRef} data={data} options={options} redraw={false} />;
 +  const series = useMemo(
-+    () => [{ label: '', color: style.inuse.borderColor, values: memory.inuse.slice(-size) }],
++    // the first frame of the core is 0 (sing-box sends no reading first): not drawn
++    () => [
++      {
++        label: '',
++        color: style.inuse.borderColor,
++        values: memory.inuse.slice(-size).map((value) => (value > 0 ? value : null)),
++      },
++    ],
 +    [memory, size, style],
 +  );
 +  return (
@@ -2531,7 +2532,7 @@ index 344dedd..7da20c2 100644
 +  );
  }
 diff --git a/src/components/home/TrafficChart.tsx b/src/components/home/TrafficChart.tsx
-index 2584886..5f9004e 100644
+index 2584886..a3ca715 100644
 --- a/src/components/home/TrafficChart.tsx
 +++ b/src/components/home/TrafficChart.tsx
 @@ -1,14 +1,11 @@
@@ -2661,7 +2662,7 @@ index 2584886..5f9004e 100644
 +      labels={traffic.labels.slice(-size)}
 +      range={{ min: 0, max }}
 +      grid={5}
-+      format={(v) => formatTrafficRate(decompress(v))}
++      format={(v) => formatTrafficRate(Math.round(decompress(v)))}
 +    />
 +  );
  }
@@ -2717,10 +2718,10 @@ index bc723a0..eac1d95 100644
  export default Collapsible;
 diff --git a/src/components/shared/LineChart.tsx b/src/components/shared/LineChart.tsx
 new file mode 100644
-index 0000000..db6f78a
+index 0000000..3d4e7c0
 --- /dev/null
 +++ b/src/components/shared/LineChart.tsx
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,211 @@
 +import * as React from 'react';
 +
 +import { withAlpha } from '~/modules/home/utils';
@@ -2744,6 +2745,37 @@ index 0000000..db6f78a
 +};
 +
 +const GRID_COLOR = 'rgba(148, 163, 184, 0.22)';
++
++// a curve through every point of a run that rises and falls only where the points do
++// (monotone cubic): no overshoot, no dip below zero
++function smooth(points: [number, number][]): Path2D {
++  const path = new Path2D();
++  const count = points.length;
++  path.moveTo(points[0][0], points[0][1]);
++  if (count < 3) {
++    for (let i = 1; i < count; i++) path.lineTo(points[i][0], points[i][1]);
++    return path;
++  }
++  const secant = (i: number) =>
++    (points[i + 1][1] - points[i][1]) / (points[i + 1][0] - points[i][0]);
++  const tangent = (i: number) => {
++    if (i === 0) return secant(0);
++    if (i === count - 1) return secant(count - 2);
++    const before = secant(i - 1);
++    const after = secant(i);
++    return before * after <= 0 ? 0 : 2 / (1 / before + 1 / after);
++  };
++  let previous = tangent(0);
++  for (let i = 0; i < count - 1; i++) {
++    const [x0, y0] = points[i];
++    const [x1, y1] = points[i + 1];
++    const next = tangent(i + 1);
++    const third = (x1 - x0) / 3;
++    path.bezierCurveTo(x0 + third, y0 + previous * third, x1 - third, y1 - next * third, x1, y1);
++    previous = next;
++  }
++  return path;
++}
 +
 +export default function LineChart({ series, labels, range, grid = 0, format }: Props) {
 +  const wrap = useRef<HTMLDivElement>(null);
@@ -2792,8 +2824,7 @@ index 0000000..db6f78a
 +    }
 +
 +    for (const one of series) {
-+      // the runs of points without a gap, each drawn smooth through the middles of its
-+      // segments (it stays between its points: no dip below zero)
++      // the runs of points without a gap, each drawn smooth through its points
 +      const runs: [number, number][][] = [];
 +      let run: [number, number][] = [];
 +      one.values.forEach((value, index) => {
@@ -2809,14 +2840,7 @@ index 0000000..db6f78a
 +      fill.addColorStop(0, withAlpha(one.color, 0.35));
 +      fill.addColorStop(1, withAlpha(one.color, 0.02));
 +      for (const points of runs) {
-+        const path = new Path2D();
-+        path.moveTo(points[0][0], points[0][1]);
-+        for (let i = 1; i < points.length; i++) {
-+          const [px, py] = points[i - 1];
-+          const [cx, cy] = points[i];
-+          path.quadraticCurveTo(px, py, (px + cx) / 2, (py + cy) / 2);
-+          if (i === points.length - 1) path.lineTo(cx, cy);
-+        }
++        const path = smooth(points);
 +        const area = new Path2D(path);
 +        area.lineTo(points[points.length - 1][0], height);
 +        area.lineTo(points[0][0], height);
@@ -2990,7 +3014,7 @@ index 2a2c815..04243e0 100644
    close_all_confirm: 'Are you sure you want to close all connections?',
    close_all_confirm_yes: "I'm sure",
 diff --git a/src/main.tsx b/src/main.tsx
-index 16e3a1b..be0ced3 100644
+index 16e3a1b..db2fe55 100644
 --- a/src/main.tsx
 +++ b/src/main.tsx
 @@ -6,7 +6,6 @@ import { createRoot } from 'react-dom/client';
@@ -3001,13 +3025,20 @@ index 16e3a1b..be0ced3 100644
  
  const rootEl = document.getElementById('app');
  if (!rootEl) {
-@@ -17,6 +16,4 @@ const root = createRoot(rootEl);
+@@ -17,6 +16,11 @@ const root = createRoot(rootEl);
  
  root.render(<App />);
  
 -swRegistration.register();
 -
  registerAppBootstrap(rootEl);
++
++// podkop-exp build: no service worker. One Yacd-meta registered at this address (on https or
++// localhost) is let go; assets/sw.js does it when that one still serves its own copy.
++navigator.serviceWorker?.getRegistrations().then(
++  (registrations) => registrations.forEach((registration) => registration.unregister()),
++  () => {},
++);
 diff --git a/src/misc/chart.ts b/src/misc/chart.ts
 index 234cabb..9b22a40 100644
 --- a/src/misc/chart.ts
@@ -3655,6 +3686,23 @@ index 0000000..6731857
 +export const initReactI18next = { type: '3rdParty', init() {} };
 +
 +export default i18n;
+diff --git a/src/store/app.ts b/src/store/app.ts
+index 7d992b0..c76857b 100644
+--- a/src/store/app.ts
++++ b/src/store/app.ts
+@@ -324,9 +324,9 @@ export function initialState() {
+     applyBackendQueryString(s, query, !persisted);
+   }
+ 
+-  if (query.theme === 'dark' || query.theme === 'light') {
+-    s.theme = query.theme;
+-  }
++  // podkop-exp build: no switch of the theme; it follows the system, or ?theme= for this
++  // visit (a theme saved by Yacd-meta at this address before is not taken)
++  s.theme = query.theme === 'dark' || query.theme === 'light' ? query.theme : 'auto';
+   if (query.title) {
+     document.title = decodeURIComponent(query.title);
+   }
 diff --git a/src/styles/main.scss b/src/styles/main.scss
 index 7be86a6..788b3ba 100644
 --- a/src/styles/main.scss

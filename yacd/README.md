@@ -4,9 +4,10 @@ podkop-exp brings a small build of [Yacd-meta](https://github.com/MetaCubeX/Yacd
 (`/usr/share/podkop/yacd`). With YACD on, the backend copies it to `/usr/share/podkop/ui`, the directory
 sing-box serves as the `external_ui` of the Clash API, before sing-box starts: sing-box downloads a
 dashboard itself, from GitHub and within its start, only into an empty directory, and that download is
-gone. The copy is what the upgrade writes: the button "Update YACD from GitHub" of the settings, or
-"Upgrade Dashboard UI" of the dashboard, makes sing-box download the dashboard of Yacd-meta from GitHub
-and unpack it over the copy; "Built-in YACD" puts this one back. The files of the package are never
+gone. The copy is what the upgrade writes: the button "Update YACD from GitHub" of the settings makes
+sing-box download the dashboard of Yacd-meta from GitHub and unpack it over the copy (in the background:
+the page asks `podkop yacd_status` until it ends), and the copy of the package comes back when that
+fails (sing-box empties the directory then); "Built-in YACD" puts this one back. The files of the package are never
 written. `/usr/share/podkop/ui.builtin` tells which dashboard is served (sing-box leaves it alone): the
 build copied and the hash of its `index.html`. A newer package replaces an older copy of its own, a
 dashboard upgraded from GitHub stays, and one sing-box downloaded before this build was brought is
@@ -34,11 +35,14 @@ What the patch changes:
   (`src/components/shared/LineChart.tsx`) when their data changes, in place of chart.js redrawing every
   frame.
 - No drag and drop: a column of the connection table moves up by its button.
-- No switch of the theme (it follows the system; `?theme=` still works), no animation of collapsing.
-- No service worker, no fonts of its own (Inter, Roboto Mono, Twemoji: the system's are used), no logo
-  of Clash Meta (105 KB in the styles), one icon of 64×64.
-- The button that upgrades the dashboard is shown for sing-box too (Yacd-meta shows it only for a core
-  that is not "premium"); the upgrade of the core stays hidden.
+- No switch of the theme: it follows the system (`?theme=` still works for a visit), whatever Yacd-meta
+  saved at the address before; no animation of collapsing.
+- No service worker: `sw.js` lets go of the one Yacd-meta registers at the address (on https or
+  localhost; plain http has none) and of its cache, which would go on serving the old copy.
+- No fonts of its own (Inter, Roboto Mono, Twemoji: the system's are used), no logo of Clash Meta
+  (105 KB in the styles), one icon of 64×64.
+- The charts go through their points (a monotone curve); the first reading of memory, 0 from sing-box,
+  is not drawn.
 
 Rebuild (git, docker and the network): `sh yacd/build.sh` from the root of the repository. It gives the
 same files, byte for byte. To change the build: a working copy of Yacd-meta at the commit above, the

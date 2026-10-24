@@ -1,6 +1,7 @@
 package supervisor
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"net/netip"
@@ -301,16 +302,25 @@ func TestFakeRetryFailedStart(t *testing.T) {
 	require.False(t, s.Boot().OK)
 	require.Equal(t, stateFailed, state(t, s))
 	system.take()
-	// still down: tried, failed again
-	require.Contains(t, s.restoreRouting(), "the start that had failed was tried again")
+	// still down: the first few tried at once, failed again
+	for range 3 {
+		require.Contains(t, s.restoreRouting(), "the start that had failed was tried again")
+	}
 	require.Equal(t, stateFailed, state(t, s))
-	require.Len(t, fake.built, 2)
+	require.Len(t, fake.built, 4)
+	// then a try waits
+	require.Contains(t, s.restoreRouting(), "the start failed 4 times in a row: it is tried again from ")
+	require.Len(t, fake.built, 4)
+	// a change of the settings is tried at once
+	require.False(t, s.Apply().OK)
+	require.Len(t, fake.built, 5)
+	system.take()
 	// what kept it down is gone
 	fake.silent = nil
 	require.Contains(t, s.restoreRouting(), "the start that had failed was tried again: started")
 	require.True(t, s.Running())
 	require.Equal(t, stateRunning, state(t, s))
-	require.Equal(t, []string{"no dns", "no firewall", "no routing", "routing", "firewall", "dns"}, system.take())
+	require.Equal(t, []string{"routing", "firewall", "dns"}, system.take())
 	// a stop is not undone by the network
 	s.Stop()
 	require.Equal(t, "nothing runs", s.restoreRouting())
@@ -319,6 +329,27 @@ func TestFakeRetryFailedStart(t *testing.T) {
 	require.False(t, s.Boot().OK)
 	require.Equal(t, stateReleased, state(t, s))
 	require.Equal(t, "nothing runs", s.restoreRouting())
+}
+
+// A start whose routing cannot be set up is a start that failed too: it is tried again,
+// and the stop that gives the router back keeps the count of the failures.
+func TestFakeSurroundFailed(t *testing.T) {
+	s, fake, system, settings := fakeFixture(t)
+	settings("one.lab.example", "60")
+	system.routingError = os.ErrPermission
+	require.False(t, s.Boot().OK)
+	require.Equal(t, stateFailed, state(t, s))
+	for range 3 {
+		require.Contains(t, s.restoreRouting(), "the start that had failed was tried again: set up the routing")
+	}
+	require.Contains(t, s.restoreRouting(), "the start failed 4 times in a row")
+	require.Len(t, fake.built, 4)
+	require.True(t, fake.built[3].closed)
+	system.routingError = nil
+	s.failedAt = time.Now().Add(-time.Minute)
+	require.Contains(t, s.restoreRouting(), "the start that had failed was tried again: started")
+	require.Equal(t, stateRunning, state(t, s))
+	s.Stop()
 }
 
 // At a change of the network the running configuration is held to the router: a LAN that
@@ -332,8 +363,8 @@ func TestFakeDrift(t *testing.T) {
 	all := func(drop string) []sockets.Listener {
 		var result []sockets.Listener
 		for _, inbound := range inboundSockets(s.current.result.Config) {
-			if inbound.tag != drop {
-				result = append(result, sockets.Listener{Protocol: "tcp", Address: inbound.address})
+			if inbound.tag+" "+inbound.protocol != drop && inbound.tag != drop {
+				result = append(result, sockets.Listener{Protocol: inbound.protocol, Address: inbound.address})
 			}
 		}
 		return result
@@ -352,16 +383,51 @@ func TestFakeDrift(t *testing.T) {
 	require.Equal(t, "nothing was missing", s.restoreRouting(), "an address that went away is no change")
 	system.noLAN = false
 
-	system.listening = all("dns-in")
+	// a wildcard socket of another program is none of its own
+	system.listening = append(all("dns-in"), sockets.Listener{Protocol: "udp", Address: netip.MustParseAddrPort("[::]:53")},
+		sockets.Listener{Protocol: "tcp", Address: netip.MustParseAddrPort("0.0.0.0:53")})
 	message = s.restoreRouting()
-	require.Contains(t, message, "nothing listens on 127.0.0.42:53 (dns-in)")
+	require.Contains(t, message, "nothing listens on tcp 127.0.0.42:53 (dns-in); nothing listens on udp 127.0.0.42:53 (dns-in)")
 	require.Len(t, fake.built, 2, "a new instance listens again")
 	require.True(t, fake.built[0].closed)
 	require.Equal(t, string(fake.built[0].config), string(fake.built[1].config))
 	system.listening = all("")
 	require.Equal(t, "nothing was missing", s.restoreRouting())
-	// netifd that does not answer moves no name
-	system.devices = nil
+	// the UDP socket of the transparent proxy alone
+	system.listening = all("tproxy-in udp")
+	require.Contains(t, s.restoreRouting(), "the settings applied again for nothing listens on udp 127.0.0.1:1602 (tproxy-in): ")
+	require.Len(t, fake.built, 3)
+	system.listening = all("")
+
+	// settings that cannot be used now: a change of the network is applied again once
+	path := s.options.SettingsPath
+	good, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, bytes.Replace(good, []byte("socks5://203.0.113.15:1080"), []byte("vless://broken"), 1), 0o644))
+	system.lan = "192.168.3.1"
+	require.Contains(t, s.restoreRouting(), "nothing is changed")
+	require.Contains(t, s.restoreRouting(), "the settings did not take for the address of the LAN: 192.168.3.1 (was 192.168.2.1) before: not applied again")
+	require.Len(t, fake.built, 3)
+	// a lost socket all the same: the configuration that runs is started again
+	system.listening = all("tproxy-in")
+	message = s.restoreRouting()
+	require.Contains(t, message, "nothing listens on tcp 127.0.0.1:1602 (tproxy-in)")
+	require.Contains(t, message, "sing-box runs the new configuration")
+	require.Len(t, fake.built, 4)
+	require.Equal(t, string(fake.built[2].config), string(fake.built[3].config))
+	require.True(t, s.Running())
+	system.listening = all("")
+	// a change of the settings tries the change of the network again
+	require.NoError(t, os.WriteFile(path, good, 0o644))
+	require.True(t, s.Apply().OK)
 	require.Equal(t, "nothing was missing", s.restoreRouting())
 	s.Stop()
+}
+
+func TestRetryPause(t *testing.T) {
+	var pauses []time.Duration
+	for failures := 1; failures <= 11; failures++ {
+		pauses = append(pauses, retryPause(failures))
+	}
+	require.Equal(t, []time.Duration{0, 0, 0, time.Minute, 2 * time.Minute, 4 * time.Minute, 8 * time.Minute, 16 * time.Minute, 32 * time.Minute, time.Hour, time.Hour}, pauses)
 }

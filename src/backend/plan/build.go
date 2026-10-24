@@ -8,6 +8,8 @@
 package plan
 
 import (
+	"cmp"
+	"fmt"
 	"net"
 	"net/netip"
 	"os"
@@ -90,8 +92,11 @@ type Options struct {
 	// leaves the test at its default. The shell backend leaves that to an environment
 	// variable of the sing-box service: without it the configuration is the one it makes.
 	DownloadURL string
-	// NoExternalUI leaves the dashboard YACD out of the Clash API: there is none to serve,
-	// and sing-box would download one within its start (supervisor, yacd).
+	// ExternalUI is the directory the Clash API serves the dashboard YACD from (yacd.
+	// ServedDir); none: "ui" of the working directory, as the shell backend has it.
+	// NoExternalUI leaves the dashboard out: there is none to serve, and sing-box would
+	// download one within its start (supervisor, yacd).
+	ExternalUI   string
 	NoExternalUI bool
 }
 
@@ -762,7 +767,7 @@ func (b *builder) buildExperimental() {
 	b.clashAPI = address + ":" + strconv.Itoa(dataplane.ClashAPIPort)
 	clashAPI := newObject("external_controller", b.clashAPI)
 	if settings.EnableYACD && !b.options.NoExternalUI {
-		clashAPI.set("external_ui", "ui")
+		clashAPI.set("external_ui", cmp.Or(b.options.ExternalUI, "ui"))
 	}
 	// the API has the key of the settings whether YACD is on or not: a device of the LAN
 	// that has no key reads no connection and switches no outbound. The backend makes a
@@ -796,6 +801,7 @@ func (b *builder) buildAdditionalInbounds() error {
 		}
 		return nil
 	}
+	ports := make(map[string]string)
 	for index := range b.config.Sections {
 		section := &b.config.Sections[index]
 		if !section.MixedProxyEnabled {
@@ -805,6 +811,11 @@ func (b *builder) buildAdditionalInbounds() error {
 		if _, isText := port.(string); isText {
 			return E.New("section ", section.Name, ": the port of the mixed proxy is not a number")
 		}
+		// sing-box would fail to start on the second socket, and so would every try again
+		if other, taken := ports[fmt.Sprint(port)]; taken {
+			return E.New("sections ", other, " and ", section.Name, ": the mixed proxies have the same port ", port)
+		}
+		ports[fmt.Sprint(port)] = section.Name
 		b.addMixedInbound(section.Name+"-mixed-in", address, port, outboundTag(section.Name))
 	}
 	return nil

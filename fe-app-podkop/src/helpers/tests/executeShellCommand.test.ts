@@ -42,7 +42,9 @@ describe('executeShellCommand', () => {
 
   it('runs the program when the backend does not run', async () => {
     backend = async () => {
-      throw new Error('Object not found');
+      throw new Error(
+        'RPC call to podkop/run failed with error -32000: Object not found',
+      );
     };
     const reply = await executeShellCommand({
       command: '/usr/bin/podkop',
@@ -63,6 +65,19 @@ describe('executeShellCommand', () => {
     });
     expect(reply.stdout).toBe('from the program\n');
     expect(calls).toHaveLength(2);
+  });
+
+  it('does not run the program again for a call that got no answer', async () => {
+    backend = async () => {
+      throw new Error('XHR request timed out');
+    };
+    const reply = await executeShellCommand({
+      command: '/usr/bin/podkop',
+      args: ['clash_api', 'upgrade_ui'],
+    });
+    expect(reply.stdout).toBe('');
+    expect(reply.stderr).toBe('XHR request timed out');
+    expect(calls).toEqual(['podkop.run ["clash_api",["upgrade_ui"]]']);
   });
 
   it('runs other programs as they are', async () => {

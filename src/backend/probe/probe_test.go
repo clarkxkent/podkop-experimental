@@ -123,10 +123,13 @@ func TestLabelsAreForgotten(t *testing.T) {
 }
 
 func TestDeadEnd(t *testing.T) {
-	address := net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort))
-	// the address held by another listener at the start: tried again until it is free
-	held, err := net.Listen("tcp", address)
+	// the address held by another listener at the start: tried again until it is free. A
+	// port of its own: the tests of the supervisor listen on the dead end of the package.
+	held, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	address := held.Addr().String()
+	deadEndListen = address
+	defer func() { deadEndListen = net.JoinHostPort(DeadEndAddress, strconv.Itoa(DeadEndPort)) }()
 	deadEndRetry = 50 * time.Millisecond
 	defer func() { deadEndRetry = 10 * time.Second }()
 	var said []string

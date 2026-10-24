@@ -508,6 +508,7 @@ var Podkop;
     AvailableMethods2["GET_SYSTEM_INFO"] = "get_system_info";
     AvailableMethods2["GET_SING_BOX_FEATURES"] = "get_sing_box_features";
     AvailableMethods2["YACD_BUILTIN"] = "yacd_builtin";
+    AvailableMethods2["YACD_STATUS"] = "yacd_status";
   })(AvailableMethods = Podkop2.AvailableMethods || (Podkop2.AvailableMethods = {}));
   let AvailableClashAPIMethods;
   ((AvailableClashAPIMethods2) => {
@@ -558,13 +559,27 @@ var PodkopShellMethods = {
     group,
     proxy
   ]),
-  // the dashboard YACD of GitHub in place of the one served: sing-box downloads it
-  upgradeYacd: async () => callBaseMethod(
-    Podkop.AvailableMethods.CLASH_API,
-    [Podkop.AvailableClashAPIMethods.UPGRADE_UI],
-    "/usr/bin/podkop",
-    19e4
-  ),
+  // the dashboard YACD of GitHub in place of the one served: sing-box downloads it. That
+  // takes longer than LuCI waits for an answer: the backend runs it in the background and
+  // tells its end (yacd_status); the program, when the backend does not run, at the end.
+  upgradeYacd: async () => {
+    const started3 = await callBaseMethod(
+      Podkop.AvailableMethods.CLASH_API,
+      [Podkop.AvailableClashAPIMethods.UPGRADE_UI],
+      "/usr/bin/podkop",
+      19e4
+    );
+    if (!started3.success || !started3.data?.started) return started3;
+    const deadline = Date.now() + 24e4;
+    while (Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 2e3));
+      const status = await callBaseMethod(
+        Podkop.AvailableMethods.YACD_STATUS
+      );
+      if (status.success && !status.data?.running) return status;
+    }
+    return { success: false, error: "no answer" };
+  },
   // the dashboard YACD of the package served again
   restoreYacd: async () => callBaseMethod(
     Podkop.AvailableMethods.YACD_BUILTIN
@@ -4798,8 +4813,9 @@ async function askBackend(args) {
   try {
     const reply = await backendRun(args[0], args.slice(1));
     return typeof reply === "object" && reply !== null ? reply : void 0;
-  } catch {
-    return void 0;
+  } catch (err) {
+    if (/^RPC call to /.test(err?.message ?? "")) return void 0;
+    throw err;
   }
 }
 async function execute(command, args) {

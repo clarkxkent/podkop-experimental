@@ -64,6 +64,9 @@ import (
 //     interface of the settings still binds them (route.default_interface), as the
 //     interface of a VPN section binds its outbound; the device of layer 3 a name stands
 //     for (Facts.Devices) goes there.
+// 12. Settings with two mixed proxies on one port are refused: sing-box would fail to start
+//     on the second socket, and so would every try of the start again. The shell backend
+//     wrote the configuration.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
