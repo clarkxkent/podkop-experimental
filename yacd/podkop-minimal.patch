@@ -2166,6 +2166,389 @@ index 73d9683..a0c21ad 100644
  }
  
  export async function flushFakeIPPool(apiConfig: ClashAPIConfig) {
+diff --git a/src/api/connections.ts b/src/api/connections.ts
+index 0fcf2da..bae38ad 100644
+--- a/src/api/connections.ts
++++ b/src/api/connections.ts
+@@ -1,14 +1,13 @@
+ import { ClashAPIConfig } from '~/types';
+ 
+-import { buildWebSocketURL, getURLAndInit } from '../misc/request-helper';
++import { getURLAndInit } from '../misc/request-helper';
++import { openStream } from './stream';
+ 
+ const endpoint = '/connections';
+ 
+-const fetched = false;
+-
+ interface Subscriber {
+   listner: ConnectionsListener; // on data received, listener will be called with data
+-  onClose: () => void; // on stream closed, onClose will be called
++  onClose: () => void; // podkop-exp build: not called, the stream is opened again (stream.ts)
+ }
+ 
+ const subscribers: Subscriber[] = [];
+@@ -60,41 +59,27 @@ function appendData(s: string) {
+         }
+       }
+     });
+-  } catch (err) {
+-    console.log('JSON.parse error', JSON.parse(s));
++  } catch {
++    return;
+   }
+   subscribers.forEach((s) => s.listner(o));
+ }
+ 
+ type UnsubscribeFn = () => void;
+ 
+-let wsState: number;
++let started = false;
++
++// podkop-exp build: the stream is opened again whenever it ends (stream.ts) and keeps its
++// subscribers; it used to drop them when it closed, and the tiles of the overview stood still
+ export function fetchData(
+   apiConfig: ClashAPIConfig,
+   listener: ConnectionsListener,
+   onClose: () => void,
+ ): UnsubscribeFn | void {
+-  if (fetched || wsState === 1) {
+-    if (listener)
+-      return subscribe({
+-        listner: listener,
+-        onClose,
+-      });
++  if (!started) {
++    started = true;
++    openStream(apiConfig, endpoint, appendData);
+   }
+-  wsState = 1;
+-  const url = buildWebSocketURL(apiConfig, endpoint);
+-  const ws = new WebSocket(url);
+-  ws.addEventListener('error', () => {
+-    wsState = 3;
+-    subscribers.forEach((s) => s.onClose?.());
+-    subscribers.length = 0;
+-  });
+-  ws.addEventListener('close', () => {
+-    wsState = 3;
+-    subscribers.forEach((s) => s.onClose?.());
+-    subscribers.length = 0;
+-  });
+-  ws.addEventListener('message', (event) => appendData(event.data));
+   if (listener)
+     return subscribe({
+       listner: listener,
+@@ -106,7 +91,7 @@ function subscribe(subscriber: Subscriber): UnsubscribeFn {
+   subscribers.push(subscriber);
+   return function unsubscribe() {
+     const idx = subscribers.indexOf(subscriber);
+-    subscribers.splice(idx, 1);
++    if (idx >= 0) subscribers.splice(idx, 1);
+   };
+ }
+ 
+diff --git a/src/api/memory.ts b/src/api/memory.ts
+index 6f4008a..217e8f0 100644
+--- a/src/api/memory.ts
++++ b/src/api/memory.ts
+@@ -1,9 +1,8 @@
+ import { ClashAPIConfig } from '~/types';
+ 
+-import { buildWebSocketURL, getURLAndInit } from '../misc/request-helper';
++import { openStream, parseMessage } from './stream';
+ 
+ const endpoint = '/memory';
+-const textDecoder = new TextDecoder('utf-8');
+ 
+ const Size = 150;
+ 
+@@ -38,81 +37,18 @@ const memory = {
+   },
+ };
+ 
+-let fetched = false;
+-let decoded = '';
++let started = false;
+ 
+-function parseAndAppend(x: string) {
+-  memory.appendData(JSON.parse(x));
+-}
+-
+-function pump(reader: ReadableStreamDefaultReader): Promise<void> {
+-  return reader.read().then(({ done, value }) => {
+-    const str = textDecoder.decode(value, { stream: !done });
+-    decoded += str;
+-
+-    const splits = decoded.split('\n');
+-
+-    const lastSplit = splits[splits.length - 1];
+-
+-    for (let i = 0; i < splits.length - 1; i++) {
+-      parseAndAppend(splits[i]);
+-    }
+-
+-    if (done) {
+-      parseAndAppend(lastSplit);
+-      decoded = '';
+-
+-      console.log('GET /memory streaming done');
+-      fetched = false;
+-      return;
+-    } else {
+-      decoded = lastSplit;
+-    }
+-    return pump(reader);
+-  });
+-}
+-
+-// 1 OPEN
+-// other value CLOSED
+-// similar to ws readyState but not the same
+-// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
+-let wsState: number;
++// podkop-exp build: the stream is opened again whenever it ends (stream.ts), in place of a fetch
++// that was tried once after the WebSocket closed and then never again
+ function fetchData(apiConfig: ClashAPIConfig) {
+-  if (fetched || wsState === 1) return memory;
+-  wsState = 1;
+-  const url = buildWebSocketURL(apiConfig, endpoint);
+-  const ws = new WebSocket(url);
+-  ws.addEventListener('error', function (_ev) {
+-    wsState = 3;
+-  });
+-  ws.addEventListener('close', function (_ev) {
+-    wsState = 3;
+-    fetchDataWithFetch(apiConfig);
+-  });
+-  ws.addEventListener('message', function (event) {
+-    parseAndAppend(event.data);
+-  });
+-  return memory;
+-}
+-
+-function fetchDataWithFetch(apiConfig: ClashAPIConfig) {
+-  if (fetched) return memory;
+-  fetched = true;
+-  const { url, init } = getURLAndInit(apiConfig);
+-  fetch(url + endpoint, init).then(
+-    (response) => {
+-      if (response.ok && response.body) {
+-        const reader = response.body.getReader();
+-        pump(reader);
+-      } else {
+-        fetched = false;
+-      }
+-    },
+-    (err) => {
+-      console.log('fetch /memory error', err);
+-      fetched = false;
+-    },
+-  );
++  if (!started) {
++    started = true;
++    openStream(apiConfig, endpoint, (data) => {
++      const message = parseMessage<{ inuse: number; oslimit: number }>(data);
++      if (message) memory.appendData(message);
++    });
++  }
+   return memory;
+ }
+ 
+diff --git a/src/api/stream.ts b/src/api/stream.ts
+new file mode 100644
+index 0000000..72ea190
+--- /dev/null
++++ b/src/api/stream.ts
+@@ -0,0 +1,81 @@
++import { ClashAPIConfig } from '~/types';
++
++import { buildWebSocketURL } from '../misc/request-helper';
++
++// podkop-exp build: a stream of the Clash API (/traffic, /memory, /connections) over a WebSocket
++// that is opened again whenever it ends. sing-box closes its streams when it restarts (an apply of
++// the settings of podkop), and a phone closes them or lets them die in the background; the page
++// then got no data until it was loaded again. Opened again after 1 s, then up to 10 s apart, and
++// at once when the page is shown again or the network comes back. Each of these streams brings a
++// message every second: one silent for STALE is taken for dead and replaced.
++
++const STALE = 10000;
++const FIRST_DELAY = 1000;
++const MAX_DELAY = 10000;
++
++export function openStream(
++  apiConfig: ClashAPIConfig,
++  endpoint: string,
++  onMessage: (data: string) => void,
++) {
++  let ws: WebSocket | null = null;
++  let timer = 0;
++  let delay = FIRST_DELAY;
++  let lastMessage = 0;
++
++  const connect = () => {
++    window.clearTimeout(timer);
++    timer = 0;
++    const mine = new WebSocket(buildWebSocketURL(apiConfig, endpoint));
++    ws = mine;
++    lastMessage = Date.now();
++    mine.addEventListener('open', () => {
++      delay = FIRST_DELAY;
++    });
++    mine.addEventListener('message', (event) => {
++      if (ws !== mine) return;
++      lastMessage = Date.now();
++      onMessage(event.data);
++    });
++    mine.addEventListener('close', () => {
++      if (ws !== mine) return;
++      ws = null;
++      timer = window.setTimeout(connect, delay);
++      delay = Math.min(delay * 2, MAX_DELAY);
++    });
++  };
++
++  // a socket that is open but brings nothing: let it go and open another
++  const replaceIfStale = () => {
++    if (ws && Date.now() - lastMessage > STALE) {
++      const stale = ws;
++      ws = null;
++      stale.close();
++      connect();
++    }
++  };
++
++  const wake = () => {
++    if (document.visibilityState !== 'visible') return;
++    if (!ws) {
++      delay = FIRST_DELAY;
++      connect();
++    } else {
++      replaceIfStale();
++    }
++  };
++
++  document.addEventListener('visibilitychange', wake);
++  window.addEventListener('online', wake);
++  window.setInterval(replaceIfStale, STALE / 2);
++  connect();
++}
++
++// the messages of a stream are JSON, one each; one that is not is skipped
++export function parseMessage<T>(data: string): T | null {
++  try {
++    return JSON.parse(data) as T;
++  } catch {
++    return null;
++  }
++}
+diff --git a/src/api/traffic.ts b/src/api/traffic.ts
+index 0a6bbd6..73461d7 100644
+--- a/src/api/traffic.ts
++++ b/src/api/traffic.ts
+@@ -1,9 +1,8 @@
+ import { ClashAPIConfig } from '~/types';
+ 
+-import { buildWebSocketURL, getURLAndInit } from '../misc/request-helper';
++import { openStream, parseMessage } from './stream';
+ 
+ const endpoint = '/traffic';
+-const textDecoder = new TextDecoder('utf-8');
+ 
+ const Size = 150;
+ 
+@@ -38,81 +37,18 @@ const traffic = {
+   },
+ };
+ 
+-let fetched = false;
+-let decoded = '';
++let started = false;
+ 
+-function parseAndAppend(x: string) {
+-  traffic.appendData(JSON.parse(x));
+-}
+-
+-function pump(reader: ReadableStreamDefaultReader): Promise<void> {
+-  return reader.read().then(({ done, value }) => {
+-    const str = textDecoder.decode(value, { stream: !done });
+-    decoded += str;
+-
+-    const splits = decoded.split('\n');
+-
+-    const lastSplit = splits[splits.length - 1];
+-
+-    for (let i = 0; i < splits.length - 1; i++) {
+-      parseAndAppend(splits[i]);
+-    }
+-
+-    if (done) {
+-      parseAndAppend(lastSplit);
+-      decoded = '';
+-
+-      console.log('GET /traffic streaming done');
+-      fetched = false;
+-      return;
+-    } else {
+-      decoded = lastSplit;
+-    }
+-    return pump(reader);
+-  });
+-}
+-
+-// 1 OPEN
+-// other value CLOSED
+-// similar to ws readyState but not the same
+-// https://developer.mozilla.org/en-US/docs/Web/API/WebSocket/readyState
+-let wsState: number;
++// podkop-exp build: the stream is opened again whenever it ends (stream.ts), in place of a fetch
++// that was tried once after the WebSocket closed and then never again
+ function fetchData(apiConfig: ClashAPIConfig) {
+-  if (fetched || wsState === 1) return traffic;
+-  wsState = 1;
+-  const url = buildWebSocketURL(apiConfig, endpoint);
+-  const ws = new WebSocket(url);
+-  ws.addEventListener('error', function (_ev) {
+-    wsState = 3;
+-  });
+-  ws.addEventListener('close', function (_ev) {
+-    wsState = 3;
+-    fetchDataWithFetch(apiConfig);
+-  });
+-  ws.addEventListener('message', function (event) {
+-    parseAndAppend(event.data);
+-  });
+-  return traffic;
+-}
+-
+-function fetchDataWithFetch(apiConfig: ClashAPIConfig) {
+-  if (fetched) return traffic;
+-  fetched = true;
+-  const { url, init } = getURLAndInit(apiConfig);
+-  fetch(url + endpoint, init).then(
+-    (response) => {
+-      if (response.ok && response.body) {
+-        const reader = response.body.getReader();
+-        pump(reader);
+-      } else {
+-        fetched = false;
+-      }
+-    },
+-    (err) => {
+-      console.log('fetch /traffic error', err);
+-      fetched = false;
+-    },
+-  );
++  if (!started) {
++    started = true;
++    openStream(apiConfig, endpoint, (data) => {
++      const message = parseMessage<{ up: number; down: number }>(data);
++      if (message) traffic.appendData(message);
++    });
++  }
+   return traffic;
+ }
+ 
 diff --git a/src/app/SideBar.module.scss b/src/app/SideBar.module.scss
 index 70d91a6..a9a4375 100644
 --- a/src/app/SideBar.module.scss
@@ -2228,6 +2611,48 @@ index cc0d1e0..05faab9 100644
 -      </div>
 +      <div className={s.footer}></div>
      </div>
+   );
+ }
+diff --git a/src/app/router.tsx b/src/app/router.tsx
+index 1f7166d..c9c4725 100644
+--- a/src/app/router.tsx
++++ b/src/app/router.tsx
+@@ -1,5 +1,13 @@
+ import { Suspense } from 'react';
+-import { HashRouter, Navigate, Route, RouteObject, Routes, useRoutes } from 'react-router-dom';
++import {
++  HashRouter,
++  Navigate,
++  Route,
++  RouteObject,
++  Routes,
++  useLocation,
++  useRoutes,
++} from 'react-router-dom';
+ 
+ import SideBar from '~/app/SideBar';
+ import { Head } from '~/components/shared/Head';
+@@ -29,11 +37,21 @@ const routes = [
+ ].filter(Boolean) as RouteObject[];
+ 
+ function DashboardRouter() {
++  const location = useLocation();
++  const page = useRoutes(routes);
++  // podkop-exp build (Preact): a page that waits for its data suspends here, under the router,
++  // and each page has a boundary of its own. Suspended above the router, a page left the router
++  // unsubscribed from the location under Preact: after the rules had loaded, a tap on another tab
++  // changed the address and nothing else, until the page was loaded again.
+   return (
+     <>
+       <APIDiscoveryContainer />
+       <SideBar />
+-      <div className={styles.content}>{useRoutes(routes)}</div>
++      <div className={styles.content}>
++        <Suspense key={location.pathname} fallback={<Loading />}>
++          {page}
++        </Suspense>
++      </div>
+     </>
    );
  }
 diff --git a/src/components/backend/APIDiscovery.tsx b/src/components/backend/APIDiscovery.tsx

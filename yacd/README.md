@@ -49,6 +49,14 @@ What the patch changes:
 - The button that upgrades the dashboard is shown for sing-box too (Yacd-meta shows it only for a core
   that is not "premium"), and the request has a deadline of 5 minutes; the upgrade of the core stays
   hidden.
+- The pages wait for their data under the router, each in a boundary of its own: under Preact a page
+  that waited above the router (as in Yacd-meta) left the router deaf to the address, and after the
+  rules had loaded a tap on another tab changed nothing until a reload.
+- The streams of traffic, memory and connections open their WebSocket again whenever it ends (1 s, then
+  up to 10 s apart; at once when the page is shown again or the network is back; a socket silent for
+  10 s is replaced), in place of one try over fetch. Yacd-meta itself stops for good after sing-box
+  restarts (an apply of the settings) or after a phone let the tab sleep: the charts until a reload, the
+  tiles of the overview until the page is entered again.
 
 Rebuild (git, docker and the network): `sh yacd/build.sh` from the root of the repository. It gives the
 same files, byte for byte. To change the build: a working copy of Yacd-meta at the commit above, the
@@ -59,6 +67,8 @@ files of `removed.txt` removed, the patch applied, the change made; then
 Checked in Chromium, Firefox and WebKit against the sing-box of podkop-exp, the same steps for Yacd-meta
 and for this build (rs-lab/pk08/e2e/yacdcheck.py of the lab): the groups, the choice in a selector, the
 latency test, the rules, the connections (listed, settings, closed), the logs, the charts, the samples of
-the styles, no error of the page or of the console.
+the styles, no error of the page or of the console. On an emulated phone (Pixel 7, taps;
+rs-lab/pk08/e2e/yacdmobile.py and yacdtabs.py): the tabs tapped through, and the streams and the tiles
+after a restart of podkop, 20 s offline, 90 s of packets dropped and 90 s frozen in the background.
 
 The licence: MIT (`LICENSE`, installed with the files).
