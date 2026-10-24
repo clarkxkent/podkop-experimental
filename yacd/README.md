@@ -5,9 +5,10 @@ podkop-exp brings a small build of [Yacd-meta](https://github.com/MetaCubeX/Yacd
 sing-box serves as the `external_ui` of the Clash API, before sing-box starts: sing-box downloads a
 dashboard itself, from GitHub and within its start, only into an empty directory, and that download is
 gone. The copy is what the upgrade writes: the button "Upgrade Dashboard UI" of the dashboard (Config)
-makes sing-box download the dashboard of Yacd-meta from GitHub and unpack it over the copy. When the
-unpacking fails (no room left on the flash), sing-box empties the directory: the backend looks every
-30 s and puts this one back. `podkop yacd_builtin` puts it back by hand. The files of the package are never
+makes sing-box download the dashboard of Yacd-meta from GitHub and put it in place of the copy. An
+upgrade that fails (no room left on the flash, GitHub out of reach) leaves the dashboard served:
+podkop-engine r16 unpacks it into a directory of its own first and replaces the files only when all of
+them are there. `podkop yacd_builtin` puts this one back by hand. The files of the package are never
 written. `/usr/share/podkop/ui.builtin` tells which dashboard is served (sing-box leaves it alone): the
 build copied and the hash of its `index.html`. A newer package replaces an older copy of its own, a
 dashboard upgraded from GitHub stays, and one sing-box downloaded before this build was brought is

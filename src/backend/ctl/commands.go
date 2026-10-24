@@ -564,9 +564,6 @@ func clashAPI(client api.Client, arguments []string, output io.Writer) int {
 		}
 		message := "the Clash API did not answer (YACD off, or podkop not running)"
 		if status != 0 {
-			// sing-box empties the directory when the unpacking fails: the dashboard of
-			// the package is put back
-			_, _ = yacd.Ensure(yacd.BuiltinDir, yacd.ServedDir)
 			var answer struct {
 				Message string `json:"message"`
 			}

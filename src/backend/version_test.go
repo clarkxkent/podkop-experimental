@@ -9,8 +9,8 @@ import (
 func TestEngine(t *testing.T) {
 	saved := EngineRelease
 	defer func() { EngineRelease = saved }()
-	EngineRelease = "r15"
-	require.Equal(t, "sing-box 1.14.3, podkop-engine r15, "+Build+" (1d47804dc783)", Engine("1.14.3-pdk-1d47804dc783"))
+	EngineRelease = "r16"
+	require.Equal(t, "sing-box 1.14.3, podkop-engine r16, "+Build+" (6678b03c0edd)", Engine("1.14.3-pdk-6678b03c0edd"))
 	EngineRelease = ""
 	require.Equal(t, "sing-box 1.14.3, "+Build, Engine("1.14.3"))
 }

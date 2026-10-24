@@ -1,15 +1,15 @@
 // Package yacd keeps the dashboard YACD where sing-box serves it (the external_ui of the
 // Clash API). The package of podkop-exp brings a small build of it (BuiltinDir); it is
 // copied to a directory of its own (ServedDir) that sing-box serves and may write: the
-// upgrade of the dashboard (POST /upgrade/ui of the Clash API) unpacks the dashboard of
-// GitHub over it, and the files of the package stay as they are. sing-box downloads the
-// dashboard itself, synchronously within its start, only into an empty directory (it
-// empties it when a download fails): the served directory is never left empty.
+// upgrade of the dashboard (POST /upgrade/ui of the Clash API) puts the dashboard of GitHub
+// there, and the files of the package stay as they are. sing-box downloads the dashboard
+// itself, synchronously within its start, only into an empty directory: the served
+// directory is never left empty. An upgrade that fails leaves the dashboard served
+// (podkop-engine r16 unpacks it into a directory of its own first).
 //
 // Which dashboard is served is told by a file beside the directory (ServedDir+".builtin"),
 // which sing-box does not touch: the build of the package copied there and the hash of the
-// index.html it had. sing-box leaves the files it does not overwrite, a marker inside
-// the directory among them.
+// index.html it had.
 package yacd
 
 import (
@@ -165,9 +165,6 @@ func hashOf(path string) string {
 	sum := sha256.Sum256(content)
 	return hex.EncodeToString(sum[:])
 }
-
-// Served tells whether the directory has anything to serve.
-func Served(directory string) bool { return hasFiles(directory) }
 
 func hasFiles(directory string) bool {
 	entries, err := os.ReadDir(directory)

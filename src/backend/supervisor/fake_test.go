@@ -353,9 +353,9 @@ func TestFakeSurroundFailed(t *testing.T) {
 	s.Stop()
 }
 
-// A dashboard YACD emptied while sing-box runs (an upgrade from GitHub that failed while
-// unpacking) is put back from the package; a full one is left alone.
-func TestFakeKeepDashboard(t *testing.T) {
+// With YACD on, the dashboard of the package is put where sing-box serves it before it starts,
+// and the configuration names that directory by its path.
+func TestFakeDashboardServed(t *testing.T) {
 	s, _, _, settings := fakeFixture(t)
 	settings("one.lab.example", "60")
 	path := s.options.SettingsPath
@@ -371,18 +371,7 @@ func TestFakeKeepDashboard(t *testing.T) {
 	s.options.YACDBuiltinDir, s.options.YACDServedDir = builtin, served
 	require.True(t, s.Boot().OK)
 	require.Contains(t, string(s.current.result.Config), `"external_ui": "`+served+`"`)
-	require.FileExists(t, filepath.Join(served, "index.html"))
-	// upgraded from GitHub: left alone
-	require.NoError(t, os.WriteFile(filepath.Join(served, "index.html"), []byte("<html>github</html>"), 0o644))
-	s.keepDashboard()
 	index, err := os.ReadFile(filepath.Join(served, "index.html"))
-	require.NoError(t, err)
-	require.Equal(t, "<html>github</html>", string(index))
-	// emptied by an upgrade that failed: the one of the package again
-	require.NoError(t, os.RemoveAll(served))
-	require.NoError(t, os.MkdirAll(served, 0o755))
-	s.keepDashboard()
-	index, err = os.ReadFile(filepath.Join(served, "index.html"))
 	require.NoError(t, err)
 	require.Equal(t, "<html>1</html>", string(index))
 	s.Stop()
