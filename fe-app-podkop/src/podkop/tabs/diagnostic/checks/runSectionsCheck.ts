@@ -50,13 +50,22 @@ export async function runSectionsCheck() {
 
           if (success) {
             if (isUrlTest) {
-              const latency = Object.values(latencyGroup.data)
-                .map((item) => (item ? `${item}ms` : 'n/a'))
-                .join(' / ');
+              // sing-box answers the delays of the outbounds that answered: an empty
+              // answer is a group none of whose outbounds works
+              const delays = Object.values(latencyGroup.data).filter(
+                (item) => typeof item === 'number' && item > 0,
+              );
+
+              if (!delays.length) {
+                return {
+                  success: false,
+                  latency: `[${_('Fastest')}] ${_('Not responding')}`,
+                };
+              }
 
               return {
                 success: true,
-                latency: `[${_('Fastest')}] ${latency}`,
+                latency: `[${_('Fastest')}] ${delays.map((item) => `${item}ms`).join(' / ')}`,
               };
             }
 

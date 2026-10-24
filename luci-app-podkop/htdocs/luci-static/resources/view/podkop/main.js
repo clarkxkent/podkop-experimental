@@ -3616,10 +3616,18 @@ async function runSectionsCheck() {
           const success3 = latencyGroup.success && !latencyGroup.data.message;
           if (success3) {
             if (isUrlTest) {
-              const latency2 = Object.values(latencyGroup.data).map((item) => item ? `${item}ms` : "n/a").join(" / ");
+              const delays = Object.values(latencyGroup.data).filter(
+                (item) => typeof item === "number" && item > 0
+              );
+              if (!delays.length) {
+                return {
+                  success: false,
+                  latency: `[${_("Fastest")}] ${_("Not responding")}`
+                };
+              }
               return {
                 success: true,
-                latency: `[${_("Fastest")}] ${latency2}`
+                latency: `[${_("Fastest")}] ${delays.map((item) => `${item}ms`).join(" / ")}`
               };
             }
             const selectedProxyDelay = latencyGroup.data?.[selectedOutbound?.code ?? ""];
