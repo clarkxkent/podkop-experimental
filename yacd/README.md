@@ -52,6 +52,9 @@ What the patch changes:
 - The pages wait for their data under the router, each in a boundary of its own: under Preact a page
   that waited above the router (as in Yacd-meta) left the router deaf to the address, and after the
   rules had loaded a tap on another tab changed nothing until a reload.
+- Under sing-box only a Selector is switched: the members of its GLOBAL (a list of the outbounds made for
+  dashboards) and of a URLTest group are shown, not offered (Yacd-meta offered them, and sing-box answered
+  "Resource not found" or "Must be a Selector").
 - The streams of traffic, memory and connections open their WebSocket again whenever it ends (1 s, then
   up to 10 s apart; at once when the page is shown again or the network is back; a socket silent for
   10 s is replaced), in place of one try over fetch. Yacd-meta itself stops for good after sing-box

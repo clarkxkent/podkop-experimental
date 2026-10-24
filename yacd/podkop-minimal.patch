@@ -3142,6 +3142,26 @@ index 2584886..a3ca715 100644
 +    />
 +  );
  }
+diff --git a/src/components/proxies/ProxyGroup.tsx b/src/components/proxies/ProxyGroup.tsx
+index 0bd1f5e..2063a13 100644
+--- a/src/components/proxies/ProxyGroup.tsx
++++ b/src/components/proxies/ProxyGroup.tsx
+@@ -86,9 +86,13 @@ export const ProxyGroup = memo(function ProxyGroup({
+ 
+   const version = useVersion(apiConfig);
+ 
++  // podkop-exp build: mihomo (meta) fixes a member of a Fallback or URLTest group too; sing-box
++  // (meta and premium) switches only a Selector, and its GLOBAL is a list of the outbounds made
++  // for dashboards, no group of its own: a tap there failed with "Resource not found"
++  const mihomo = version.meta && !version.premium;
+   const isSelectable = useMemo(
+-    () => ['Selector', version.meta && 'Fallback', version.meta && 'URLTest'].includes(type),
+-    [type, version.meta],
++    () => ['Selector', mihomo && 'Fallback', mihomo && 'URLTest'].includes(type),
++    [type, mihomo],
+   );
+ 
+   const {
 diff --git a/src/components/shared/Collapsible.tsx b/src/components/shared/Collapsible.tsx
 index bc723a0..eac1d95 100644
 --- a/src/components/shared/Collapsible.tsx

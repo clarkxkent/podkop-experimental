@@ -8,7 +8,7 @@
 # the icons in the patch comes from feather-shim.py.
 set -eu
 UPSTREAM=24151c331027ff176b45ed417180c6f1220474a3
-BUILD=podkop-exp-6
+BUILD=podkop-exp-7
 # the image the files were built with: another version of bun may resolve or bundle otherwise
 IMAGE=oven/bun:1.4.4@sha256:1d22548f177f4ff38e0c15baa3c2c46c6c2060ba2d1bc573bb4720b407548f1d
 ROOT=$(pwd)
