@@ -46,6 +46,10 @@ const (
 	RoutingTableName = "podkop"
 	RulePriority     = 105
 
+	// UplinkRulePriority is the priority of the rules that route what sing-box sends from a
+	// socket bound to the device of an uplink by the main table (netcfg.RouteUplinks).
+	UplinkRulePriority = 106
+
 	// FirewallTable is the nftables table of the backend, of the family inet.
 	FirewallTable = "PodkopTable"
 

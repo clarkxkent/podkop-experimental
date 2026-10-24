@@ -35,6 +35,8 @@ func (Router) RemoveRouting() error { return netcfg.Remove() }
 
 func (Router) RoutingPresent() (bool, error) { return netcfg.Present() }
 
+func (Router) RouteUplinks() ([]string, error) { return netcfg.RouteUplinks() }
+
 func (Router) FirewallPresent() (bool, error) { return firewall.Exists() }
 
 func (Router) SetClashSecret(key string) error {

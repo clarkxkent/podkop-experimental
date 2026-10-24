@@ -63,7 +63,9 @@ import (
 //     route.default_mark (dataplane.OutboundMark), which mangle_output lets go by. An
 //     interface of the settings still binds them (route.default_interface), as the
 //     interface of a VPN section binds its outbound; the device of layer 3 a name stands
-//     for (Facts.Devices) goes there.
+//     for (Facts.Devices) goes there. What is bound to the device of an uplink goes by the
+//     main table (netcfg.RouteUplinks), not into the table of another uplink that the
+//     policy of mwan3 chose.
 // 12. Settings with two mixed proxies on one port are refused: sing-box would fail to start
 //     on the second socket, and so would every try of the start again. The shell backend
 //     wrote the configuration.

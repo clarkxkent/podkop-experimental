@@ -438,6 +438,11 @@ func TestFakeDrift(t *testing.T) {
 	require.NotEmpty(t, all(""))
 	system.listening = all("")
 	require.Equal(t, "nothing was missing", s.restoreRouting())
+	// an uplink that came up gets its rule, and sing-box keeps running
+	system.uplinks = []string{"wwan0"}
+	require.Equal(t, "what sing-box sends bound to wwan0 goes by the main routing table", s.restoreRouting())
+	require.Len(t, fake.built, 1)
+	require.Equal(t, "nothing was missing", s.restoreRouting())
 
 	system.lan = "192.168.2.1"
 	message := s.restoreRouting()

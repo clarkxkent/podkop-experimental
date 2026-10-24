@@ -87,8 +87,13 @@ func Present() (bool, error) {
 	return len(routes) > 0, nil
 }
 
-// Remove deletes the rule and the routes of the table; what is not there is no error.
+// Remove deletes the rule and the routes of the table, and the rules of the uplinks
+// (RouteUplinks); what is not there is no error.
 func Remove() error {
+	_, err := syncUplinkRules(nil)
+	if err != nil {
+		return err
+	}
 	for {
 		exists, err := ruleExists()
 		if err != nil {

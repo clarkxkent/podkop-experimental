@@ -61,6 +61,10 @@ type System interface {
 	// FirewallPresent whether the table is.
 	RoutingPresent() (bool, error)
 	FirewallPresent() (bool, error)
+	// RouteUplinks keeps the rules that route the sockets of sing-box bound to an uplink by
+	// the main table, and tells the devices it added a rule for (netcfg.RouteUplinks);
+	// RemoveRouting removes them.
+	RouteUplinks() ([]string, error)
 	// SetClashSecret writes the key of the Clash API into the settings.
 	SetClashSecret(key string) error
 	// UpdateFirewall brings the firewall table from the previous plan to the next; with
@@ -556,6 +560,8 @@ func (s *Supervisor) restoreRouting() string {
 			restored = append(restored, "the rule and the route of the routing table")
 		}
 	}
+	// an uplink that came up, or the rules a restart of the network flushed
+	routed := s.routeUplinks()
 	present, err = s.options.System.FirewallPresent()
 	if err != nil {
 		s.log("warn", "look at the firewall table: ", err)
@@ -586,6 +592,12 @@ func (s *Supervisor) restoreRouting() string {
 		message = strings.Join(restored, ", ") + " had gone and are back"
 		s.log("warn", "the network changed: ", message)
 	}
+	if routed != "" {
+		if message != "" {
+			message += "; "
+		}
+		message += routed
+	}
 	if changes, lost := s.drift(current); len(changes) > 0 {
 		// The router has changed under the configuration: an interface came up after
 		// podkop or got another device, the LAN got its address or another one (the
@@ -613,6 +625,22 @@ func (s *Supervisor) restoreRouting() string {
 	if message == "" {
 		return "nothing was missing"
 	}
+	return message
+}
+
+// routeUplinks keeps the rules for the sockets of sing-box bound to an uplink
+// (System.RouteUplinks) and tells the uplinks it added a rule for; a failure is only
+// logged: sockets that are not bound do not need the rules.
+func (s *Supervisor) routeUplinks() string {
+	added, err := s.options.System.RouteUplinks()
+	if err != nil {
+		s.log("warn", "route the sockets bound to an uplink: ", err)
+	}
+	if len(added) == 0 {
+		return ""
+	}
+	message := "what sing-box sends bound to " + strings.Join(added, ", ") + " goes by the main routing table"
+	s.log("info", message)
 	return message
 }
 
@@ -1247,6 +1275,7 @@ func (s *Supervisor) surround(previousFirewall *firewall.Plan) error {
 	if err != nil {
 		return E.Cause(err, "set up the routing")
 	}
+	s.routeUplinks()
 	// the plan is kept once the kernel has it: one that failed leaves none, and the next
 	// update sets the whole table up
 	plan := s.firewallPlan(current)

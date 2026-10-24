@@ -6,6 +6,8 @@ import (
 	"net/netip"
 	"os/exec"
 	"strings"
+
+	E "github.com/sagernet/sing/common/exceptions"
 )
 
 // netifdInterface is what netifd reports of a logical interface (ubus call
@@ -19,6 +21,10 @@ type netifdInterface struct {
 	Addresses []struct {
 		Address string `json:"address"`
 	} `json:"ipv4-address"`
+	Routes []struct {
+		Target string `json:"target"`
+		Mask   int    `json:"mask"`
+	} `json:"route"`
 }
 
 // pppPrefixes are the protocols of netifd whose device of layer 3 is made by pppd when the
@@ -51,20 +57,30 @@ func Devices(names []string) map[string]string {
 	if len(names) == 0 {
 		return nil
 	}
+	interfaces, err := dumpInterfaces()
+	if err != nil {
+		return nil
+	}
+	return devicesOf(interfaces, names)
+}
+
+// dumpInterfaces is what netifd reports of the logical interfaces.
+func dumpInterfaces() ([]netifdInterface, error) {
 	// netifd answers at once or is not there; a bus that hangs must not hold the caller
 	ctx, cancel := context.WithTimeout(context.Background(), netifdTimeout)
 	defer cancel()
 	output, err := exec.CommandContext(ctx, "ubus", "-t", "2", "call", "network.interface", "dump").Output()
 	if err != nil {
-		return nil
+		return nil, E.Cause(err, "ask netifd for the interfaces")
 	}
 	var dump struct {
 		Interfaces []netifdInterface `json:"interface"`
 	}
-	if json.Unmarshal(output, &dump) != nil {
-		return nil
+	err = json.Unmarshal(output, &dump)
+	if err != nil {
+		return nil, E.Cause(err, "read the interfaces of netifd")
 	}
-	return devicesOf(dump.Interfaces, names)
+	return dump.Interfaces, nil
 }
 
 func devicesOf(interfaces []netifdInterface, names []string) map[string]string {

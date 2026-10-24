@@ -58,6 +58,8 @@ type recorder struct {
 	listening []sockets.Listener
 	// routingError is what setting up the routing fails with
 	routingError error
+	// uplinks are the devices RouteUplinks adds a rule for, once
+	uplinks []string
 }
 
 func (r *recorder) Devices(names []string) map[string]string { return r.devices }
@@ -74,6 +76,12 @@ func (r *recorder) AllowBridgedTraffic() []string {
 func (r *recorder) SetClashSecret(key string) error { r.secrets = append(r.secrets, key); return nil }
 func (r *recorder) RoutingPresent() (bool, error)   { return !r.routingGone, nil }
 func (r *recorder) FirewallPresent() (bool, error)  { return !r.firewallGone, nil }
+
+func (r *recorder) RouteUplinks() ([]string, error) {
+	added := r.uplinks
+	r.uplinks = nil
+	return added, nil
+}
 
 func (r *recorder) LANAddress() string {
 	if r.noLAN {
