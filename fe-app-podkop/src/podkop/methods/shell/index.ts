@@ -50,33 +50,6 @@ export const PodkopShellMethods = {
       group,
       proxy,
     ]),
-  // the dashboard YACD of GitHub in place of the one served: sing-box downloads it. That
-  // takes longer than LuCI waits for an answer: the backend runs it in the background and
-  // tells its end (yacd_status); the program, when the backend does not run, at the end.
-  upgradeYacd: async (): Promise<Podkop.MethodResponse<Podkop.YacdUpgrade>> => {
-    const started = await callBaseMethod<Podkop.YacdUpgrade>(
-      Podkop.AvailableMethods.CLASH_API,
-      [Podkop.AvailableClashAPIMethods.UPGRADE_UI],
-      '/usr/bin/podkop',
-      190000,
-    );
-    if (!started.success || !started.data?.started) return started;
-    const deadline = Date.now() + 240000;
-    while (Date.now() < deadline) {
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      const status = await callBaseMethod<Podkop.YacdUpgrade>(
-        Podkop.AvailableMethods.YACD_STATUS,
-      );
-      // not running: ended, or the backend that ran it is gone
-      if (status.success && !status.data?.running) return status;
-    }
-    return { success: false, error: 'no answer' };
-  },
-  // the dashboard YACD of the package served again
-  restoreYacd: async () =>
-    callBaseMethod<{ success: boolean; message?: string }>(
-      Podkop.AvailableMethods.YACD_BUILTIN,
-    ),
   restart: async () =>
     callBaseMethod<unknown>(
       Podkop.AvailableMethods.RESTART,

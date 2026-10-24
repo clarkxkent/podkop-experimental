@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-24 02:37+0000\n"
-"PO-Revision-Date: 2026-10-24 02:37+0000\n"
+"POT-Creation-Date: 2026-10-23 08:38+0000\n"
+"PO-Revision-Date: 2026-10-23 08:38+0000\n"
 "Last-Translator: Automatically generated\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -73,9 +73,6 @@ msgstr "Браузер не использует FakeIP"
 
 msgid "Browser is using FakeIP correctly"
 msgstr "Браузер использует FakeIP"
-
-msgid "Built-in YACD"
-msgstr "Встроенный YACD"
 
 msgid "Cache File Path"
 msgstr "Путь к файлу кэша"
@@ -335,9 +332,6 @@ msgstr "IP-адрес 0.0.0.0 не допускается"
 msgid "Issues detected"
 msgstr "Обнаружены проблемы"
 
-msgid "It did not work: %s"
-msgstr "Не получилось: %s"
-
 msgid "Latest"
 msgstr "Последняя"
 
@@ -391,9 +385,6 @@ msgstr "нет ни method:password@сервер, ни base64 этой стро�
 
 msgid "Network Interface"
 msgstr "Сетевой интерфейс"
-
-msgid "no answer"
-msgstr "нет ответа"
 
 msgid "no IPv4 address now"
 msgstr "сейчас без IPv4-адреса"
@@ -641,9 +632,6 @@ msgstr "Ссылки появятся здесь после «Сохранить
 msgid "The maximum difference in response times (ms) allowed when comparing servers"
 msgstr "Максимально допустимая разница во времени отклика (мс) при сравнении серверов"
 
-msgid "The router downloads the dashboard of the Yacd-meta project from GitHub and serves it in place of this one"
-msgstr "Роутер скачивает панель проекта Yacd-meta с GitHub и показывает её вместо этой"
-
 msgid "The settings are not saved. The engine of the router refuses these links:"
 msgstr "Настройки не сохранены. Движок роутера отвергает эти ссылки:"
 
@@ -661,9 +649,6 @@ msgstr "пользователь должен быть UUID и паролем"
 
 msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
 msgstr "Веб-панель sing-box, открывается с устройств, выбранных ниже; без неё API панели доступен только с самого роутера"
-
-msgid "The YACD of podkop-exp is served again: reload its page"
-msgstr "Снова показывается YACD из podkop-exp: перезагрузите его страницу"
 
 msgid "Time in seconds for DNS record caching (default: 60)"
 msgstr "Время в секундах для кэширования DNS записей (по умолчанию: 60)"
@@ -697,9 +682,6 @@ msgstr "Неизвестная ошибка"
 
 msgid "Unsupported link type"
 msgstr "Неподдерживаемый тип ссылки"
-
-msgid "Update YACD from GitHub"
-msgstr "Обновить YACD с GitHub"
 
 msgid "Uplink"
 msgstr "Исходящий"
@@ -766,9 +748,6 @@ msgstr "Если сервер не отвечает на TLS ClientHello с от
 
 msgid "Without it, podkop's own connections go where the routing of the router sends them (mwan3 included)"
 msgstr "Без этого собственные соединения podkop идут туда, куда их отправляет маршрутизация роутера (в том числе mwan3)"
-
-msgid "YACD is updated from GitHub: reload its page"
-msgstr "YACD обновлён с GitHub: перезагрузите его страницу"
 
 msgid "YACD Links"
 msgstr "Ссылки YACD"

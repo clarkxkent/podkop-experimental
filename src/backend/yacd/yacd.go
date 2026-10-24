@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -146,53 +145,6 @@ func Remove(served string) error {
 	return os.RemoveAll(served)
 }
 
-// Upgrade is an upgrade of the dashboard from GitHub that runs in the background: sing-box
-// downloads it within the request, longer than the user interface waits for an answer.
-type Upgrade struct {
-	access  sync.Mutex
-	running bool
-	last    UpgradeResult
-}
-
-// UpgradeResult is what the last upgrade came to.
-type UpgradeResult struct {
-	Done    bool   `json:"done"`
-	Success bool   `json:"success"`
-	Message string `json:"message,omitempty"`
-	At      int64  `json:"at,omitempty"`
-}
-
-// Upgrades is the upgrade of the backend.
-var Upgrades Upgrade
-
-// Start runs the upgrade in the background unless one runs; it tells whether it started.
-func (u *Upgrade) Start(upgrade func() error) bool {
-	u.access.Lock()
-	defer u.access.Unlock()
-	if u.running {
-		return false
-	}
-	u.running = true
-	go func() {
-		err := upgrade()
-		result := UpgradeResult{Done: true, Success: err == nil, At: time.Now().Unix()}
-		if err != nil {
-			result.Message = err.Error()
-		}
-		u.access.Lock()
-		u.running, u.last = false, result
-		u.access.Unlock()
-	}()
-	return true
-}
-
-// Status tells whether an upgrade runs and what the last one came to.
-func (u *Upgrade) Status() (bool, UpgradeResult) {
-	u.access.Lock()
-	defer u.access.Unlock()
-	return u.running, u.last
-}
-
 func readRecord(served string) (build string, hash string, known bool) {
 	content, err := os.ReadFile(record(served))
 	if err != nil {
@@ -213,6 +165,9 @@ func hashOf(path string) string {
 	sum := sha256.Sum256(content)
 	return hex.EncodeToString(sum[:])
 }
+
+// Served tells whether the directory has anything to serve.
+func Served(directory string) bool { return hasFiles(directory) }
 
 func hasFiles(directory string) bool {
 	entries, err := os.ReadDir(directory)

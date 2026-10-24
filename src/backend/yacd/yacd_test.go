@@ -1,11 +1,9 @@
 package yacd
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -117,28 +115,4 @@ func TestEnsure(t *testing.T) {
 	require.NoError(t, Remove(served))
 	require.NoDirExists(t, served)
 	require.NoFileExists(t, served+".builtin")
-}
-
-// One upgrade from GitHub at a time, in the background; its end is told by Status.
-func TestUpgrade(t *testing.T) {
-	var upgrade Upgrade
-	release := make(chan error)
-	require.True(t, upgrade.Start(func() error { return <-release }))
-	require.False(t, upgrade.Start(func() error { return nil }), "one at a time")
-	running, last := upgrade.Status()
-	require.True(t, running)
-	require.False(t, last.Done)
-	release <- errors.New("no network")
-	ended := func() bool {
-		running, _ := upgrade.Status()
-		return !running
-	}
-	require.Eventually(t, ended, 5*time.Second, 10*time.Millisecond)
-	_, last = upgrade.Status()
-	require.Equal(t, UpgradeResult{Done: true, Message: "no network", At: last.At}, last)
-	require.NotZero(t, last.At)
-	require.True(t, upgrade.Start(func() error { return nil }))
-	require.Eventually(t, ended, 5*time.Second, 10*time.Millisecond)
-	_, last = upgrade.Status()
-	require.True(t, last.Success)
 }

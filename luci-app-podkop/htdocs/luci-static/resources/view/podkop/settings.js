@@ -1,6 +1,5 @@
 "use strict";
 "require form";
-"require ui";
 "require uci";
 "require baseclass";
 "require tools.widgets as widgets";
@@ -203,60 +202,15 @@ function createSettingsContent(section, singBoxFeatures = []) {
     if (!this.links.length) {
       return E("em", {}, [_("The links appear here after Save & Apply")]);
     }
-    // the dashboard served: the one of the package, or that of GitHub on request
-    const act = (button, method, done) => {
-      button.disabled = true;
-      return method()
-        .then((answer) => {
-          const ok = answer.success && answer.data && answer.data.success;
-          const text = ok
-            ? done
-            : _("It did not work: %s").format(
-                (answer.data && answer.data.message) || _("no answer"),
-              );
-          ui.addNotification(null, E("p", {}, [text]), ok ? "info" : "warning");
-        })
-        .finally(() => {
-          button.disabled = false;
-        });
-    };
-    const upgrade = E(
-      "button",
-      {
-        class: "cbi-button cbi-button-action",
-        title: _(
-          "The router downloads the dashboard of the Yacd-meta project from GitHub and serves it in place of this one",
-        ),
-        click: (ev) =>
-          act(
-            ev.currentTarget,
-            main.PodkopShellMethods.upgradeYacd,
-            _("YACD is updated from GitHub: reload its page"),
-          ),
-      },
-      [_("Update YACD from GitHub")],
-    );
-    const builtin = E(
-      "button",
-      {
-        class: "cbi-button",
-        click: (ev) =>
-          act(
-            ev.currentTarget,
-            main.PodkopShellMethods.restoreYacd,
-            _("The YACD of podkop-exp is served again: reload its page"),
-          ),
-      },
-      [_("Built-in YACD")],
-    );
-    return E("div", {}, [
-      ...this.links.map((link) =>
+    return E(
+      "div",
+      {},
+      this.links.map((link) =>
         E("div", {}, [
           E("a", { href: link, target: "_blank", rel: "noopener" }, [link]),
         ]),
       ),
-      E("div", { style: "margin-top: 0.5em" }, [upgrade, " ", builtin]),
-    ]);
+    );
   };
 
   if (singBoxFeatures.includes("tls.utls-fallback")) {

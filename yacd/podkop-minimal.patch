@@ -2151,6 +2151,21 @@ index 8602281..3ebe5e3 100644
    },
    "overrides": {
      "@types/react": "18.3.28",
+diff --git a/src/api/configs.ts b/src/api/configs.ts
+index 73d9683..a0c21ad 100644
+--- a/src/api/configs.ts
++++ b/src/api/configs.ts
+@@ -58,7 +58,9 @@ export async function upgradeGeo(apiConfig: ClashAPIConfig) {
+ export async function upgradeUI(apiConfig: ClashAPIConfig) {
+   const { url, init } = getURLAndInit(apiConfig);
+   const body = '{"path": "", "payload": ""}';
+-  return await fetch(url + upgradeUIEndpoint, { ...init, body, method: 'POST' });
++  // podkop-exp build: sing-box downloads without a deadline; the buttons are not held for good
++  const signal = AbortSignal.timeout(5 * 60 * 1000);
++  return await fetch(url + upgradeUIEndpoint, { ...init, body, method: 'POST', signal });
+ }
+ 
+ export async function flushFakeIPPool(apiConfig: ClashAPIConfig) {
 diff --git a/src/app/SideBar.module.scss b/src/app/SideBar.module.scss
 index 70d91a6..a9a4375 100644
 --- a/src/app/SideBar.module.scss
@@ -2239,7 +2254,7 @@ index aace980..d245d80 100644
    );
  }
 diff --git a/src/components/config/Config.tsx b/src/components/config/Config.tsx
-index b807661..c167afe 100644
+index b807661..b3035b5 100644
 --- a/src/components/config/Config.tsx
 +++ b/src/components/config/Config.tsx
 @@ -23,7 +23,6 @@ import {
@@ -2259,7 +2274,26 @@ index b807661..c167afe 100644
  
    const { selectChartStyleIndex, updateAppConfig } = useStoreActions();
    const {
-@@ -311,17 +310,6 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+@@ -67,6 +66,9 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+   const coreMeta = getCoreVersionMeta(version);
+   // 只有 mihomo 支持在线升级内核和面板；版本号跟着升级按钮走，其它内核的版本号放在当前后端里
+   const canUpgrade = version.meta && !version.premium;
++  // podkop-exp build: sing-box (premium) upgrades the dashboard too (POST /upgrade/ui); the
++  // backend of podkop-exp puts this one back when the unpacking fails and empties it
++  const canUpgradeUI = version.meta;
+ 
+   return (
+     <div>
+@@ -243,7 +245,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+                     </div>
+                   </div>
+                 )}
+-                {canUpgrade && (
++                {canUpgradeUI && (
+                   <div>
+                     <div className={s0.label}>Yacd</div>
+                     <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
+@@ -311,17 +313,6 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
              {t('dashboard')}
            </div>
            <div className={s0.section}>
@@ -2277,6 +2311,15 @@ index b807661..c167afe 100644
              <div>
                <div className={s0.label}>{t('chart_style')}</div>
                <Selection2
+@@ -332,7 +323,7 @@ export default function Config({ dispatch, configs, selectedChartStyleIndex, api
+               />
+             </div>
+ 
+-            {canUpgrade ? null : (
++            {canUpgradeUI ? null : (
+               <div>
+                 <div className={s0.label}>Yacd</div>
+                 <VersionLine version={__VERSION__} link={YACD_REPO_URL} />
 diff --git a/src/components/connections/ConnectionSettingsModal.module.scss b/src/components/connections/ConnectionSettingsModal.module.scss
 index cfb46b2..50c2676 100644
 --- a/src/components/connections/ConnectionSettingsModal.module.scss

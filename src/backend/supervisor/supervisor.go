@@ -215,6 +215,8 @@ type Supervisor struct {
 	// unapplied is the change of the network the settings were last applied again for
 	// without taking: the same change is not tried again at every event of the network
 	unapplied string
+	// dashboardFailed tells that the dashboard YACD could not be put back (keepDashboard)
+	dashboardFailed bool
 	// stuck tells that an instance of sing-box did not close: nothing more can run in
 	// this process (see close)
 	stuck bool
@@ -798,6 +800,7 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 		case <-bridged.C:
 			if s.current != nil {
 				s.allowBridged()
+				s.keepDashboard()
 			}
 		case <-reload:
 			s.Apply()
@@ -832,7 +835,8 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 const deriveMerge = 500 * time.Millisecond
 
 // bridgedCheckInterval is how often a running backend looks whether another program has
-// let bridged packets through the IP firewall hooks again (dockerd does at its start).
+// let bridged packets through the IP firewall hooks again (dockerd does at its start), and
+// whether the dashboard YACD is still there (keepDashboard).
 const bridgedCheckInterval = 30 * time.Second
 
 // allowBridged keeps bridged packets out of the IP firewall hooks (System.
@@ -1011,6 +1015,25 @@ func (s *Supervisor) noDashboard(settings *model.Config) bool {
 		s.log("warn", "put the dashboard YACD in place: ", err)
 	}
 	return !served
+}
+
+// keepDashboard puts the dashboard YACD of the package back when the directory sing-box
+// serves is empty: an upgrade from GitHub (the button of the dashboard) that fails while
+// unpacking, with no room left on the flash, empties it, and /ui/ would answer nothing
+// until the next start. A failure to put it back is told once.
+func (s *Supervisor) keepDashboard() {
+	if !s.current.settings.Settings.EnableYACD || s.options.YACDServedDir == "" || yacd.Served(s.options.YACDServedDir) {
+		return
+	}
+	served, err := yacd.Ensure(s.options.YACDBuiltinDir, s.options.YACDServedDir)
+	switch {
+	case err != nil && !s.dashboardFailed:
+		s.dashboardFailed = true
+		s.log("warn", "put the dashboard YACD back: ", err)
+	case err == nil && served:
+		s.dashboardFailed = false
+		s.log("warn", "the dashboard YACD was gone (an upgrade from GitHub that failed): the one of the package is served again")
+	}
 }
 
 // forgetLists keeps what the checks found only of the lists of this apply.
