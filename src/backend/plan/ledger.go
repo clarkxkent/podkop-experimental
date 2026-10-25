@@ -72,6 +72,10 @@ import (
 // 13. A proxy section connects through another section (option detour): the outbounds of
 //     its servers get the detour of the outbound of that section. The shell backend has no
 //     such option.
+// 14. The uTLS fingerprint fallback of the engine (experimental.utls_fallback) is told
+//     always: on without the option utls_fallback and with 'enabled', off with 'disabled'.
+//     The shell backend wrote it only with enable_utls_fallback on, with a list of
+//     fingerprints the engine reads no more since podkop-engine r17.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -222,6 +226,7 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 					clashAPIObject.set("external_controller", address+":"+strconv.Itoa(dataplane.ClashAPIPort))
 				}
 			}
+			experimentalObject.set("utls_fallback", newObject("enabled", shell.Settings.Settings.UTLSFallback))
 		}
 	}
 	movePaths(document, options.RuleSetDir)

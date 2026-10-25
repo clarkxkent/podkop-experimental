@@ -36,10 +36,13 @@ type Settings struct {
 	EnableYACD bool
 	// YACDInterfaces are the devices YACD is opened from; none: those of
 	// SourceNetworkInterfaces
-	YACDInterfaces     []string
-	YACDSecretKey      string
-	EnableUTLSFallback bool
-	DisableQUIC        bool
+	YACDInterfaces []string
+	YACDSecretKey  string
+	// UTLSFallback turns the uTLS fingerprint fallback of the engine on
+	// (experimental.utls_fallback): on unless the settings turn it off
+	// ("utls_fallback" 'disabled'); the page writes nothing for the default
+	UTLSFallback bool
+	DisableQUIC  bool
 
 	UpdateInterval               string
 	DownloadListsViaProxy        bool
@@ -122,7 +125,7 @@ func Load(parsed *uci.Package) (*Config, error) {
 		EnableYACD:                   settings.Bool("enable_yacd", false),
 		YACDInterfaces:               list(settings, "yacd_interfaces"),
 		YACDSecretKey:                settings.Get("yacd_secret_key"),
-		EnableUTLSFallback:           settings.Bool("enable_utls_fallback", false),
+		UTLSFallback:                 settings.Bool("utls_fallback", true),
 		DisableQUIC:                  settings.Bool("disable_quic", false),
 		UpdateInterval:               get(settings, "update_interval", "1d"),
 		DownloadListsViaProxy:        settings.Bool("download_lists_via_proxy", false),

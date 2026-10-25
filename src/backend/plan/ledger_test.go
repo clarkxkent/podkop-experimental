@@ -16,8 +16,9 @@ func TestFromShell(t *testing.T) {
 
 	// the shell backend's download_detour becomes the detour of the one HTTP client of
 	// the lists, named the default; independent_cache goes; the key of the settings goes
-	// to the Clash API, which listens on this host (YACD is off)
-	settings := &model.Config{Settings: model.Settings{UpdateInterval: "1d", YACDSecretKey: "k3y"}, Sections: []model.Section{{Name: "main",
+	// to the Clash API, which listens on this host (YACD is off); the uTLS fallback is
+	// told as the settings have it
+	settings := &model.Config{Settings: model.Settings{UpdateInterval: "1d", YACDSecretKey: "k3y", UTLSFallback: true}, Sections: []model.Section{{Name: "main",
 		RemoteDomainLists: []string{"https://lists.example/a.srs"}}}}
 	shell := []byte(`{"dns":{"final":"dns-server","independent_cache":true},"certificate":{},"endpoints":[],"route":{"rules":[{"action":"route","rule_set":"main-a-remote-domains-ruleset"}],"rule_set":[` +
 		`{"type":"remote","tag":"main-a-remote-domains-ruleset","format":"binary","url":"https://lists.example/a.srs","download_detour":"main-out","update_interval":"1d"}],"final":"direct-out"},` +
@@ -60,6 +61,9 @@ func TestFromShell(t *testing.T) {
     "clash_api": {
       "external_controller": "127.0.0.1:9090",
       "secret": "k3y"
+    },
+    "utls_fallback": {
+      "enabled": true
     }
   }
 }

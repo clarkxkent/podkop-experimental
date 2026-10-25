@@ -35,7 +35,6 @@ const (
 	// DefaultRuleSetDir is where the backend keeps the rule-set files it makes (the
 	// shell backend: /tmp/sing-box/rulesets).
 	DefaultRuleSetDir    = dataplane.RunDir + "/rulesets"
-	fingerprintsFallback = "safari,randomized,edge,firefox,chrome"
 	versionSourceRuleSet = 3
 	versionUDPOverTCP    = 2
 )
@@ -870,9 +869,9 @@ func (b *builder) buildExperimental() {
 		b.clashSecret = settings.YACDSecretKey
 	}
 	b.experimental.set("clash_api", clashAPI)
-	if settings.EnableUTLSFallback {
-		b.experimental.set("utls_fallback", newObject("enabled", true, "fingerprints", stringsToAny(strings.Split(fingerprintsFallback, ","))))
-	}
+	// the fallback is told either way: the environment of the engine
+	// (SING_BOX_UTLS_FALLBACK) is not read then
+	b.experimental.set("utls_fallback", newObject("enabled", settings.UTLSFallback))
 }
 
 // listenAddress is where the services for the LAN listen: what the settings say, or the

@@ -214,16 +214,19 @@ function createSettingsContent(section, singBoxFeatures = []) {
   };
 
   if (singBoxFeatures.includes("tls.utls-fallback")) {
+    // the default writes nothing: the backend takes no option as enabled
     o = section.option(
-      form.Flag,
-      "enable_utls_fallback",
-      _("Enable uTLS-fallback"),
+      form.ListValue,
+      "utls_fallback",
+      _("uTLS-fallback"),
       _(
-        "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints",
+        "Before a connection with the uTLS fingerprint of a link, that fingerprint without the X25519MLKEM768 key share is tried, then firefox; the first one the server and the network take is kept and checked again once a day. Disabled: the fingerprint of the link is sent as it is",
       ),
     );
-    o.default = "0";
-    o.rmempty = false;
+    o.value("", _("Default (enabled)"));
+    o.value("enabled", _("Enabled"));
+    o.value("disabled", _("Disabled"));
+    o.rmempty = true;
   }
 
   o = section.option(

@@ -1,15 +1,15 @@
 # RU translations for PODKOP package.
 # Copyright (C) 2026 THE PODKOP'S COPYRIGHT HOLDER
 # This file is distributed under the same license as the PODKOP package.
-# Automatically generated, 2026.
+# FiyeroT, 2026.
 #
 msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-24 13:17+0000\n"
-"PO-Revision-Date: 2026-10-24 13:17+0000\n"
-"Last-Translator: Automatically generated\n"
+"POT-Creation-Date: 2026-10-25 19:01+0000\n"
+"PO-Revision-Date: 2026-10-25 19:01+0000\n"
+"Last-Translator: FiyeroT\n"
 "Language-Team: none\n"
 "Language: ru\n"
 "MIME-Version: 1.0\n"
@@ -55,6 +55,9 @@ msgstr "Автозапуск"
 
 msgid "Available actions"
 msgstr "Доступные действия"
+
+msgid "Before a connection with the uTLS fingerprint of a link, that fingerprint without the X25519MLKEM768 key share is tried, then firefox; the first one the server and the network take is kept and checked again once a day. Disabled: the fingerprint of the link is sent as it is"
+msgstr "Перед подключением с отпечатком uTLS из ссылки сначала пробуется этот отпечаток без ключа X25519MLKEM768, затем firefox; первый, который принимают сервер и сеть, запоминается и перепроверяется раз в сутки. Отключено: отпечаток из ссылки отправляется как есть"
 
 msgid "Before switching to a server, 64 KiB is downloaded through it, so a server that freezes connections after about 16 KB is skipped"
 msgstr "Перед переключением на сервер через него скачивается 64 КиБ: сервер, который «замораживает» соединения после ~16 КБ, пропускается"
@@ -142,6 +145,9 @@ msgstr "Дашборд сейчас недоступен"
 
 msgid "Default"
 msgstr "По умолчанию"
+
+msgid "Default (enabled)"
+msgstr "По умолчанию (включено)"
 
 msgid "DHCP has DNS server"
 msgstr "DHCP содержит DNS сервер"
@@ -239,11 +245,11 @@ msgstr "Включить выходной сетевой интерфейс"
 msgid "Enable the mixed proxy, allowing this section to route traffic through both HTTP and SOCKS proxies"
 msgstr "Включить смешанный прокси-сервер, разрешив этому разделу маршрутизировать трафик как через HTTP, так и через SOCKS-прокси."
 
-msgid "Enable uTLS-fallback"
-msgstr "Включить uTLS-fallback"
-
 msgid "Enable YACD"
 msgstr "Включить YACD"
+
+msgid "Enabled"
+msgstr "Включено"
 
 msgid "Enter complete outbound configuration in JSON format"
 msgstr "Введите полную конфигурацию исходящего соединения в формате JSON"
@@ -755,6 +761,9 @@ msgstr "Пользовательские подсети"
 msgid "User Subnets List"
 msgstr "Список пользовательских подсетей"
 
+msgid "uTLS-fallback"
+msgstr "uTLS-fallback"
+
 msgid "Valid"
 msgstr "Валидно"
 
@@ -775,9 +784,6 @@ msgstr "Предупреждение: %s нельзя использовать �
 
 msgid "Warning: Russia inside can only be used with %s. %s already in Russia inside and have been removed from selection."
 msgstr "Предупреждение: Russia inside может быть использован только с %s. %s уже есть в Russia inside и будет удален из выбранных."
-
-msgid "When a server does not answer the TLS ClientHello sent with the uTLS fingerprint of a link, the connection is tried with other fingerprints"
-msgstr "Если сервер не отвечает на TLS ClientHello с отпечатком uTLS из ссылки, соединение пробуется с другими отпечатками"
 
 msgid "Without it, podkop's own connections go where the routing of the router sends them (mwan3 included)"
 msgstr "Без этого собственные соединения podkop идут туда, куда их отправляет маршрутизация роутера (в том числе mwan3)"
