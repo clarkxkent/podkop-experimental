@@ -76,6 +76,11 @@ import (
 //     always: on without the option utls_fallback and with 'enabled', off with 'disabled'.
 //     The shell backend wrote it only with enable_utls_fallback on, with a list of
 //     fingerprints the engine reads no more since podkop-engine r17.
+// 15. A name without an IPv4 address gets its IPv6 addresses (dns.ipv6_if_no_ipv4 of
+//     podkop-engine r17): the strategy stays ipv4_only, and an AAAA question goes out only
+//     when the A question of its name is answered without an A record. FakeIP answers no
+//     AAAA question, so a name of a list is not affected. The shell backend answered every
+//     AAAA question empty.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,
@@ -115,6 +120,9 @@ func FromShell(content []byte, shell Shell) (*Converted, error) {
 	if dns, _ := document.get("dns"); dns != nil {
 		if dnsObject, isObject := dns.(*object); isObject {
 			dnsObject.remove("independent_cache")
+			if _, found := dnsObject.get("strategy"); found {
+				dnsObject.insertAfter("strategy", "ipv6_if_no_ipv4", true)
+			}
 		}
 	}
 	route, _ := document.get("route")

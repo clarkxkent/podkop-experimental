@@ -746,7 +746,9 @@ func (b *builder) buildDNS() (*object, error) {
 	if suffix := b.options.CheckNames.Suffix; suffix != "" {
 		b.dnsRules = append(b.dnsRules, &rule{fields: newObject("action", "route", "server", tagFakeIPServer, "rewrite_ttl", ttl, "domain_suffix", suffix)})
 	}
-	return newObject("servers", listOrEmpty(b.dnsServers), "rules", nil, "final", tagDNSServer, "strategy", "ipv4_only"), nil
+	// IPv4 only, as FakeIP and the firewall are; a name without an IPv4 address gets its
+	// IPv6 addresses, which go past the proxy (ledger item 15)
+	return newObject("servers", listOrEmpty(b.dnsServers), "rules", nil, "final", tagDNSServer, "strategy", "ipv4_only", "ipv6_if_no_ipv4", true), nil
 }
 
 func (b *builder) addRouteRule(name string, fields *object) *rule {
