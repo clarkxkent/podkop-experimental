@@ -10,7 +10,7 @@ import "strings"
 // -X github.com/podkop-net/podkop-experimental/src/backend.Version=...
 var Version = "0.8.0-dev"
 
-// EngineRelease is the release of podkop-engine whose sing-box is built in (r16): the
+// EngineRelease is the release of podkop-engine whose sing-box is built in (r17): the
 // commit go.mod takes podkop-engine at is that release's. A build sets it with
 // -X github.com/podkop-net/podkop-experimental/src/backend.EngineRelease=...
 var EngineRelease = ""
