@@ -37,9 +37,10 @@ func state(t *testing.T) string {
 	return ip(t, "-4", "rule", "list") + string(routes)
 }
 
-// The rule and the route made over netlink read back, by the ip program, as the ones the
-// commands of the shell backend make (route_table_rule_mark of podkop 0.7.24).
-func TestRuleAndRouteAsTheShellBackendMakesThem(t *testing.T) {
+// The rules and the route made over netlink read back, by the ip program, as the ones the
+// commands of the shell backend make (route_table_rule_mark of podkop 0.7.24), with the
+// backend's own two: the rule of the check of the source and the rule of the router's mark.
+func TestRulesAndRouteAsTheShellBackendMakesThem(t *testing.T) {
 	needIP(t)
 	TableNamesPath = filepath.Join(t.TempDir(), "rt_tables")
 	if err := os.WriteFile(TableNamesPath, []byte("255 local\n254 main"), 0o644); err != nil {
@@ -51,6 +52,8 @@ func TestRuleAndRouteAsTheShellBackendMakesThem(t *testing.T) {
 	clean := state(t)
 	ip(t, "route", "add", "local", "0.0.0.0/0", "dev", "lo", "table", "105")
 	ip(t, "-4", "rule", "add", "fwmark", "0x00100000/0x00100000", "table", "105", "priority", "105")
+	ip(t, "-4", "rule", "add", "fwmark", "0x00400000/0x00400000", "table", "105", "priority", "105")
+	ip(t, "-4", "rule", "add", "iif", "lo", "fwmark", "0x00100000/0x00100000", "lookup", "main", "priority", "104")
 	want := state(t)
 	if want == clean {
 		t.Fatal("the commands of the shell backend changed nothing")
@@ -152,6 +155,36 @@ func TestMarkedRoute(t *testing.T) {
 	// the ip program says the same
 	if text := ip(t, "route", "get", destination.String(), "from", source.String(), "iif", "pdktest0", "mark", "0x100000"); !strings.HasPrefix(text, "local ") || !strings.Contains(text, "table 105") {
 		t.Fatalf("ip route get: %s", text)
+	}
+	// with src_valid_mark (Tailscale sets it) the kernel checks the source by a lookup with
+	// the mark of the packet: the rule of priority 104 keeps the table out of it, without it
+	// the packet is a martian
+	const validMark = "/proc/sys/net/ipv4/conf/all/src_valid_mark"
+	saved, err := os.ReadFile(validMark)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(validMark, []byte("1"), 0o644); err != nil {
+		t.Logf("src_valid_mark is not tested: %v", err)
+	} else {
+		defer os.WriteFile(validMark, saved, 0o644)
+		route, err = MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark)
+		if err != nil || !route.Local || route.Table != dataplane.RoutingTable {
+			t.Fatalf("with src_valid_mark: %+v, %v", route, err)
+		}
+		ip(t, "rule", "del", "priority", "104")
+		if route, err = MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark); err == nil {
+			t.Fatalf("with src_valid_mark and without the rule of priority 104: %+v", route)
+		}
+		if present, _ := Present(); present {
+			t.Fatal("Present without the rule of priority 104")
+		}
+		if err = Apply(); err != nil {
+			t.Fatal(err)
+		}
+		if route, err = MarkedRoute("pdktest0", source, destination, dataplane.ProxyMark); err != nil || !route.Local {
+			t.Fatalf("with src_valid_mark, the rule made again: %+v, %v", route, err)
+		}
 	}
 	// a rule of higher priority takes the packet before the one of the backend
 	ip(t, "rule", "add", "from", "10.99.0.0/24", "lookup", "main", "priority", "50")

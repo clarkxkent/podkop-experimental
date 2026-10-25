@@ -33,6 +33,7 @@ const (
 	SetInterfaces = "interfaces"
 
 	markProxy    = dataplane.ProxyMark
+	markRouter   = dataplane.RouterMark
 	markOutbound = dataplane.OutboundMark
 	portTProxy   = dataplane.TProxyPort
 	// the bit of a connection's status that says its destination was rewritten
@@ -365,11 +366,14 @@ func Apply(plan *Plan) error {
 	}
 	toSubnets := append(ipv4(), addressIn(offsetDestination, SetSubnets, idSubnets)...)
 	toFakeIP := append(ipv4(), addressWithin(offsetDestination, rangeFakeIP)...)
-	mark := []expr.Any{
-		&expr.Immediate{Register: 1, Data: binaryutil.NativeEndian.PutUint32(markProxy)},
-		&expr.Meta{Key: expr.MetaKeyMARK, SourceRegister: true, Register: 1},
-		&expr.Counter{},
+	markWith := func(value uint32) []expr.Any {
+		return []expr.Any{
+			&expr.Immediate{Register: 1, Data: binaryutil.NativeEndian.PutUint32(value)},
+			&expr.Meta{Key: expr.MetaKeyMARK, SourceRegister: true, Register: 1},
+			&expr.Counter{},
+		}
 	}
+	mark := markWith(markProxy)
 	returns := []expr.Any{&expr.Verdict{Kind: expr.VerdictReturn}}
 	transports := []byte{unix.IPPROTO_TCP, unix.IPPROTO_UDP}
 
@@ -394,20 +398,24 @@ func Apply(plan *Plan) error {
 			add(mangle, fromInterfaces, destination, protocol(transport), mark)
 		}
 	}
-	// proxy: what is marked goes to the transparent proxy inbound
-	for _, transport := range transports {
-		add(proxy, []expr.Any{
-			&expr.Meta{Key: expr.MetaKeyMARK, Register: 1},
-			&expr.Bitwise{SourceRegister: 1, DestRegister: 1, Len: 4, Mask: binaryutil.NativeEndian.PutUint32(markProxy), Xor: binaryutil.NativeEndian.PutUint32(0)},
-			&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryutil.NativeEndian.PutUint32(markProxy)},
-		}, protocol(transport), []expr.Any{
-			&expr.Immediate{Register: 1, Data: addressProxy.AsSlice()},
-			&expr.Immediate{Register: 2, Data: binaryutil.BigEndian.PutUint16(portTProxy)},
-			&expr.TProxy{Family: byte(nftables.TableFamilyIPv4), TableFamily: byte(nftables.TableFamilyINet), RegAddr: 1, RegPort: 2},
-			&expr.Counter{},
-		})
+	// proxy: what is marked goes to the transparent proxy inbound; what the router sent
+	// comes here through the loopback with its own mark
+	for _, value := range []uint32{markProxy, markRouter} {
+		for _, transport := range transports {
+			add(proxy, []expr.Any{
+				&expr.Meta{Key: expr.MetaKeyMARK, Register: 1},
+				&expr.Bitwise{SourceRegister: 1, DestRegister: 1, Len: 4, Mask: binaryutil.NativeEndian.PutUint32(value), Xor: binaryutil.NativeEndian.PutUint32(0)},
+				&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryutil.NativeEndian.PutUint32(value)},
+			}, protocol(transport), []expr.Any{
+				&expr.Immediate{Register: 1, Data: addressProxy.AsSlice()},
+				&expr.Immediate{Register: 2, Data: binaryutil.BigEndian.PutUint16(portTProxy)},
+				&expr.TProxy{Family: byte(nftables.TableFamilyIPv4), TableFamily: byte(nftables.TableFamilyINet), RegAddr: 1, RegPort: 2},
+				&expr.Counter{},
+			})
+		}
 	}
-	// mangle_output: the same marking for what the router itself sends
+	// mangle_output: the same marking for what the router itself sends, with the mark of
+	// the router (dataplane.RouterMark)
 	add(mangleOutput, ipv4(), addressIn(offsetDestination, SetLocal, idLocal), returns)
 	// what sing-box opens itself, and a tunnel of the router with the mark as its own
 	// (dataplane.OutboundMark), under the mask: mwan3 adds its bits to the mark
@@ -419,7 +427,7 @@ func Apply(plan *Plan) error {
 	}, returns)
 	for _, destination := range [][]expr.Any{toSubnets, toFakeIP} {
 		for _, transport := range transports {
-			add(mangleOutput, destination, protocol(transport), mark)
+			add(mangleOutput, destination, protocol(transport), markWith(markRouter))
 		}
 	}
 	// the groups: a set each, and a rule of the LAN chain with the ports of the group

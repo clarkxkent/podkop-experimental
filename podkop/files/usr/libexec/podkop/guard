@@ -256,7 +256,8 @@ oom_new() {
 # The stop of podkop gives the router back what the backend took. A binary that cannot
 # run (cut short by an upgrade that ran out of space, say) cannot do that: dnsmasq is then
 # pointed back at the router's servers here, as the backend does it, and the firewall
-# table goes. The rule of table 105 left behind does nothing without the table's marks.
+# table goes. The rules of the marks left behind (priorities 104 and 105) do nothing
+# without the marks of the table.
 raw_release() {
 	S='dhcp.@dnsmasq[0]'
 	case " $(uci -q get $S.server) " in

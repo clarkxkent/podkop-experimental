@@ -27,6 +27,13 @@ const (
 	// proxy; the rule of the routing table sends what has it to the table.
 	ProxyMark = 0x00100000
 
+	// RouterMark is the mark the firewall gives what the router itself sends to the proxy;
+	// a rule of its own sends it to the table. It is not ProxyMark: the routing of what
+	// the router sends and the check of the source of a packet the router receives are
+	// both lookups from the loopback, and the rule of ReverseRulePriority sends the latter
+	// with ProxyMark to the main table (netcfg).
+	RouterMark = 0x00400000
+
 	// OutboundMark is the mark sing-box gives every connection it opens itself
 	// (route.default_mark). mangle_output lets what has it go by: a server of sing-box
 	// whose address is in the subnets of a section, or in FakeIP's, is not sent back into
@@ -45,6 +52,10 @@ const (
 	RoutingTable     = 105
 	RoutingTableName = "podkop"
 	RulePriority     = 105
+
+	// ReverseRulePriority is the priority of the rule that sends the check of the source of
+	// a marked packet of the LAN to the main table (netcfg).
+	ReverseRulePriority = 104
 
 	// UplinkRulePriority is the priority of the rules that route what sing-box sends from a
 	// socket bound to the device of an uplink by the main table (netcfg.RouteUplinks).

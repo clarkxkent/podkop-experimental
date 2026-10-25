@@ -1,4 +1,4 @@
-// Package netcfg keeps what the backend needs of the routing of the router: the rule and
+// Package netcfg keeps what the backend needs of the routing of the router: the rules and
 // the route that hand the packets the firewall marked to the transparent proxy, and the
 // address of the LAN. It talks netlink; the ip program is not run.
 package netcfg
@@ -25,11 +25,14 @@ import (
 )
 
 const (
-	tableID      = dataplane.RoutingTable
-	tableName    = dataplane.RoutingTableName
-	rulePriority = dataplane.RulePriority
-	// markProxy is the mark of the firewall table (firewall)
-	markProxy = dataplane.ProxyMark
+	tableID             = dataplane.RoutingTable
+	tableName           = dataplane.RoutingTableName
+	rulePriority        = dataplane.RulePriority
+	reverseRulePriority = dataplane.ReverseRulePriority
+	// markProxy and markRouter are the marks of the firewall table (firewall): what comes
+	// from the LAN, what the router itself sends
+	markProxy  = dataplane.ProxyMark
+	markRouter = dataplane.RouterMark
 	// netifdTimeout is how long the answer of netifd is waited for.
 	netifdTimeout = 3 * time.Second
 )
@@ -41,7 +44,7 @@ var TableNamesPath = "/etc/iproute2/rt_tables"
 // NetworkConfigPath is the UCI file of netifd.
 var NetworkConfigPath = "/etc/config/network"
 
-// Apply makes the route and the rule; what is there already is left as it is.
+// Apply makes the route and the rules; what is there already is left as it is.
 func Apply() error {
 	nameTable()
 	loopback, err := netlink.LinkByName("lo")
@@ -59,26 +62,31 @@ func Apply() error {
 	if err != nil {
 		return E.Cause(err, "add the route of the table ", tableID)
 	}
-	exists, err := ruleExists()
-	if err != nil {
-		return err
-	}
-	if !exists {
-		err = netlink.RuleAdd(markRule())
+	for _, rule := range backendRules() {
+		exists, err := ruleExists(rule)
+		if err != nil {
+			return err
+		}
+		if exists {
+			continue
+		}
+		err = netlink.RuleAdd(rule)
 		if err != nil && !errors.Is(err, unix.EEXIST) {
-			return E.Cause(err, "add the rule for marked packets")
+			return E.Cause(err, "add the rule of priority ", rule.Priority, " for marked packets")
 		}
 	}
 	return nil
 }
 
-// Present tells whether the rule and the route are both there. netifd, when it is
+// Present tells whether the rules and the route are all there. netifd, when it is
 // restarted, flushes the rules it does not own, and a loopback that goes down takes the
 // route with it.
 func Present() (bool, error) {
-	exists, err := ruleExists()
-	if err != nil || !exists {
-		return false, err
+	for _, rule := range backendRules() {
+		exists, err := ruleExists(rule)
+		if err != nil || !exists {
+			return false, err
+		}
 	}
 	routes, err := netlink.RouteListFiltered(unix.AF_INET, &netlink.Route{Table: tableID}, netlink.RT_FILTER_TABLE)
 	if err != nil {
@@ -87,24 +95,26 @@ func Present() (bool, error) {
 	return len(routes) > 0, nil
 }
 
-// Remove deletes the rule and the routes of the table, and the rules of the uplinks
+// Remove deletes the rules and the routes of the table, and the rules of the uplinks
 // (RouteUplinks); what is not there is no error.
 func Remove() error {
 	_, err := syncUplinkRules(nil)
 	if err != nil {
 		return err
 	}
-	for {
-		exists, err := ruleExists()
-		if err != nil {
-			return err
-		}
-		if !exists {
-			break
-		}
-		err = netlink.RuleDel(markRule())
-		if err != nil && !errors.Is(err, unix.ENOENT) {
-			return E.Cause(err, "delete the rule for marked packets")
+	for _, rule := range backendRules() {
+		for {
+			exists, err := ruleExists(rule)
+			if err != nil {
+				return err
+			}
+			if !exists {
+				break
+			}
+			err = netlink.RuleDel(rule)
+			if err != nil && !errors.Is(err, unix.ENOENT) {
+				return E.Cause(err, "delete the rule of priority ", rule.Priority, " for marked packets")
+			}
 		}
 	}
 	routes, err := netlink.RouteListFiltered(unix.AF_INET, &netlink.Route{Table: tableID}, netlink.RT_FILTER_TABLE)
@@ -125,24 +135,39 @@ func Remove() error {
 	return nil
 }
 
-func markRule() *netlink.Rule {
+// backendRules are the rules of the backend: one for each mark of the firewall sends a marked
+// packet to the table, whose route makes it the router's own. The kernel checks the source
+// of a packet it routes to itself by the lookup of the way back, as from the loopback, and
+// with src_valid_mark (Tailscale sets it for all interfaces) that lookup has the mark of the
+// packet: by the rule of the mark it would find the route of the table, take the address
+// of the LAN device for the router's own and drop the packet. So the first rule sends a
+// lookup from the loopback with the mark of the LAN to the main table. What the router
+// sends is looked up from the loopback too: it has a mark of its own, which that rule
+// leaves to the table.
+func backendRules() []*netlink.Rule {
+	reverse := markRule(reverseRulePriority, markProxy, unix.RT_TABLE_MAIN)
+	reverse.IifName = "lo"
+	return []*netlink.Rule{reverse, markRule(rulePriority, markProxy, tableID), markRule(rulePriority, markRouter, tableID)}
+}
+
+func markRule(priority int, mark uint32, table int) *netlink.Rule {
 	rule := netlink.NewRule()
 	rule.Family = unix.AF_INET
-	rule.Priority = rulePriority
-	rule.Table = tableID
-	rule.Mark = markProxy
+	rule.Priority = priority
+	rule.Table = table
+	rule.Mark = mark
 	rule.MarkSet = true
-	rule.Mask = markProxy
+	rule.Mask = int(mark)
 	return rule
 }
 
-func ruleExists() (bool, error) {
+func ruleExists(want *netlink.Rule) (bool, error) {
 	rules, err := netlink.RuleList(unix.AF_INET)
 	if err != nil {
 		return false, E.Cause(err, "list the routing rules")
 	}
 	for _, rule := range rules {
-		if rule.Table == tableID && rule.Priority == rulePriority && rule.Mark == markProxy && uint32(rule.Mask) == markProxy {
+		if rule.Table == want.Table && rule.Priority == want.Priority && rule.Mark == want.Mark && rule.Mask == want.Mask && rule.IifName == want.IifName {
 			return true, nil
 		}
 	}

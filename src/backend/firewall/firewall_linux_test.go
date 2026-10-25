@@ -44,7 +44,8 @@ func nft(t *testing.T, arguments ...string) string {
 // shellBackendTable makes the table with the commands the shell backend of podkop 0.7.24
 // runs, one nft a line and in its order: create_nft_rules, then
 // nft_list_all_traffic_from_ip for every device, then what the list update adds for the
-// Discord list, then the elements.
+// Discord list, then the elements. One difference is the backend's own: what the router
+// sends has a mark of its own (dataplane.RouterMark), and proxy has rules for it.
 func shellBackendTable(t *testing.T, plan *Plan) {
 	table := "inet " + tableName
 	lines := []string{
@@ -68,12 +69,14 @@ func shellBackendTable(t *testing.T, plan *Plan) {
 		"add rule "+table+" mangle iifname @interfaces ip daddr 198.18.0.0/15 meta l4proto udp meta mark set 0x00100000 counter",
 		"add rule "+table+" proxy meta mark & 0x00100000 == 0x00100000 meta l4proto tcp tproxy ip to 127.0.0.1:1602 counter",
 		"add rule "+table+" proxy meta mark & 0x00100000 == 0x00100000 meta l4proto udp tproxy ip to 127.0.0.1:1602 counter",
+		"add rule "+table+" proxy meta mark & 0x00400000 == 0x00400000 meta l4proto tcp tproxy ip to 127.0.0.1:1602 counter",
+		"add rule "+table+" proxy meta mark & 0x00400000 == 0x00400000 meta l4proto udp tproxy ip to 127.0.0.1:1602 counter",
 		"add rule "+table+" mangle_output ip daddr @localv4 return",
 		"add rule "+table+" mangle_output meta mark & 0x00200000 == 0x00200000 counter return",
-		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto tcp meta mark set 0x00100000 counter",
-		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto udp meta mark set 0x00100000 counter",
-		"add rule "+table+" mangle_output ip daddr 198.18.0.0/15 meta l4proto tcp meta mark set 0x00100000 counter",
-		"add rule "+table+" mangle_output ip daddr 198.18.0.0/15 meta l4proto udp meta mark set 0x00100000 counter",
+		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto tcp meta mark set 0x00400000 counter",
+		"add rule "+table+" mangle_output ip daddr @podkop_subnets meta l4proto udp meta mark set 0x00400000 counter",
+		"add rule "+table+" mangle_output ip daddr 198.18.0.0/15 meta l4proto tcp meta mark set 0x00400000 counter",
+		"add rule "+table+" mangle_output ip daddr 198.18.0.0/15 meta l4proto udp meta mark set 0x00400000 counter",
 	)
 	if plan.ExcludeNTP {
 		lines = append(lines, "insert rule "+table+" mangle udp dport 123 return")
