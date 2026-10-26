@@ -76,9 +76,12 @@ func TestDerive(t *testing.T) {
 		got, problems := Derive([]Source{source("discord", discord), source("telegram", telegram), source("user", user), source("names", names), source("odd", odd),
 			{Tag: "broken", Content: []byte("{")}, {Tag: "not binary", Format: C.RuleSetFormatBinary, Content: []byte("text")}})
 		require.Len(t, problems, 2, "compiled %v", compiled)
-		// the addresses of rules with more than ports go to the common set, IPv6 is left out
-		require.Equal(t, []string{"149.154.160.0/20", "198.18.5.0/24", "198.18.6.0/24", "198.18.7.0/24", "198.18.9.0/24", "198.51.100.20/32", "198.51.100.8/30", "91.108.4.0/22"},
+		// the addresses of rules with more than ports go to the common set, IPv6 is left out;
+		// neighbours are one range, as the set has them (198.18.5.0-198.18.7.255)
+		require.Equal(t, []string{"149.154.160.0/20", "198.18.5.0/24", "198.18.6.0/23", "198.18.9.0/24", "198.51.100.20/32", "198.51.100.8/30", "91.108.4.0/22"},
 			texts(got.Subnets), "compiled %v", compiled)
+		require.True(t, firewall.IsMerged(got.Subnets))
+		require.Len(t, got.Subnets, 6)
 		require.Len(t, got.Groups, 3)
 		byPorts := map[string]firewall.Group{}
 		for _, group := range got.Groups {

@@ -2,7 +2,9 @@ package firewall
 
 import (
 	"encoding/binary"
+	"math"
 	"net/netip"
+	"slices"
 )
 
 // Range is a range of IPv4 destinations, both ends included: the first address in the high
@@ -61,4 +63,51 @@ func address4(value uint32) netip.Addr {
 	var address [4]byte
 	binary.BigEndian.PutUint32(address[:], value)
 	return netip.AddrFrom4(address)
+}
+
+// Merge makes the ranges one list in order: overlapping and adjacent ones become one range.
+// The kernel takes ranges that do not overlap, and the merging the nft program offers
+// ("auto-merge") is done by that program, not by the kernel. The ranges are sorted and
+// merged where they are, so the slice is the caller's no more; a list that merges into far
+// fewer ranges (many /32s) is copied, so that the long one can be let go.
+func Merge(ranges []Range) []Range {
+	// by the first address, then by the last: the high half, then the low one
+	slices.Sort(ranges)
+	kept := ranges[:0]
+	for _, item := range ranges {
+		if last := len(kept) - 1; last >= 0 {
+			lastTo := uint32(kept[last])
+			if lastTo == math.MaxUint32 || uint32(item>>32) <= lastTo+1 {
+				if uint32(item) > lastTo {
+					kept[last] = kept[last]&^math.MaxUint32 | Range(uint32(item))
+				}
+				continue
+			}
+		}
+		kept = append(kept, item)
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	if len(kept) < cap(ranges)/2 {
+		return slices.Clone(kept)
+	}
+	return kept
+}
+
+// IsMerged tells whether ranges are as Merge leaves them: in order, and none overlaps or
+// touches the next.
+func IsMerged(ranges []Range) bool {
+	for index, item := range ranges {
+		if uint32(item>>32) > uint32(item) {
+			return false
+		}
+		if index > 0 {
+			previousTo := uint32(ranges[index-1])
+			if previousTo == math.MaxUint32 || uint32(item>>32) <= previousTo+1 {
+				return false
+			}
+		}
+	}
+	return true
 }

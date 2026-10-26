@@ -22,7 +22,8 @@ type Source struct {
 	Content []byte
 }
 
-// Destinations is what the firewall has to send to the proxy by address.
+// Destinations is what the firewall has to send to the proxy by address, merged
+// (firewall.Merge).
 type Destinations struct {
 	// Subnets go there whatever the port is.
 	Subnets []firewall.Range
@@ -84,7 +85,9 @@ func DeriveWith(sources []Source, read func(Source) ([]engine.AddressRule, error
 			group.Ranges = append(group.Ranges, rule.Ranges...)
 		}
 	}
-	result := &Destinations{Subnets: subnets}
+	// merged here, in the copies collected above: the firewall takes them as they are, and
+	// the plans of the firewall and what is kept of this derivation share one list
+	result := &Destinations{Subnets: firewall.Merge(subnets)}
 	keys := make([]string, 0, len(groups))
 	for key := range groups {
 		keys = append(keys, key)
@@ -94,6 +97,7 @@ func DeriveWith(sources []Source, read func(Source) ([]engine.AddressRule, error
 		group := groups[key]
 		// the name tells the protocol; the ports are in the rule
 		group.Set = fmt.Sprintf("podkop_subnets_%s_%d", protocolName(group.Protocol), index+1)
+		group.Ranges = firewall.Merge(group.Ranges)
 		result.Groups = append(result.Groups, *group)
 	}
 	return result, problems

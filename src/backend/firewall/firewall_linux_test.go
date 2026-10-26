@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"regexp"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"syscall"
@@ -444,13 +445,13 @@ func wantRanges(t *testing.T, ranges []Range) []netipx.IPRange {
 }
 
 // sameRanges takes no ranges as no ranges, nil or not.
-// rangesOfSpans writes spans as ranges of addresses, for a comparison.
-func rangesOfSpans(spans []span) []netipx.IPRange {
+// rangesOfRanges writes packed ranges as ranges of addresses, for a comparison.
+func rangesOfRanges(ranges []Range) []netipx.IPRange {
 	var result []netipx.IPRange
-	for _, item := range spans {
+	for _, item := range ranges {
 		var from, to [4]byte
-		binary.BigEndian.PutUint32(from[:], item[0])
-		binary.BigEndian.PutUint32(to[:], item[1])
+		binary.BigEndian.PutUint32(from[:], uint32(item>>32))
+		binary.BigEndian.PutUint32(to[:], uint32(item))
 		result = append(result, netipx.IPRangeFrom(netip.AddrFrom4(from), netip.AddrFrom4(to)))
 	}
 	return result
@@ -463,12 +464,16 @@ func sameRanges(t *testing.T, want []netipx.IPRange, got []netipx.IPRange, messa
 	require.Equal(t, want, got, message...)
 }
 
-// merge makes the ranges a set builder of netipx makes, without its memory: random
+// Merge makes the ranges a set builder of netipx makes, without its memory: random
 // lists, and the edges of the address space, neighbours, prefixes inside others, IPv6.
+// What it makes is merged (IsMerged), and merged again it stays the same.
 func TestMergeAsASetBuilder(t *testing.T) {
 	for _, count := range []int{0, 1, 2, 10, 1000, 20000} {
 		list := subnets(count)
-		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfSpans(merge(RangesOf(list))), "%d prefixes", count)
+		ranges := Merge(RangesOf(list))
+		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfRanges(ranges), "%d prefixes", count)
+		require.True(t, IsMerged(ranges))
+		require.Equal(t, ranges, Merge(slices.Clone(ranges)))
 	}
 	for _, list := range [][]netip.Prefix{
 		prefixes("0.0.0.0/0"),
@@ -477,13 +482,40 @@ func TestMergeAsASetBuilder(t *testing.T) {
 		prefixes("1.1.1.0/24", "1.1.2.0/24", "1.1.4.0/24", "1.1.1.128/25", "2001:db8::/32", "1.1.3.0/24"),
 		prefixes("::ffff:1.2.3.4/128", "9.9.9.9/32", "9.9.9.9/32"),
 	} {
-		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfSpans(merge(RangesOf(list))), "%v", list)
+		sameRanges(t, wantRanges(t, RangesOf(list)), rangesOfRanges(Merge(RangesOf(list))), "%v", list)
 	}
 	// what differs of two lists, by one walk, is what differs of the two sets
-	before, after := merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24"))), merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24")))
+	before, after := Merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24"))), Merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24")))
 	gone, came := rangesDiffer(before, after)
-	require.Equal(t, merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24")))[0:3], gone)
-	require.Equal(t, merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24"))), came)
+	require.Equal(t, Merge(RangesOf(prefixes("1.1.1.0/24", "2.2.2.0/24", "3.3.3.0/24")))[0:3], gone)
+	require.Equal(t, Merge(RangesOf(prefixes("1.1.1.0/24", "1.1.2.0/24", "3.3.4.0/24"))), came)
+}
+
+// IsMerged takes only ranges in order with a gap between each two; a plan's merged ranges
+// are those given when they are merged, and a merged copy of them otherwise, the plan's
+// own left as they were.
+func TestIsMerged(t *testing.T) {
+	ranges := RangesOf(prefixes("1.1.1.0/24", "1.1.3.0/24", "255.255.255.255/32"))
+	require.True(t, IsMerged(nil))
+	require.True(t, IsMerged(ranges))
+	for _, list := range [][]netip.Prefix{
+		prefixes("1.1.3.0/24", "1.1.1.0/24"),
+		prefixes("1.1.1.0/24", "1.1.2.0/24"),
+		prefixes("1.1.0.0/16", "1.1.2.0/24"),
+		prefixes("1.1.1.0/24", "1.1.1.0/24"),
+		prefixes("255.255.255.255/32", "1.1.1.0/24"),
+	} {
+		require.False(t, IsMerged(RangesOf(list)), "%v", list)
+	}
+	require.False(t, IsMerged([]Range{2<<32 | 1}), "a range that ends before it starts")
+
+	var plan merged
+	require.Same(t, &ranges[0], &plan.of(ranges)[0], "merged ranges are taken as they are")
+	unsorted := RangesOf(prefixes("1.1.3.0/24", "1.1.1.0/24", "1.1.2.0/24"))
+	kept := slices.Clone(unsorted)
+	var other merged
+	require.Equal(t, []Range{0x01010100<<32 | 0x010103ff}, other.of(unsorted))
+	require.Equal(t, kept, unsorted, "the ranges of the plan are not changed")
 }
 
 // A change of the lists reaches the set by what differs, and the set holds what a set

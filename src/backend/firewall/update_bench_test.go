@@ -2,6 +2,7 @@ package firewall
 
 import (
 	"net/netip"
+	"slices"
 	"testing"
 )
 
@@ -20,7 +21,7 @@ func BenchmarkOneAddressMore(b *testing.B) {
 	for range b.N {
 		one, _ := RangeOf(netip.MustParsePrefix("100.71.99.8/32"))
 		next := append(append([]Range{}, previous...), one)
-		gone, came := rangesDiffer(merge(previous), merge(next))
+		gone, came := rangesDiffer(Merge(slices.Clone(previous)), Merge(next))
 		if len(gone) != 0 || len(came) != 1 {
 			b.Fatal(len(gone), len(came))
 		}
