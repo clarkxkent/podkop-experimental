@@ -33,12 +33,20 @@ type fakeEngine struct {
 	built                          []*fakeInstance
 	// checked counts the checks of whole configurations
 	checked int
+	// lists are what the downloaded rule sets hold, by tag, in the cache file of every
+	// instance; noAddresses are the tags of those without a rule of addresses
+	lists       map[string][]byte
+	noAddresses map[string]bool
 }
 
 type fakeInstance struct {
+	engine                 *fakeEngine
 	config                 []byte
 	started, closed        bool
 	failing, silent, stuck bool
+	// loaded is what OnRuleSetUpdate was given; reads counts RuleSetContent by tag
+	loaded func(tag string)
+	reads  map[string]int
 }
 
 func has(config []byte, texts []string) bool {
@@ -64,7 +72,7 @@ func (e *fakeEngine) Build(config []byte, sink engine.LogSink, hooks ...engine.C
 	if has(config, e.broken) {
 		return nil, os.ErrInvalid
 	}
-	instance := &fakeInstance{config: config, failing: has(config, e.failing), silent: has(config, e.silent), stuck: has(config, e.stuck)}
+	instance := &fakeInstance{engine: e, config: config, failing: has(config, e.failing), silent: has(config, e.silent), stuck: has(config, e.stuck), reads: map[string]int{}}
 	e.built = append(e.built, instance)
 	return instance, nil
 }
@@ -79,7 +87,9 @@ func (e *fakeEngine) Ready(ctx context.Context) error {
 
 func (e *fakeEngine) Notes() []string { return nil }
 
-func (i *fakeInstance) OnRuleSetUpdate(tags []string, updated func(tag string)) {}
+func (i *fakeInstance) OnRuleSetUpdate(tags []string, updated func(tag string)) {
+	i.loaded = updated
+}
 
 // Start fails as engine.Instance.Start does: it closes the instance, and tells when that
 // does not end.
@@ -101,8 +111,20 @@ func (i *fakeInstance) Close(time.Duration) error {
 	i.closed = true
 	return nil
 }
-func (i *fakeInstance) RuleSetContent(string) ([]byte, bool)    { return nil, false }
-func (i *fakeInstance) RuleSetUpdated(string) (time.Time, bool) { return time.Time{}, false }
+func (i *fakeInstance) RuleSetContent(tag string) ([]byte, bool) {
+	content, found := i.engine.lists[tag]
+	if found {
+		i.reads[tag]++
+	}
+	return bytes.Clone(content), found
+}
+func (i *fakeInstance) RuleSetHasAddresses(tag string) (bool, bool) {
+	_, found := i.engine.lists[tag]
+	return found && !i.engine.noAddresses[tag], found
+}
+func (i *fakeInstance) RuleSetUpdated(string) (time.Time, bool) {
+	return time.Time{}, false
+}
 func (i *fakeInstance) FakeIPAddress(string) (netip.Addr, bool, error) {
 	return netip.Addr{}, false, nil
 }
@@ -331,6 +353,79 @@ func TestFakeDeriveOnce(t *testing.T) {
 		}
 	}
 	require.True(t, found)
+	s.Stop()
+}
+
+// The firewall reads a downloaded list again only after sing-box loaded it again, and a
+// list without a rule of addresses not at all. A new instance reads its lists once, and
+// one with the same content is not parsed again.
+func TestFakeReadLoadedOnly(t *testing.T) {
+	s, fake, system, settings := fakeFixture(t)
+	withLists := func(ttl string) {
+		settings("one.lab.example", ttl)
+		content, err := os.ReadFile(s.options.SettingsPath)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(s.options.SettingsPath, append(content, "\tlist remote_subnet_lists 'http://192.0.2.80/subnets.lst'\n"+
+			"\tlist remote_domain_lists 'http://192.0.2.80/domains.lst'\n"...), 0o644))
+	}
+	withLists("60")
+	require.True(t, s.Boot().OK)
+	var subnets, domains string
+	for _, ruleSet := range s.current.result.RuleSets {
+		switch {
+		case strings.HasSuffix(ruleSet.URL, "/subnets.lst"):
+			subnets = ruleSet.Tag
+		case strings.HasSuffix(ruleSet.URL, "/domains.lst"):
+			domains = ruleSet.Tag
+		}
+	}
+	require.NotEmpty(t, subnets)
+	require.NotEmpty(t, domains)
+	fake.lists = map[string][]byte{subnets: []byte("11.0.0.0/24\n"), domains: []byte("one.lab.example\n")}
+	fake.noAddresses = map[string]bool{domains: true}
+	first := fake.built[0]
+	lastSubnets := func() []string {
+		return firewall.RangeStrings(system.plans[len(system.plans)-1].Subnets)
+	}
+
+	first.loaded(subnets)
+	first.loaded(domains)
+	s.refreshFirewall()
+	require.Equal(t, []string{"11.0.0.0/24"}, lastSubnets())
+	require.Equal(t, 1, first.reads[subnets])
+	require.Zero(t, first.reads[domains], "a list without addresses is not read")
+
+	s.refreshFirewall()
+	require.Equal(t, 1, first.reads[subnets], "a list not loaded again is not read again")
+
+	fake.lists[subnets] = []byte("11.0.0.0/24\n11.0.2.0/24\n")
+	first.loaded(subnets)
+	s.refreshFirewall()
+	require.Equal(t, 2, first.reads[subnets])
+	require.Equal(t, []string{"11.0.0.0/24", "11.0.2.0/24"}, lastSubnets())
+	var parsed *engine.AddressRule
+	for key, read := range s.read {
+		if key.tag == subnets {
+			parsed = &read.rules[0]
+		}
+	}
+	require.NotNil(t, parsed)
+
+	// another configuration: its instance reads the list once, the same content, which is
+	// not parsed again
+	withLists("61")
+	require.True(t, s.Apply().OK)
+	second := fake.built[1]
+	require.NotSame(t, first, second)
+	require.Equal(t, 1, second.reads[subnets])
+	require.Equal(t, []string{"11.0.0.0/24", "11.0.2.0/24"}, lastSubnets())
+	for key, read := range s.read {
+		if key.tag == subnets {
+			require.Same(t, parsed, &read.rules[0], "the same content was parsed again")
+		}
+	}
+	s.refreshFirewall()
+	require.Equal(t, 1, second.reads[subnets])
 	s.Stop()
 }
 

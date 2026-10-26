@@ -99,6 +99,7 @@ type Instance interface {
 	// Close returns engine.ErrStuck when the instance does not close in time.
 	Close(patience time.Duration) error
 	RuleSetContent(tag string) ([]byte, bool)
+	RuleSetHasAddresses(tag string) (bool, bool)
 	RuleSetUpdated(tag string) (time.Time, bool)
 	UpdateRuleSets(ctx context.Context) (engine.RuleSetUpdate, error)
 	FakeIPAddress(name string) (netip.Addr, bool, error)
@@ -232,9 +233,12 @@ type Supervisor struct {
 	listChecks   map[listKey]listCheck
 	checkedLists map[listKey]bool
 	// derived is what the firewall sets were made of last, read what was read of each
-	// rule set for them
+	// rule set for them, known what each rule set held when it was read last
 	derived *derivation
 	read    map[derivationKey]readRules
+	known   map[string]knownSource
+	// loads are the loads of rule sets sing-box reported, by instance
+	loads ruleSetLoads
 
 	statusAccess sync.Mutex
 	status       Status
@@ -815,8 +819,10 @@ func (s *Supervisor) answerProbe(request probeRequest) {
 func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 	s.Boot()
 	// a download brings several rule sets one after another: the firewall is refilled
-	// once, a moment after the first, and nothing else waits meanwhile
+	// once, deriveMerge after the last of them (deriveMergeLimit after the first at the
+	// latest), and nothing else waits meanwhile
 	var merge <-chan time.Time
+	var mergeFirst time.Time
 	bridged := time.NewTicker(bridgedCheckInterval)
 	defer bridged.Stop()
 	for !s.stuck {
@@ -846,7 +852,11 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 			}
 			reply <- s.restoreRouting()
 		case <-s.derive:
+			now := time.Now()
 			if merge == nil {
+				mergeFirst = now
+			}
+			if now.Sub(mergeFirst) < deriveMergeLimit {
 				merge = time.After(deriveMerge)
 			}
 		case <-merge:
@@ -857,8 +867,12 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 	return s.stuckError()
 }
 
-// how long the refill of the firewall sets waits for more rule sets to load
-const deriveMerge = 500 * time.Millisecond
+// how long the refill of the firewall sets waits for more rule sets to load, after the
+// last load and after the first at the most
+const (
+	deriveMerge      = 500 * time.Millisecond
+	deriveMergeLimit = 5 * time.Second
+)
 
 // bridgedCheckInterval is how often a running backend looks whether another program has
 // let bridged packets through the IP firewall hooks again (dockerd does at its start).
@@ -1104,6 +1118,9 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 		}
 	}
 	instance.OnRuleSetUpdate(tags, func(tag string) {
+		// counted before the firewall is told: a refill that reads the count after this
+		// reads the content of this load
+		s.loads.add(instance, tag)
 		s.log("info", "list ", tag, " updated (", sources[tag], ")")
 		select {
 		case s.derive <- struct{}{}:
@@ -1112,6 +1129,7 @@ func (s *Supervisor) start(next *candidate, previous *plan.Result) (Instance, er
 	})
 	err = instance.Start()
 	if err != nil {
+		s.loads.forget(instance)
 		if taken := takenBy(err); taken != "" {
 			s.log("error", taken)
 		}
@@ -1195,6 +1213,7 @@ func (s *Supervisor) close(instance Instance) bool {
 	// of an apply. A negative value only reads the limit.
 	limit := debug.SetMemoryLimit(-1)
 	defer debug.SetMemoryLimit(limit)
+	defer s.loads.forget(instance)
 	err := instance.Close(engine.StopTimeout)
 	if err == engine.ErrStuck {
 		s.log("error", "sing-box does not close: giving the router back; the process has to end")
@@ -1311,23 +1330,66 @@ func (s *Supervisor) surround(previousFirewall *firewall.Plan) error {
 func (s *Supervisor) firewallPlan(current *running) *firewall.Plan {
 	wanted := &current.result.Dataplane
 	result := &firewall.Plan{Interfaces: wanted.Interfaces, ExcludeNTP: wanted.ExcludeNTP, Sources: wanted.Sources, ClashAPIInterfaces: wanted.ClashAPIInterfaces}
-	var sources []lists.Source
+	var sources []keyedSource
+	known := make(map[string]knownSource, len(current.result.RuleSets))
 	for _, ruleSet := range current.result.RuleSets {
-		if ruleSet.Path != "" {
-			content, err := os.ReadFile(ruleSet.Path)
-			if err == nil {
-				sources = append(sources, lists.Source{Tag: ruleSet.Tag, Format: ruleSet.Format, Content: content})
-			}
-		} else if content, found := current.instance.RuleSetContent(ruleSet.Tag); found {
-			sources = append(sources, lists.Source{Tag: ruleSet.Tag, Format: ruleSet.Format, Content: content})
+		// a rule set without a rule of addresses gives the firewall nothing: its content,
+		// often the biggest list of names, is not read
+		if has, told := current.instance.RuleSetHasAddresses(ruleSet.Tag); told && !has {
+			continue
+		}
+		source, stamp, found := s.ruleSetSource(current.instance, ruleSet)
+		if found {
+			sources = append(sources, source)
+			known[ruleSet.Tag] = stamp
 		}
 	}
+	s.known = known
 	destinations, problems := s.deriveSets(sources)
 	for _, problem := range problems {
 		s.log("warn", "firewall sets: ", problem)
 	}
 	result.Subnets, result.Groups = destinations.Subnets, destinations.Groups
 	return result
+}
+
+// ruleSetLoads counts the loads of rule sets sing-box reported, by instance and tag. The
+// counts are added from sing-box's goroutines; the firewall reads a list again only when
+// it was loaded after it was read last.
+type ruleSetLoads struct {
+	access sync.Mutex
+	counts map[ruleSetLoad]uint64
+}
+
+type ruleSetLoad struct {
+	instance Instance
+	tag      string
+}
+
+func (l *ruleSetLoads) add(instance Instance, tag string) {
+	l.access.Lock()
+	defer l.access.Unlock()
+	if l.counts == nil {
+		l.counts = make(map[ruleSetLoad]uint64)
+	}
+	l.counts[ruleSetLoad{instance, tag}]++
+}
+
+func (l *ruleSetLoads) count(instance Instance, tag string) uint64 {
+	l.access.Lock()
+	defer l.access.Unlock()
+	return l.counts[ruleSetLoad{instance, tag}]
+}
+
+// forget drops the counts of an instance that closed.
+func (l *ruleSetLoads) forget(instance Instance) {
+	l.access.Lock()
+	defer l.access.Unlock()
+	for key := range l.counts {
+		if key.instance == instance {
+			delete(l.counts, key)
+		}
+	}
 }
 
 // derivation is what the firewall sets were made of: the rule sets by tag, format and
@@ -1349,14 +1411,77 @@ type readRules struct {
 	err   error
 }
 
+// keyedSource is a rule set for the firewall with the key of its content. Content is nil
+// when what was read of that content is kept (Supervisor.read).
+type keyedSource struct {
+	lists.Source
+	key derivationKey
+}
+
+// knownSource is the key of what a rule set held when the firewall read it last, and what
+// tells that it has not changed since: the instance and its count of loads of the rule set
+// for one sing-box downloads (it tells every load), the size and time of the file for a
+// local one.
+type knownSource struct {
+	instance Instance
+	loads    uint64
+	path     string
+	size     int64
+	modified time.Time
+	key      derivationKey
+}
+
+func (k knownSource) same(other knownSource) bool {
+	return k.instance == other.instance && k.loads == other.loads && k.path == other.path && k.size == other.size && k.modified.Equal(other.modified)
+}
+
+// ruleSetSource is a rule set as the firewall reads it: its content is read only when it
+// may have changed since the last read, or when what was read of it is not kept. A big
+// list that did not change is not copied from the cache file and hashed at every refill.
+func (s *Supervisor) ruleSetSource(instance Instance, ruleSet plan.RuleSet) (keyedSource, knownSource, bool) {
+	source := lists.Source{Tag: ruleSet.Tag, Format: ruleSet.Format}
+	var stamp knownSource
+	if ruleSet.Path != "" {
+		info, err := os.Stat(ruleSet.Path)
+		if err != nil {
+			return keyedSource{}, knownSource{}, false
+		}
+		stamp = knownSource{path: ruleSet.Path, size: info.Size(), modified: info.ModTime()}
+	} else {
+		// taken before the content: a load meanwhile has the content read again
+		stamp = knownSource{instance: instance, loads: s.loads.count(instance, ruleSet.Tag)}
+	}
+	if previous, seen := s.known[ruleSet.Tag]; seen && previous.same(stamp) && previous.key.format == ruleSet.Format {
+		if _, kept := s.read[previous.key]; kept {
+			return keyedSource{source, previous.key}, previous, true
+		}
+	}
+	if ruleSet.Path != "" {
+		content, err := os.ReadFile(ruleSet.Path)
+		if err != nil {
+			return keyedSource{}, knownSource{}, false
+		}
+		source.Content = content
+	} else {
+		content, found := instance.RuleSetContent(ruleSet.Tag)
+		if !found {
+			return keyedSource{}, knownSource{}, false
+		}
+		source.Content = content
+	}
+	stamp.key = derivationKey{ruleSet.Tag, ruleSet.Format, sha256.Sum256(source.Content)}
+	return keyedSource{source, stamp.key}, stamp, true
+}
+
 // deriveSets is lists.Derive of rule sets with what was read of each kept: the sets of the
 // firewall are made at every apply and at every load of a rule set, and a big list read
 // for them again is a big list read once more. Only a rule set whose
 // content changed is read; when none did, the sets are those made last.
-func (s *Supervisor) deriveSets(sources []lists.Source) (*lists.Destinations, []error) {
+func (s *Supervisor) deriveSets(sources []keyedSource) (*lists.Destinations, []error) {
 	keys := make([]derivationKey, len(sources))
+	plain := make([]lists.Source, len(sources))
 	for index, source := range sources {
-		keys[index] = derivationKey{source.Tag, source.Format, sha256.Sum256(source.Content)}
+		keys[index], plain[index] = source.key, source.Source
 	}
 	if s.derived != nil && slices.Equal(keys, s.derived.keys) {
 		return s.derived.destinations, s.derived.problems
@@ -1370,7 +1495,7 @@ func (s *Supervisor) deriveSets(sources []lists.Source) (*lists.Destinations, []
 		keyOf[key.tag] = key
 	}
 	used := make(map[derivationKey]bool, len(keys))
-	destinations, problems := lists.DeriveWith(sources, func(source lists.Source) ([]engine.AddressRule, error) {
+	destinations, problems := lists.DeriveWith(plain, func(source lists.Source) ([]engine.AddressRule, error) {
 		key := keyOf[source.Tag]
 		used[key] = true
 		if found, known := s.read[key]; known {
@@ -1544,7 +1669,7 @@ func (s *Supervisor) release() {
 	s.retireConfig()
 	// what was read of the lists for the firewall goes with the firewall table: with
 	// nothing running it would hold the addresses of every list until the next start
-	s.derived, s.read = nil, nil
+	s.derived, s.read, s.known = nil, nil, nil
 	changed, err := s.options.System.RestoreDNS()
 	if err != nil {
 		s.log("error", "give the DNS of the LAN back: ", err)

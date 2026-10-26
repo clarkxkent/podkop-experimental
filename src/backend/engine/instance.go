@@ -253,6 +253,26 @@ func (i *Instance) RuleSetContent(tag string) ([]byte, bool) {
 	return saved.Content, true
 }
 
+// RuleSetHasAddresses tells whether the content sing-box loaded into a rule set has a rule
+// with destination addresses (its metadata, ContainsIPCIDRRule; while the content of a
+// remote one is not known yet, it says yes); told is false when there is no such rule set.
+// A list of names only gives the firewall nothing, and need not be read for it.
+func (i *Instance) RuleSetHasAddresses(tag string) (has bool, told bool) {
+	if !i.enter() {
+		return false, false
+	}
+	defer i.leave()
+	router := service.FromContext[adapter.Router](i.ctx)
+	if router == nil {
+		return false, false
+	}
+	ruleSet, found := router.RuleSet(tag)
+	if !found {
+		return false, false
+	}
+	return ruleSet.Metadata().ContainsIPCIDRRule, true
+}
+
 // RuleSetUpdated tells when sing-box last downloaded a rule set, or found it unchanged at
 // its server; nothing for a rule set never downloaded and without a cache file.
 func (i *Instance) RuleSetUpdated(tag string) (time.Time, bool) {
