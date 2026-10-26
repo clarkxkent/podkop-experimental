@@ -15,7 +15,9 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
+	"github.com/mdlayher/netlink"
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/sagernet/nftables"
 	"github.com/sagernet/nftables/binaryutil"
@@ -72,6 +74,21 @@ var (
 		netipx.IPRangeFrom(netip.MustParseAddr("240.0.0.0"), netip.MustParseAddr("255.255.255.255")),
 	}
 )
+
+// netlinkDeadline bounds how long a transaction of the table waits for the kernel's
+// answers. A refill of the sets of a million subnets never ended twice in 37 runs of the
+// stand, holding the goroutine of the backend for good: no apply, no update, no answer to
+// the page. With the bound the refill fails and is logged, and the next one sets the whole
+// table up.
+const netlinkDeadline = time.Minute
+
+// newConn is a netlink connection of nftables whose reads end at netlinkDeadline; a
+// connection that is not lasting dials anew at every flush, and the bound with it.
+func newConn() (*nftables.Conn, error) {
+	return nftables.New(nftables.WithSockOptions(func(conn *netlink.Conn) error {
+		return conn.SetReadDeadline(time.Now().Add(netlinkDeadline))
+	}))
+}
 
 // Plan is the whole table: what its rules depend on and what its sets hold.
 type Plan struct {
@@ -197,7 +214,7 @@ func updateSet(name string, before []Range, after []Range) error {
 	}
 	gone, came, few := rangesDifferUpTo(before, after, fillLot)
 	if few {
-		conn, err := nftables.New()
+		conn, err := newConn()
 		if err != nil {
 			return E.Cause(err, "open netlink")
 		}
@@ -264,7 +281,7 @@ func rangesDifferUpTo(before []Range, after []Range, limit int) (gone []Range, c
 // Apply makes the table anew, in one transaction: what a previous run left is replaced
 // whole, and the kernel never has a half of it.
 func Apply(plan *Plan) error {
-	conn, err := nftables.New()
+	conn, err := newConn()
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
@@ -470,7 +487,7 @@ func Apply(plan *Plan) error {
 
 // Remove deletes the table; one that is not there is no error.
 func Remove() error {
-	conn, err := nftables.New()
+	conn, err := newConn()
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
@@ -492,7 +509,7 @@ func ReplaceSet(name string, ranges []Range, lot int) (int, error) {
 }
 
 func replaceRanges(name string, ranges []Range, lot int) error {
-	conn, err := nftables.New()
+	conn, err := newConn()
 	if err != nil {
 		return E.Cause(err, "open netlink")
 	}
@@ -651,7 +668,7 @@ type State struct {
 
 // Exists tells whether the table is there.
 func Exists() (bool, error) {
-	conn, err := nftables.New()
+	conn, err := newConn()
 	if err != nil {
 		return false, E.Cause(err, "open netlink")
 	}
@@ -669,7 +686,7 @@ func Exists() (bool, error) {
 
 // Inspect reads the state of the table and of the counters of its rules.
 func Inspect() (*State, error) {
-	conn, err := nftables.New()
+	conn, err := newConn()
 	if err != nil {
 		return nil, E.Cause(err, "open netlink")
 	}
