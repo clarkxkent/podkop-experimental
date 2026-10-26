@@ -81,6 +81,11 @@ import (
 //     when the A question of its name is answered without an A record. FakeIP answers no
 //     AAAA question, so a name of a list is not affected. The shell backend answered every
 //     AAAA question empty.
+// 16. The names of the NTP servers of the router's NTP service (Facts.NTPServerNames) have
+//     a DNS rule of their own before the lists: they get their own addresses, never FakeIP
+//     ones, and the NTP of the router goes past the proxy (firewall). The shell backend had
+//     neither: a name of a list sent sysntpd through the proxy, which a wrong clock breaks.
+//     Without such names (the cases of render/testdata) there is no rule.
 
 // Shell is what FromShell has to know besides the configuration: the settings it was made
 // of, and how the generator reads and names the local lists (Options: RuleSetDir,

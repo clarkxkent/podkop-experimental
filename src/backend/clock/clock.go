@@ -1,9 +1,23 @@
-// Package clock sets the clock of the router before the backend starts, as the shell backend
-// did with "ntpd -q". Most routers have no clock of their own: one boots with the time of
-// the last change of /etc, which may be days or months behind, and TLS refuses certificates
-// against such a clock: DoH and DoT, the downloads of lists, the proxies over TLS. The
-// router's own NTP service finds its servers by name, and with DoH or DoT the names need
-// the very TLS the clock breaks. The servers here are asked by address.
+// Package clock helps the router's NTP service, sysntpd (BusyBox ntpd), to set the clock;
+// it does not keep the clock itself. Most routers have no clock of their own: one boots with
+// the time of the newest file of /etc (sysfixtime), which may be weeks behind, and TLS and
+// REALITY refuse what such a clock says. sysntpd finds its servers by name through dnsmasq,
+// which after a power loss points at sing-box before it is there, and with DoH or DoT the
+// names need the TLS the clock breaks; it notices that the DNS works only at its next try,
+// minutes later, and logs nothing.
+//
+// What is done, and only while sysntpd has not set the clock since the boot:
+//
+//   - A: the servers of sysntpd itself are asked once, their names resolved by the DNS
+//     servers of the uplinks directly, and a clock more than Threshold off is set;
+//   - C: when none of them answers, the time of the HTTPS answer of the DoH server of the
+//     settings, its certificate verified at that time;
+//   - B: once sing-box answers DNS, sysntpd is restarted, as LuCI's "Sync with NTP-Server"
+//     does: it asks at once instead of at its next try.
+//
+// The hook of the package (/etc/hotplug.d/ntp/60-podkop) tells what sysntpd did (State)
+// and keeps a file of /etc as new as the last time sysntpd set the clock, at most an hour
+// behind, so that sysfixtime boots with the time of the last power loss.
 package clock
 
 import (
@@ -15,9 +29,6 @@ import (
 	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/common/ntp"
 )
-
-// Servers are the NTP servers the shell backend asked, by address.
-var Servers = []string{"194.190.168.1", "216.239.35.0", "216.239.35.4", "162.159.200.1", "162.159.200.123"}
 
 // Threshold is how far off the clock may be before it is set: closer than this it is the
 // business of the router's NTP service, which adjusts it smoothly.

@@ -90,6 +90,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		address         string
 		outboundResults []string
 		deviceLines     []string
+		clockReport     []string
 		client          netip.Addr
 		asked           sync.WaitGroup
 	)
@@ -110,6 +111,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 			dns = diag.CheckDNS(ctx, diag.DNSSettings{Type: settings.DNSType, Server: settings.DNSServer, Bootstrap: settings.BootstrapDNSServer}, dhcp)
 		},
 		func() { tables = diag.CheckFirewall(ctx, nil) },
+		func() { clockReport = clockLines(ctx, routerClockFacts) },
 		func() { works, answered = routerFakeIP() },
 		func() { address = diag.FakeIPAddress(ctx) },
 		func() {
@@ -136,6 +138,9 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		"⚙️ Engine:        "+engine,
 		"🛜 OpenWrt:       "+system.OpenWrtVersion,
 		"🛜 Device:        "+system.DeviceModel)
+
+	add(rule, "🕰️ Clock")
+	add(clockReport...)
 
 	add(rule, "➡️ DNS status")
 	if dns.Bootstrap != "" {

@@ -1,0 +1,40 @@
+#!/bin/sh
+# What the router's NTP service (sysntpd) does, for the clock help of the backend
+# (src/backend/clock) and for the log. procd runs this at every event of ntpd: step,
+# stratum, periodic (every 11 minutes), unsync; ntpd itself logs nothing.
+#   /var/state/podkop-ntp         the last event: "<unix time> <action> <offset> <stratum>"
+#   /var/state/podkop-ntp-synced  touched whenever ntpd tells the clock is set
+#   /etc/podkop-time              a file of /etc as new as the last time the clock was set,
+#                                 an hour behind at most: at a boot sysfixtime sets the
+#                                 clock to the newest file of /etc, the time of the last
+#                                 power loss instead of that of the last change of settings
+# /var/state is made at every boot (/etc/init.d/boot); without it nothing is written. The
+# package removes the files at its removal.
+[ -d /var/state ] || exit 0
+now=$(date +%s)
+state=/var/state/podkop-ntp
+echo "$now $ACTION ${offset:--} ${stratum:-16}" > "$state.$$" && mv -f "$state.$$" "$state"
+case "$ACTION" in
+step)
+	logger -t podkop "ntpd stepped the clock by ${offset:-?} s"
+	;;
+unsync)
+	logger -t podkop "ntpd lost every NTP server"
+	exit 0
+	;;
+*)
+	[ "${stratum:-16}" -lt 16 ] 2> /dev/null || exit 0
+	;;
+esac
+synced=/var/state/podkop-ntp-synced
+[ -e "$synced" ] || [ "$ACTION" = step ] || logger -t podkop "ntpd has set the clock (stratum $stratum)"
+touch "$synced"
+# a mark ahead of the clock (the clock was set back) is renewed too: a boot would set the
+# clock to it
+mark=/etc/podkop-time
+if [ -e "$mark" ]; then
+	age=$((now - $(date -r "$mark" +%s)))
+	[ "$age" -ge 0 ] && [ "$age" -lt 3600 ] && exit 0
+fi
+touch "$mark"
+exit 0

@@ -56,6 +56,8 @@ type recorder struct {
 	noLAN bool
 	// listening are the sockets that listen; nil: not known
 	listening []sockets.Listener
+	// ntpNames are the names of the NTP servers of the router
+	ntpNames []string
 	// routingError is what setting up the routing fails with
 	routingError error
 	// uplinks are the devices RouteUplinks adds a rule for, once
@@ -82,6 +84,8 @@ func (r *recorder) RouteUplinks() ([]string, error) {
 	r.uplinks = nil
 	return added, nil
 }
+
+func (r *recorder) NTPServerNames() []string { return r.ntpNames }
 
 func (r *recorder) LANAddress() string {
 	if r.noLAN {

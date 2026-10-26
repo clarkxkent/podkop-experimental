@@ -64,6 +64,10 @@ type Facts struct {
 	// name ("wan": "pppoe-wan"), the same for a device of layer 2 under it. A name that is
 	// not in it is used as it is.
 	Devices map[string]string
+	// NTPServerNames are the names of the NTP servers of the router's NTP service
+	// (clock.ServerNames): sing-box answers them with their own addresses, never from FakeIP
+	// (ledger item 16).
+	NTPServerNames []string
 }
 
 // Options are the builder's ways to the outside.
@@ -736,6 +740,13 @@ func (b *builder) buildDNS() (*object, error) {
 	b.dnsRules = append(b.dnsRules,
 		&rule{fields: newObject("action", "reject", "query_type", "HTTPS")},
 		&rule{fields: newObject("action", "reject", "domain_suffix", "use-application-dns.net")},
+	)
+	if names := b.facts.NTPServerNames; len(names) > 0 {
+		// the NTP of the router goes past the proxy (firewall): a name of a list would have
+		// it sent to a FakeIP address, and through the proxy, which the clock may break
+		b.dnsRules = append(b.dnsRules, &rule{fields: newObject("action", "route", "server", tagDNSServer, "domain", stringsToAny(names))})
+	}
+	b.dnsRules = append(b.dnsRules,
 		b.fakeIPRule,
 		// The name the backend checks itself with has a rule apart from the lists: since
 		// sing-box 1.14 a rule set of several rules next to "domain" matches only together

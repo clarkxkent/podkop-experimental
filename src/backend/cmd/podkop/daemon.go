@@ -16,9 +16,12 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/logbuf"
+	"github.com/podkop-net/podkop-experimental/src/backend/model"
+	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/supervisor"
 	"github.com/podkop-net/podkop-experimental/src/backend/ubus"
+	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 
 	"github.com/spf13/cobra"
@@ -80,7 +83,14 @@ var commandDaemon = &cobra.Command{
 			logs.Write("backend", level, message)
 		}
 		go probe.ServeDeadEnd(ctx, say)
-		setClock(ctx, say)
+		// the clock, before sing-box downloads lists and speaks TLS (see clock)
+		keeper := &clock.Keeper{
+			Log:       say,
+			DoH:       func() string { return dohServer(commandDaemonFlagUCI) },
+			UplinkDNS: netcfg.UplinkDNSServers,
+		}
+		keeper.AtStart(ctx)
+		go keeper.Loop(ctx)
 		backend := supervisor.New(supervisor.Options{
 			SettingsPath: commandDaemonFlagUCI,
 			System:       supervisor.Router{},
@@ -91,6 +101,7 @@ var commandDaemon = &cobra.Command{
 			YACDServedDir:  yacd.ServedDir,
 			ConfigDir:      configDir,
 			DownloadURL:    downloadURL,
+			Clock:          keeper,
 			Log:            say,
 			EngineLog: func(level string, message string) {
 				logs.Write("sing-box", level, message)
@@ -186,27 +197,22 @@ func processSettings() {
 // empty instead of downloading during the start.
 const startEmptyVariable = "SING_BOX_RULE_SET_START_EMPTY"
 
-// clockWait is how long the start waits for the NTP servers: without the WAN, at boot,
-// none answers, and the start goes on with the clock it has.
-const clockWait = 3 * time.Second
-
-// setClock sets the clock before the first start of sing-box, which downloads lists
-// and speaks TLS (see clock).
-func setClock(ctx context.Context, say func(level string, message string)) {
-	ctx, cancel := context.WithTimeout(ctx, clockWait)
-	defer cancel()
-	result, err := clock.Sync(ctx, clock.Servers, clock.Threshold, nil)
-	switch {
-	case err != nil:
-		say("info", "the clock is not checked: "+err.Error())
-	case result.Set:
-		way := "behind"
-		offset := result.Offset
-		if offset < 0 {
-			way, offset = "ahead", -offset
-		}
-		say("warn", "the clock was "+offset.Round(time.Second).String()+" "+way+"; it is set from the NTP server "+result.Server)
+// dohServer is the DNS server of the settings when it is DoH (host[:port][/path]): the time
+// of its HTTPS answers sets a clock no NTP server could (clock.Keeper.DoH).
+func dohServer(path string) string {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return ""
 	}
+	parsed, err := uci.Parse(content)
+	if err != nil {
+		return ""
+	}
+	config, err := model.Load(parsed)
+	if err != nil || config.Settings.DNSType != "doh" {
+		return ""
+	}
+	return config.Settings.DNSServer
 }
 
 // lockPath is the file a running backend holds locked.

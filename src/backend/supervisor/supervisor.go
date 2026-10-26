@@ -75,6 +75,14 @@ type System interface {
 	// what it had. Each tells whether it changed anything.
 	TakeOverDNS() (bool, error)
 	RestoreDNS() (bool, error)
+	// NTPServerNames are the names of the NTP servers of the router (clock.ServerNames).
+	NTPServerNames() []string
+}
+
+// Clock is the help the router's NTP service gets (clock.Keeper): kicked when sing-box has
+// started and when an interface comes up, it runs in the background.
+type Clock interface {
+	Kick()
 }
 
 // Engine is sing-box as the supervisor uses it. The real one is the package engine's
@@ -165,6 +173,8 @@ type Options struct {
 	// gets their rules, and sing-box shows the watcher the connections it routes. Who
 	// sets it serves the dead end of those connections (probe.ServeDeadEnd).
 	Watcher *probe.Watcher
+	// Clock, when set, is kicked after a start of sing-box and when an interface comes up.
+	Clock Clock
 }
 
 // The files of Options.ConfigDir (api.RunningConfig, api.LastConfig, api.RejectedConfig).
@@ -549,6 +559,8 @@ func (s *Supervisor) restoreRouting() string {
 		result := s.Boot()
 		return "the start that had failed was tried again: " + result.Message
 	}
+	// an uplink that came up: sysntpd learns of it only at its next try
+	s.kickClock()
 	var restored []string
 	if s.allowBridged() {
 		restored = append(restored, "bridged packets out of the IP firewall (br_netfilter)")
@@ -978,7 +990,7 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 		return nil, E.Cause(err, "read the settings")
 	}
 	s.clashKey(settings)
-	facts := plan.Facts{LANAddress: s.options.System.LANAddress(), Devices: s.options.System.Devices(plan.InterfaceNames(settings))}
+	facts := plan.Facts{LANAddress: s.options.System.LANAddress(), Devices: s.options.System.Devices(plan.InterfaceNames(settings)), NTPServerNames: s.options.System.NTPServerNames()}
 	if facts.Devices == nil && s.current != nil {
 		// netifd did not answer: the devices the names stood for so far, not the names
 		facts.Devices = s.current.result.Facts.Devices
@@ -1260,7 +1272,15 @@ func (s *Supervisor) Boot() Result {
 		return s.done(false, false, err)
 	}
 	s.log("info", "running, ", time.Since(started).Milliseconds(), " ms after the start")
+	s.kickClock()
 	return s.done(true, true, "started in ", time.Since(started).Milliseconds(), " ms")
+}
+
+// kickClock asks the help of the router's NTP service to look at the clock (Options.Clock).
+func (s *Supervisor) kickClock() {
+	if s.options.Clock != nil {
+		s.options.Clock.Kick()
+	}
 }
 
 // startFailed records a start of sing-box, or of the settings around it, that failed: the

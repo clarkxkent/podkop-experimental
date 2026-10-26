@@ -30,6 +30,24 @@ func TestUplinksOf(t *testing.T) {
 	require.Empty(t, uplinksOf(nil))
 }
 
+// The DNS servers of the uplinks, each once, in the order of netifd: not those of the LAN
+// or of an interface that is down or routes only its subnet.
+func TestUplinkDNSServersOf(t *testing.T) {
+	const dump = `{"interface": [
+	{"interface": "lan", "up": true, "l3_device": "br-lan", "route": [], "dns-server": ["192.168.1.1"]},
+	{"interface": "wan", "up": true, "l3_device": "pppoe-wan", "route": [{"target": "0.0.0.0", "mask": 0}], "dns-server": ["1.1.1.1", "10.0.0.53"]},
+	{"interface": "wan6", "up": true, "l3_device": "pppoe-wan", "route": [{"target": "::", "mask": 0}], "dns-server": ["2001:db8::53", "1.1.1.1"]},
+	{"interface": "wg0", "up": true, "l3_device": "wg0", "route": [{"target": "10.8.0.0", "mask": 24}], "dns-server": ["10.8.0.1"]},
+	{"interface": "lte", "up": false, "route": [{"target": "0.0.0.0", "mask": 0}], "dns-server": ["10.64.0.53"]}
+]}`
+	var parsed struct {
+		Interfaces []netifdInterface `json:"interface"`
+	}
+	require.NoError(t, json.Unmarshal([]byte(dump), &parsed))
+	require.Equal(t, []string{"1.1.1.1", "10.0.0.53", "2001:db8::53"}, uplinkDNSServersOf(parsed.Interfaces))
+	require.Empty(t, uplinkDNSServersOf(nil))
+}
+
 func rules(t *testing.T) string {
 	return ip(t, "-4", "rule", "list") + ip(t, "-6", "rule", "list")
 }

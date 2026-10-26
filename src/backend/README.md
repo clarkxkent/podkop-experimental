@@ -23,7 +23,7 @@ calls the same commands (`podkop get_status`, `podkop check_logs`, ...).
 | `dataplane`, `firewall`, `netcfg`, `dnsmasq` | The nftables table (over netlink), the routing rule and route, the DNS of the LAN |
 | `lists` | The lists: downloads, updates, the nftables sets of subnets |
 | `api`, `ctl` | The socket of the running backend and the commands of the page on top of it |
-| `diag`, `probe`, `clock` | The checks of the page, the probe of the data path, the clock at boot |
+| `diag`, `probe`, `clock` | The checks of the page, the probe of the data path, the help of the router's NTP service (sysntpd) |
 | `render`, `logbuf` | What a start writes before sing-box runs; the last lines of the log in memory |
 | `compat.go` | What is kept only for podkop 0.7, each item with when it can go |
 

@@ -25,6 +25,7 @@ type netifdInterface struct {
 		Target string `json:"target"`
 		Mask   int    `json:"mask"`
 	} `json:"route"`
+	DNSServers []string `json:"dns-server"`
 }
 
 // pppPrefixes are the protocols of netifd whose device of layer 3 is made by pppd when the

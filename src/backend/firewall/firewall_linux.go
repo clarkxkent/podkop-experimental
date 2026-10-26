@@ -417,6 +417,11 @@ func Apply(plan *Plan) error {
 		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: binaryutil.NativeEndian.PutUint32(markOutbound)},
 		&expr.Counter{},
 	}, returns)
+	// the NTP of the router itself (sysntpd, the clock check of the backend) never goes to
+	// the proxy, whose TLS or REALITY a wrong clock breaks: through it the clock would never
+	// be set. A FakeIP address has no other way than sing-box; the DNS gives the names of
+	// the NTP servers their own addresses (plan, ledger item 16).
+	add(mangleOutput, ipv4(), addressNotWithin(offsetDestination, rangeFakeIP), protocol(unix.IPPROTO_UDP), destinationPort(123), returns)
 	for _, destination := range [][]expr.Any{toSubnets, toFakeIP} {
 		for _, transport := range transports {
 			add(mangleOutput, destination, protocol(transport), markWith(markRouter))
@@ -629,14 +634,23 @@ func addressIn(offset uint32, setName string, setID uint32) []expr.Any {
 
 // addressWithin matches an address against a prefix; a whole address needs no mask.
 func addressWithin(offset uint32, prefix netip.Prefix) []expr.Any {
+	return addressCompared(offset, prefix, expr.CmpOpEq)
+}
+
+// addressNotWithin matches an address outside a prefix.
+func addressNotWithin(offset uint32, prefix netip.Prefix) []expr.Any {
+	return addressCompared(offset, prefix, expr.CmpOpNeq)
+}
+
+func addressCompared(offset uint32, prefix netip.Prefix, op expr.CmpOp) []expr.Any {
 	if prefix.Bits() == 32 {
-		return []expr.Any{addressLoad(offset), &expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: prefix.Addr().AsSlice()}}
+		return []expr.Any{addressLoad(offset), &expr.Cmp{Op: op, Register: 1, Data: prefix.Addr().AsSlice()}}
 	}
 	mask := netipx.RangeOfPrefix(netip.PrefixFrom(netip.MustParseAddr("255.255.255.255"), prefix.Bits())).From().AsSlice()
 	return []expr.Any{
 		addressLoad(offset),
 		&expr.Bitwise{SourceRegister: 1, DestRegister: 1, Len: 4, Mask: mask, Xor: []byte{0, 0, 0, 0}},
-		&expr.Cmp{Op: expr.CmpOpEq, Register: 1, Data: prefix.Masked().Addr().AsSlice()},
+		&expr.Cmp{Op: op, Register: 1, Data: prefix.Masked().Addr().AsSlice()},
 	}
 }
 

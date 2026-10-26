@@ -35,19 +35,52 @@ func RouteUplinks() ([]string, error) {
 	return syncUplinkRules(uplinksOf(interfaces))
 }
 
+// UplinkDNSServers are the DNS servers netifd has for the interfaces that are up with a
+// default route, in its order: those of the provider, or those written into the interface
+// instead. They are asked directly, past dnsmasq and sing-box (clock).
+func UplinkDNSServers() []string {
+	interfaces, err := dumpInterfaces()
+	if err != nil {
+		return nil
+	}
+	return uplinkDNSServersOf(interfaces)
+}
+
+func uplinkDNSServersOf(interfaces []netifdInterface) []string {
+	var servers []string
+	for _, networkInterface := range interfaces {
+		if !hasDefaultRoute(networkInterface) {
+			continue
+		}
+		for _, server := range networkInterface.DNSServers {
+			if !slices.Contains(servers, server) {
+				servers = append(servers, server)
+			}
+		}
+	}
+	return servers
+}
+
+func hasDefaultRoute(networkInterface netifdInterface) bool {
+	if !networkInterface.Up {
+		return false
+	}
+	for _, route := range networkInterface.Routes {
+		if route.Mask == 0 && (route.Target == "0.0.0.0" || route.Target == "::") {
+			return true
+		}
+	}
+	return false
+}
+
 // uplinksOf are the devices of the interfaces that are up with a default route.
 func uplinksOf(interfaces []netifdInterface) []string {
 	var devices []string
 	for _, networkInterface := range interfaces {
-		if !networkInterface.Up || networkInterface.L3Device == "" || slices.Contains(devices, networkInterface.L3Device) {
+		if networkInterface.L3Device == "" || slices.Contains(devices, networkInterface.L3Device) || !hasDefaultRoute(networkInterface) {
 			continue
 		}
-		for _, route := range networkInterface.Routes {
-			if route.Mask == 0 && (route.Target == "0.0.0.0" || route.Target == "::") {
-				devices = append(devices, networkInterface.L3Device)
-				break
-			}
-		}
+		devices = append(devices, networkInterface.L3Device)
 	}
 	slices.Sort(devices)
 	return devices

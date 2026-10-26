@@ -4,6 +4,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/podkop-net/podkop-experimental/src/backend/clock"
 	"github.com/podkop-net/podkop-experimental/src/backend/dnsmasq"
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
@@ -24,6 +25,8 @@ func (Router) LANAddress() string {
 }
 
 func (Router) Devices(names []string) map[string]string { return netcfg.Devices(names) }
+
+func (Router) NTPServerNames() []string { return clock.ServerNames() }
 
 func (Router) Listening() []sockets.Listener { return sockets.Bound("/") }
 
