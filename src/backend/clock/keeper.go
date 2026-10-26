@@ -314,13 +314,13 @@ func (k *Keeper) resolve(ctx context.Context, servers []string) []string {
 	return addresses
 }
 
-// lookupAt resolves a name to IPv4 addresses by a DNS server over UDP, or by the resolver
-// of the router when server is empty.
+// lookupAt resolves a name to IPv4 addresses by a DNS server, directly and never through
+// the proxy, or by the resolver of the router when server is empty.
 func lookupAt(ctx context.Context, server string, name string) ([]netip.Addr, error) {
 	resolver := net.DefaultResolver
 	if server != "" {
 		resolver = &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, network string, _ string) (net.Conn, error) {
-			var dialer net.Dialer
+			dialer := net.Dialer{Control: markedControl}
 			return dialer.DialContext(ctx, network, net.JoinHostPort(server, "53"))
 		}}
 	}

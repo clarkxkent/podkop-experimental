@@ -14,13 +14,14 @@ import (
 )
 
 // HTTPSTime is the time an HTTPS server tells in the Date header of its answer, the server
-// at address (host:port, connected directly) under the name host. Its certificate is
-// verified at that time, not at the clock of the router: the clock may be wrong by months,
-// and only a server with a valid certificate of host can tell a time that is taken. A
+// at address (host:port, connected directly, never through the proxy) under the name host.
+// Its certificate is verified at that time, not at the clock of the router: the clock may be
+// wrong by months, and only a server with a valid certificate of host can tell a time that
+// is taken. A
 // request of the DoH path is answered by any DoH server, with an error or not; the status
 // does not matter. The Date has whole seconds: half a second is added.
 func HTTPSTime(ctx context.Context, address string, host string, path string, roots *x509.CertPool) (time.Time, error) {
-	var dialer net.Dialer
+	dialer := net.Dialer{Control: markedControl}
 	raw, err := dialer.DialContext(ctx, "tcp", address)
 	if err != nil {
 		return time.Time{}, err
