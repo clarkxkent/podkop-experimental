@@ -248,6 +248,8 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	if running {
 		add(rule, "🌍 Outbounds")
 		add(outboundResults...)
+		// a VPN section whose test did not pass: the MTU of its tunnel against the way out
+		add(vpnMTUHints(sections, outboundResults, network, devices, routerMTUFacts)...)
 	}
 	if device != nil {
 		add(rule, "🌐 This device")

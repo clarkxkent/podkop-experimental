@@ -70,3 +70,20 @@ func MarkedRoute(device string, source netip.Addr, destination netip.Addr, mark 
 	}
 	return route, nil
 }
+
+// RouteDevice is the device the main routing of the router sends a packet to destination
+// through ("ip route get <destination>").
+func RouteDevice(destination netip.Addr) (string, error) {
+	routes, err := netlink.RouteGet(destination.AsSlice())
+	if err != nil {
+		return "", E.Cause(err, "ask the kernel for the route to ", destination)
+	}
+	if len(routes) == 0 || routes[0].LinkIndex == 0 {
+		return "", E.New("no route to ", destination)
+	}
+	link, err := netlink.LinkByIndex(routes[0].LinkIndex)
+	if err != nil {
+		return "", E.Cause(err, "find the device of the route to ", destination)
+	}
+	return link.Attrs().Name, nil
+}
