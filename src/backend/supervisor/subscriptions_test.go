@@ -165,7 +165,7 @@ func TestSubscriptionRoutes(t *testing.T) {
 	require.True(t, s.Boot().OK)
 	downloadNow(t, s)
 	require.Equal(t, []string{"direct"}, source.asked)
-	routes := s.routes(3)
+	routes, _ := s.routes(3)
 	var names []string
 	for _, route := range routes {
 		names = append(names, route.Name)
@@ -225,6 +225,46 @@ func TestSubscriptionPreviews(t *testing.T) {
 	require.Equal(t, 2, check.Total)
 	require.Equal(t, []string{"gone: not in the saved settings"}, check.Missing)
 	require.Len(t, fake.built, 1)
+	s.Stop()
+}
+
+// Two lists that come in the same round make one new configuration, after the last of them:
+// no download loses the sing-box it goes through to a new configuration.
+func TestSubscriptionRoundAppliesOnce(t *testing.T) {
+	directory := t.TempDir()
+	fake, system := &fakeEngine{refuse: map[string]error{}}, new(recorder)
+	source := &provider{body: "vless://u1@nl1.example:443?security=tls&sni=nl1.example#NL%201\n"}
+	options := Options{
+		SettingsPath: filepath.Join(directory, "podkop"), RuleSetDir: filepath.Join(directory, "rulesets"),
+		StagingDir: filepath.Join(directory, "candidate"), StatePath: filepath.Join(directory, "state"),
+		ConfigDir: filepath.Join(directory, "run"), ReadyTimeout: time.Second, System: system, Engine: fake,
+		Download: source.download,
+	}
+	settings := subscriptionSettings(directory, "block") + "\nconfig subscription 'prov2'\n\toption url 'https://other.example/sub/2'\n" +
+		"\nconfig group 'two'\n\tlist subscription 'prov2'\n" +
+		"\nconfig section 'second'\n\toption connection_type 'group'\n\toption group 'two'\n\toption user_domain_list_type 'dynamic'\n\tlist user_domains 'second.lab.example'\n"
+	require.NoError(t, os.WriteFile(options.SettingsPath, []byte(settings), 0o644))
+	s := New(options)
+	require.True(t, s.Boot().OK)
+	require.Len(t, fake.built, 1)
+	s.downloadDue(time.Now(), "*")
+	first := <-s.downloads
+	s.takeList(first)
+	require.Len(t, fake.built, 1, "the other download is under way")
+	second := <-s.downloads
+	s.takeList(second)
+	require.Len(t, fake.built, 2)
+	config := string(s.current.result.Config)
+	require.Contains(t, config, `"prov1: NL 1"`)
+	require.Contains(t, config, `"prov2: NL 1"`)
+
+	// a download whose sing-box was replaced meanwhile is tried again at the next tick
+	before := s.current.instance
+	s.takeList(downloaded{name: "prov1", address: "https://sub.example/api/sub/TOKEN", err: os.ErrDeadlineExceeded, through: &fakeInstance{}})
+	state := s.subscriptionStates()[0]
+	require.Equal(t, "prov1", state.Name)
+	require.False(t, state.Next.After(time.Now()))
+	require.Same(t, before, s.current.instance)
 	s.Stop()
 }
 
