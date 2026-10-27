@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-27 11:41+0000\n"
-"PO-Revision-Date: 2026-10-27 11:41+0000\n"
+"POT-Creation-Date: 2026-10-27 17:58+0000\n"
+"PO-Revision-Date: 2026-10-27 17:58+0000\n"
 "Last-Translator: FiyeroT\n"
 "Language-Team: none\n"
 "Language: ru\n"
@@ -482,6 +482,9 @@ msgstr "Сетевой интерфейс"
 msgid "next download %s"
 msgstr "следующая загрузка %s"
 
+msgid "No group yet: make one on the tab Groups"
+msgstr "Групп ещё нет: создайте группу на вкладке «Группы»"
+
 msgid "no IPv4 address now"
 msgstr "сейчас без IPv4-адреса"
 
@@ -491,8 +494,14 @@ msgstr "Нет списка %s"
 msgid "No other marking rules found"
 msgstr "Другие правила маркировки не найдены"
 
+msgid "No section with an outbound yet"
+msgstr "Пока нет секции с выходом"
+
 msgid "No server is chosen (of %d): %s"
 msgstr "Не выбран ни один сервер (из %d): %s"
+
+msgid "No subscription yet: add one on the tab Subscriptions"
+msgstr "Подписок ещё нет: добавьте подписку на вкладке «Подписки»"
 
 msgid "not available"
 msgstr "недоступна"

@@ -99,6 +99,10 @@ function createGroupContent(section) {
     uci.sections("podkop", "subscription").forEach((item) => {
       this.value(item[".name"], item[".name"]);
     });
+    // a list of LuCI with no choice is not drawn at all: the group would not show
+    if (!this.keylist.length) {
+      this.value("", _("No subscription yet: add one on the tab Subscriptions"));
+    }
     return form.MultiValue.prototype.load.call(this, section_id);
   };
   o.rmempty = false;
@@ -157,6 +161,9 @@ function createGroupContent(section) {
       .forEach((item) => {
         this.value(item[".name"], item[".name"]);
       });
+    if (!this.keylist.length) {
+      this.value("", _("No section with an outbound yet"));
+    }
     return form.ListValue.prototype.load.call(this, section_id);
   };
 

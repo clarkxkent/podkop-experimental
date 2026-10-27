@@ -139,6 +139,10 @@ function createSectionContent(section, singBoxFeatures = []) {
     uci.sections("podkop", "group").forEach((item) => {
       this.value(item[".name"], item[".name"]);
     });
+    // a list of LuCI with no choice is not drawn at all: the section would not show
+    if (!this.keylist.length) {
+      this.value("", _("No group yet: make one on the tab Groups"));
+    }
     const value = uci.get("podkop", section_id, "group");
     // a group that is no longer there stays shown, and validate tells why
     if (value && !this.keylist.includes(value)) {

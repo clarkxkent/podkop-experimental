@@ -25,8 +25,23 @@
 
 // Sections, groups and subscriptions are sections of one file, and its names are one
 // namespace: a group named as a section would merge into it. A name taken is refused.
-function uniqueNames(typedSection) {
-  const add = typedSection.handleAdd;
+//
+// A section is added and removed as LuCI does it (the change is staged and the form drawn
+// again), but a field that does not pass its check does not stop it. LuCI saves the whole form
+// first, every tab: on a router just installed the section main has no proxy link yet, and a
+// subscription or a group could not be added (it stayed in the page unseen, and a second try
+// found its name taken). The fields that pass are kept; the one that does not is told at Save.
+function stageSections(typedSection) {
+  const map = typedSection.map;
+  const stage = () => {
+    map.checkDepends();
+    return map
+      .parse()
+      .catch(() => {})
+      .then(() => map.data.save())
+      .then(() => map.load())
+      .then(() => map.renderContents());
+  };
   typedSection.handleAdd = function (ev, name) {
     if (name && uci.get("podkop", name)) {
       ui.addNotification(
@@ -40,7 +55,12 @@ function uniqueNames(typedSection) {
       );
       return Promise.resolve();
     }
-    return add.apply(this, arguments);
+    map.data.add(this.uciconfig ?? map.config, this.sectiontype, name);
+    return stage();
+  };
+  typedSection.handleRemove = function (section_id) {
+    map.data.remove(this.uciconfig ?? map.config, section_id);
+    return stage();
   };
 }
 
@@ -87,7 +107,7 @@ const EntryPoint = {
     subscriptionsSection.anonymous = false;
     subscriptionsSection.addremove = true;
     subscription.createSubscriptionContent(subscriptionsSection);
-    uniqueNames(subscriptionsSection);
+    stageSections(subscriptionsSection);
 
     // Groups tab: servers of subscriptions chosen by their names
     const groupsSection = podkopMap.section(
@@ -98,7 +118,7 @@ const EntryPoint = {
     groupsSection.anonymous = false;
     groupsSection.addremove = true;
     group.createGroupContent(groupsSection);
-    uniqueNames(groupsSection);
+    stageSections(groupsSection);
 
     // Sections tab
     const sectionsSection = podkopMap.section(
@@ -112,7 +132,7 @@ const EntryPoint = {
 
     // Render section content
     section.createSectionContent(sectionsSection, singBoxFeatures);
-    uniqueNames(sectionsSection);
+    stageSections(sectionsSection);
 
     // Settings tab
     const settingsSection = podkopMap.section(
