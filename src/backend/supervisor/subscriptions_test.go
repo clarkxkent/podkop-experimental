@@ -249,6 +249,11 @@ func TestSubscriptionPreviews(t *testing.T) {
 	require.True(t, s.Apply().OK)
 	require.Contains(t, string(s.current.result.Config), `"fresh: NL 1"`)
 	require.Equal(t, asked, len(source.asked))
+	for _, state := range s.subscriptionStates() {
+		if state.Name == "fresh" {
+			require.WithinDuration(t, time.Now().Add(firstDownloadDelay), *state.Next, 5*time.Second, "downloaded soon all the same")
+		}
+	}
 	_, err = os.Stat(filepath.Join(directory, "subscriptions", "fresh.json"))
 	require.NoError(t, err)
 	s.Stop()

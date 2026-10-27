@@ -122,12 +122,11 @@ func (s *Supervisor) syncSubscriptions(settings *model.Config) {
 		}
 		if kept := t.previews[subscription.AddressKey(item.URL)]; !found && kept != nil && now.Sub(kept.Changed) < previewKept {
 			// the list the page got for the address a while ago (Load, Check of a group): a
-			// subscription just added has its servers at the apply that adds it, and is
-			// downloaded again at its interval
+			// subscription just added has its servers at the apply that adds it; it is
+			// downloaded soon all the same, as the provider may have changed the list since
 			saved, found = kept, true
 			checked := kept.Changed
-			next = checked.Add(t.intervals[item.Name])
-			state.Checked, state.Next = &checked, &next
+			state.Checked = &checked
 			if s.options.SubscriptionDir != "" {
 				if err := s.store().Save(item.Name, kept); err != nil {
 					s.log("warn", "subscription ", item.Name, ": ", err)
