@@ -93,3 +93,26 @@ func TestCachePathMoved(t *testing.T) {
 		require.Equal(t, want, config.Settings.CachePath, path)
 	}
 }
+
+func TestSubscriptionsAndGroups(t *testing.T) {
+	t.Parallel()
+	parsed, err := uci.Parse([]byte("config settings 'settings'\n" +
+		"\nconfig subscription 'prov1'\n\toption url ' https://a.example/sub/1 '\n" +
+		"\nconfig group 'nl'\n\tlist subscription 'prov1'\n\tlist include 'NL'\n\tlist include 'Нидерланды 1'\n\tlist include ' '\n\tlist exclude 'old'\n" +
+		"\nconfig section 'youtube'\n\toption connection_type 'group'\n\toption group 'nl'\n"))
+	require.NoError(t, err)
+	config, err := Load(parsed)
+	require.NoError(t, err)
+	require.Equal(t, []Subscription{{Name: "prov1", URL: "https://a.example/sub/1", UpdateInterval: "12h"}}, config.Subscriptions)
+	group := config.Group("nl")
+	require.NotNil(t, group)
+	require.Equal(t, []string{"NL", "Нидерланды 1"}, group.Include)
+	require.Equal(t, "all", group.Empty)
+	require.Equal(t, []string{"nl"}, config.Sections[0].Groups)
+	require.True(t, config.Sections[0].HasOutbound())
+	require.True(t, group.Takes("🇳🇱 nl-1"))
+	require.True(t, group.Takes("Нидерланды 1 ⚡"))
+	require.False(t, group.Takes("NL old"))
+	require.False(t, group.Takes("DE"))
+	require.True(t, (&Group{}).Takes("anything"))
+}

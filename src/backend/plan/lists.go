@@ -27,8 +27,8 @@ func (b *builder) buildSectionLists(section *model.Section) error {
 	}
 	var target *rule
 	switch section.ConnectionType {
-	case "proxy", "vpn":
-		target = b.addRouteRule("section "+section.Name, newObject("action", "route", "inbound", tagTProxyInbound, "outbound", outboundTag(section.Name)))
+	case "proxy", "vpn", "group":
+		target = b.addRouteRule("section "+section.Name, b.sectionRoute(section, tagTProxyInbound))
 	case "block":
 		target = b.routeRule(nameRejectRule)
 	case "exclusion":
@@ -101,10 +101,15 @@ func isSubnet(text string) bool {
 }
 
 func (b *builder) downloadDetour() string {
-	if b.config.Settings.DownloadListsViaProxy {
-		return outboundTag(b.config.Settings.DownloadListsViaProxySection)
+	if !b.config.Settings.DownloadListsViaProxy {
+		return ""
 	}
-	return ""
+	name := b.config.Settings.DownloadListsViaProxySection
+	if section := b.config.Section(name); section != nil && b.isRefused(section) {
+		b.warnOnce("the lists are downloaded directly: section ", name, " refuses its connections")
+		return ""
+	}
+	return outboundTag(name)
 }
 
 // addRemoteRuleSet names a rule set sing-box downloads. It downloads with the HTTP

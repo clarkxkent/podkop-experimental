@@ -101,6 +101,10 @@ type Options struct {
 	// download one within its start (supervisor, yacd).
 	ExternalUI   string
 	NoExternalUI bool
+	// Servers are the servers of the subscriptions by the name of the subscription, those
+	// sing-box can use, in the order of the list of the provider; a subscription whose list
+	// was never taken has none.
+	Servers map[string][]SubscriptionServer
 }
 
 // CheckNames is a domain of names made up for checks: none of them exists, every one is
@@ -297,6 +301,15 @@ type builder struct {
 	// detours are the sections the servers of a proxy section are reached through, by the
 	// name of the section (checkDetours)
 	detours map[string]string
+
+	// what the sections of the type group were given (groups.go): where each section goes,
+	// the tags of the servers of each subscription, the outbounds of the servers decoded so
+	// far, and the servers and the groups made
+	exits            map[string]groupExit
+	subscriptionTags map[string][]string
+	decoded          map[string]*object
+	servers          map[string]bool
+	groups           map[string]bool
 }
 
 // rule is a route or a DNS rule while it is built: later steps find it by its name to add
@@ -317,7 +330,8 @@ func Build(config *model.Config, facts Facts, options Options) (*Result, error) 
 	if options.DecodeLink == nil {
 		return nil, E.New("no decoder of proxy links")
 	}
-	b := &builder{config: config, facts: facts, options: options, experimental: new(object), files: make(map[string]*object)}
+	b := &builder{config: config, facts: facts, options: options, experimental: new(object), files: make(map[string]*object),
+		exits: make(map[string]groupExit), subscriptionTags: make(map[string][]string), decoded: make(map[string]*object), servers: make(map[string]bool), groups: make(map[string]bool)}
 	b.buildInbounds()
 	err := b.buildOutbounds()
 	if err != nil {
@@ -430,6 +444,8 @@ func (b *builder) buildOutbounds() error {
 			err = b.buildProxyOutbounds(section)
 		case "vpn":
 			err = b.buildInterfaceOutbound(section)
+		case "group":
+			err = b.buildGroupSection(section)
 		case "block", "exclusion":
 			// no outbound: such a section is a route rule
 		default:
@@ -468,6 +484,8 @@ func (b *builder) checkDetours() error {
 			return E.New("section ", section.Name, " connects through itself")
 		case target == nil:
 			return E.New("section ", section.Name, " connects through ", section.Detour, ", and there is no such section")
+		case target.ConnectionType == "group":
+			return E.New("section ", section.Name, " connects through ", section.Detour, ", a section of the type group: a group cannot be connected through yet")
 		case target.ConnectionType != "proxy" && target.ConnectionType != "vpn":
 			return E.New("section ", section.Name, " connects through ", section.Detour, ", a section of the type ", target.ConnectionType, " that has no outbound")
 		}
@@ -485,10 +503,16 @@ func (b *builder) checkDetours() error {
 	return nil
 }
 
-// isTransit tells whether another section connects through this one.
+// isTransit tells whether another section connects through this one, or goes as it does
+// when its group chooses no server.
 func (b *builder) isTransit(name string) bool {
 	for _, detour := range b.detours {
 		if detour == name {
+			return true
+		}
+	}
+	for _, group := range b.config.Groups {
+		if group.Empty == "section" && group.EmptySection == name {
 			return true
 		}
 	}
@@ -826,7 +850,7 @@ func (b *builder) buildRoute() (*object, error) {
 		if len(section.FullyRoutedIPs) == 0 {
 			continue
 		}
-		entry := b.addRouteRule("", newObject("action", "route", "inbound", tagTProxyInbound, "outbound", outboundTag(section.Name)))
+		entry := b.addRouteRule("", b.sectionRoute(section, tagTProxyInbound))
 		for _, address := range section.FullyRoutedIPs {
 			patch(entry.fields, "source_ip_cidr", argument(address))
 		}
@@ -921,14 +945,11 @@ func (b *builder) buildAdditionalInbounds() error {
 			return E.New("sections ", other, " and ", section.Name, ": the mixed proxies have the same port ", port)
 		}
 		ports[fmt.Sprint(port)] = section.Name
-		b.addMixedInbound(section.Name+"-mixed-in", address, port, outboundTag(section.Name))
+		tag := section.Name + "-mixed-in"
+		b.inbounds = append(b.inbounds, newObject("type", "mixed", "tag", tag, "listen", address, "listen_port", port))
+		b.addRouteRule("", b.sectionRoute(section, tag))
 	}
 	return nil
-}
-
-func (b *builder) addMixedInbound(tag string, address string, port any, outbound string) {
-	b.inbounds = append(b.inbounds, newObject("type", "mixed", "tag", tag, "listen", address, "listen_port", port))
-	b.addRouteRule("", newObject("action", "route", "inbound", tag, "outbound", outbound))
 }
 
 func onlyKeys(fields *object, allowed ...string) bool {

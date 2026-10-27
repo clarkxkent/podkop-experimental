@@ -1,7 +1,9 @@
 // Package model holds the settings of the backend as its UCI file of the 0.7 format states
 // them: one "settings" section and any number of "section" blocks. Values are kept the
 // way the shell backend reads them, defaults included, so that the configuration built
-// from them is the one that backend builds.
+// from them is the one that backend builds. The file may also have "subscription" and
+// "group" blocks, which the shell backend does not know: servers a provider lists at an
+// address, and groups of them a section of the type group sends its traffic to.
 package model
 
 import (
@@ -19,6 +21,52 @@ type Config struct {
 	// Sections in the order of the file: the order decides the order of outbounds and of
 	// route rules, and which section is the first with an outbound.
 	Sections []Section
+	// Subscriptions and Groups in the order of the file.
+	Subscriptions []Subscription
+	Groups        []Group
+}
+
+// Subscription is a "config subscription" block: the address a provider lists its servers
+// at, as proxy links.
+type Subscription struct {
+	Name string
+	// URL is a secret: the token in it is the account.
+	URL string
+	// UpdateInterval is how often the list is downloaded again (1h, 6h, 12h, 1d).
+	UpdateInterval string
+}
+
+// Group is a "config group" block: servers of subscriptions chosen by their names.
+type Group struct {
+	Name          string
+	Subscriptions []string
+	// Include are words one of which a name of a server has to contain (none: every
+	// server), Exclude words none of which it may contain; letters of any case.
+	Include []string
+	Exclude []string
+	// Empty is what the sections of the group do when no server is chosen: all (every
+	// server of its subscriptions), section (go where EmptySection goes), direct, block.
+	Empty        string
+	EmptySection string
+}
+
+// Takes tells whether the group chooses a server of the name.
+func (g *Group) Takes(name string) bool {
+	name = strings.ToLower(name)
+	for _, word := range g.Exclude {
+		if strings.Contains(name, strings.ToLower(word)) {
+			return false
+		}
+	}
+	if len(g.Include) == 0 {
+		return true
+	}
+	for _, word := range g.Include {
+		if strings.Contains(name, strings.ToLower(word)) {
+			return true
+		}
+	}
+	return false
 }
 
 // Settings is the section "settings".
@@ -58,7 +106,9 @@ type Settings struct {
 // name that part.
 type Section struct {
 	Name           string
-	ConnectionType string // proxy, vpn, block, exclusion
+	ConnectionType string // proxy, vpn, group, block, exclusion
+	// Groups are the groups a section of the type group sends its traffic to: one so far
+	Groups []string
 
 	ProxyConfigType      string // url, selector, urltest, outbound
 	ProxyString          string
@@ -139,6 +189,7 @@ func Load(parsed *uci.Package) (*Config, error) {
 		config.Sections = append(config.Sections, Section{
 			Name:                    section.Name,
 			ConnectionType:          section.Get("connection_type"),
+			Groups:                  words(section, "group"),
 			ProxyConfigType:         section.Get("proxy_config_type"),
 			ProxyString:             section.Get("proxy_string"),
 			OutboundJSON:            section.Get("outbound_json"),
@@ -173,7 +224,66 @@ func Load(parsed *uci.Package) (*Config, error) {
 			ResolveRealIPForRouting: section.Bool("resolve_real_ip_for_routing", false),
 		})
 	}
+	for _, section := range parsed.SectionsOfType("subscription") {
+		config.Subscriptions = append(config.Subscriptions, Subscription{
+			Name:           section.Name,
+			URL:            strings.TrimSpace(section.Get("url")),
+			UpdateInterval: get(section, "update_interval", "12h"),
+		})
+	}
+	for _, section := range parsed.SectionsOfType("group") {
+		config.Groups = append(config.Groups, Group{
+			Name:          section.Name,
+			Subscriptions: words(section, "subscription"),
+			Include:       words(section, "include"),
+			Exclude:       words(section, "exclude"),
+			Empty:         get(section, "empty", "all"),
+			EmptySection:  section.Get("empty_section"),
+		})
+	}
 	return config, nil
+}
+
+// words returns the items of a list option without the empty ones and the spaces around
+// them; an item may have spaces inside.
+func words(section *uci.Section, name string) []string {
+	var result []string
+	for _, item := range section.List(name) {
+		if item = strings.TrimSpace(item); item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
+}
+
+// Subscription returns the subscription of the name, or nil.
+func (c *Config) Subscription(name string) *Subscription {
+	for index := range c.Subscriptions {
+		if c.Subscriptions[index].Name == name {
+			return &c.Subscriptions[index]
+		}
+	}
+	return nil
+}
+
+// Group returns the group of the name, or nil.
+func (c *Config) Group(name string) *Group {
+	for index := range c.Groups {
+		if c.Groups[index].Name == name {
+			return &c.Groups[index]
+		}
+	}
+	return nil
+}
+
+// Section returns the section of the name, or nil.
+func (c *Config) Section(name string) *Section {
+	for index := range c.Sections {
+		if c.Sections[index].Name == name {
+			return &c.Sections[index]
+		}
+	}
+	return nil
 }
 
 // list returns the items of a list option; none when all there is to it is empty items,
@@ -220,7 +330,7 @@ func (s *Section) HasEnabledLists() bool {
 
 // HasOutbound tells whether traffic of the section leaves through an outbound of its own.
 func (s *Section) HasOutbound() bool {
-	return s.ConnectionType == "proxy" || s.ConnectionType == "vpn"
+	return s.ConnectionType == "proxy" || s.ConnectionType == "vpn" || s.ConnectionType == "group"
 }
 
 // DefaultCachePath is the cache file of sing-box (FakeIP, rule sets) when the settings name
