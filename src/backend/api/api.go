@@ -154,11 +154,13 @@ type PreviewServer struct {
 }
 
 // GroupCheck asks which servers a group would choose: the group as the form has it, not
-// as the settings saved it.
+// as the settings saved it. Addresses are those of its subscriptions in the form, by name:
+// a subscription not saved yet has its address there only.
 type GroupCheck struct {
-	Subscriptions []string `json:"subscriptions"`
-	Include       []string `json:"include"`
-	Exclude       []string `json:"exclude"`
+	Subscriptions []string          `json:"subscriptions"`
+	Include       []string          `json:"include"`
+	Exclude       []string          `json:"exclude"`
+	Addresses     map[string]string `json:"addresses,omitempty"`
 }
 
 // GroupPreview is which servers a group would choose.

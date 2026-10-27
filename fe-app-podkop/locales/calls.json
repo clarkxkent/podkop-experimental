@@ -3,7 +3,7 @@
     "call": "%d of %d servers are chosen",
     "key": "%d of %d servers are chosen",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:46"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:62"
     ]
   },
   {
@@ -54,14 +54,14 @@
     "call": "A server is chosen when its name contains one of these words, in any case of letters (a flag, a country, a city). None: every server",
     "key": "A server is chosen when its name contains one of these words, in any case of letters (a flag, a country, a city). None: every server",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:101"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:115"
     ]
   },
   {
     "call": "A server whose name contains one of these words is never chosen",
     "key": "A server whose name contains one of these words is never chosen",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:111"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:125"
     ]
   },
   {
@@ -82,7 +82,7 @@
     "call": "all the servers of its subscriptions are used",
     "key": "all the servers of its subscriptions are used",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:34"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:47"
     ]
   },
   {
@@ -111,7 +111,7 @@
     "call": "Asking the router…",
     "key": "Asking the router…",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:170",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:184",
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:148"
     ]
   },
@@ -227,7 +227,7 @@
     "call": "Check",
     "key": "Check",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:192"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:211"
     ]
   },
   {
@@ -273,8 +273,8 @@
     "call": "Choose a subscription",
     "key": "Choose a subscription",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:94",
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:163"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:108",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:177"
     ]
   },
   {
@@ -826,14 +826,14 @@
     "call": "Go as another section does",
     "key": "Go as another section does",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:123"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:137"
     ]
   },
   {
     "call": "Go directly",
     "key": "Go directly",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:124"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:138"
     ]
   },
   {
@@ -1099,14 +1099,14 @@
     "call": "Name contains",
     "key": "Name contains",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:100"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:114"
     ]
   },
   {
     "call": "Name does not contain",
     "key": "Name does not contain",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:110"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:124"
     ]
   },
   {
@@ -1141,7 +1141,7 @@
     "call": "No list of %s",
     "key": "No list of %s",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:68"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:83"
     ]
   },
   {
@@ -1155,7 +1155,7 @@
     "call": "No server is chosen (of %d): %s",
     "key": "No server is chosen (of %d): %s",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:58"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:74"
     ]
   },
   {
@@ -1345,7 +1345,7 @@
     "call": "Refuse the connections",
     "key": "Refuse the connections",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:125"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:139"
     ]
   },
   {
@@ -1472,7 +1472,7 @@
     "call": "Section",
     "key": "Section",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:131"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:145"
     ]
   },
   {
@@ -1592,7 +1592,7 @@
     "call": "Servers",
     "key": "Servers",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:150",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:164",
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:156"
     ]
   },
@@ -1724,7 +1724,7 @@
     "call": "Subscriptions",
     "key": "Subscriptions",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:79",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:93",
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/podkop.js:108"
     ]
   },
@@ -1818,14 +1818,14 @@
     "call": "the connections of its sections are refused",
     "key": "the connections of its sections are refused",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:32"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:45"
     ]
   },
   {
     "call": "the connections of its sections go directly",
     "key": "the connections of its sections go directly",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:30"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:43"
     ]
   },
   {
@@ -1909,7 +1909,7 @@
     "call": "The router did not answer",
     "key": "The router did not answer",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:183",
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:202",
       "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:185"
     ]
   },
@@ -1924,14 +1924,14 @@
     "call": "The section whose way the connections take",
     "key": "The section whose way the connections take",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:132"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:146"
     ]
   },
   {
     "call": "the sections of the group go as section %s does",
     "key": "the sections of the group go as section %s does",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:26"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:39"
     ]
   },
   {
@@ -1945,7 +1945,7 @@
     "call": "The subscriptions the group chooses servers from",
     "key": "The subscriptions the group chooses servers from",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:80"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:94"
     ]
   },
   {
@@ -1987,7 +1987,7 @@
     "call": "The words choose nothing, or the subscription has no list yet: what the sections of the group do then",
     "key": "The words choose nothing, or the subscription has no list yet: what the sections of the group do then",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:118"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:132"
     ]
   },
   {
@@ -2150,7 +2150,7 @@
     "call": "Use all the servers of the subscriptions",
     "key": "Use all the servers of the subscriptions",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:122"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:136"
     ]
   },
   {
@@ -2274,7 +2274,7 @@
     "call": "When no server is chosen",
     "key": "When no server is chosen",
     "places": [
-      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:117"
+      "../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:131"
     ]
   },
   {

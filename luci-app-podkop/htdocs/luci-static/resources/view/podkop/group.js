@@ -19,6 +19,19 @@ function currentValue(section, section_id, option) {
   return value != null ? value : uci.get("podkop", section_id, option);
 }
 
+// The address of a subscription as the form has it now, saved or not: the router knows only
+// the saved ones.
+function subscriptionAddress(section, name) {
+  const found = section.map.lookupOption("url", name);
+  if (found) {
+    const value = found[0].formvalue(found[1]);
+    if (value != null) {
+      return String(value).trim();
+    }
+  }
+  return String(uci.get("podkop", name, "url") || "").trim();
+}
+
 // What the sections of a group do when it chooses no server, as a line.
 function emptyLine(section, section_id) {
   switch (currentValue(section, section_id, "empty") || "all") {
@@ -38,8 +51,11 @@ function emptyLine(section, section_id) {
 // Which servers the group of the form would choose, by the lists the router has.
 function renderChosen(section, section_id, preview) {
   const chosen = preview.chosen || [];
+  const missing = preview.missing || [];
   const lines = [];
-  if (chosen.length) {
+  if (!chosen.length && !preview.total && missing.length) {
+    // no list to choose from: why, not what an empty group does
+  } else if (chosen.length) {
     lines.push(
       E("details", { class: "pdk-sub-list", open: "" }, [
         E("summary", {}, [
@@ -62,11 +78,9 @@ function renderChosen(section, section_id, preview) {
       ]),
     );
   }
-  (preview.missing || []).forEach((missing) => {
+  missing.forEach((item) => {
     lines.push(
-      E("div", { class: "pdk-sub-error" }, [
-        _("No list of %s").format(missing),
-      ]),
+      E("div", { class: "pdk-sub-error" }, [_("No list of %s").format(item)]),
     );
   });
   return E("div", {}, lines);
@@ -170,10 +184,15 @@ function createGroupContent(section) {
               _("Asking the router…"),
             ]),
           );
+          const addresses = {};
+          subscriptions.forEach((name) => {
+            addresses[name] = subscriptionAddress(section, name);
+          });
           main.PodkopShellMethods.groupCheck({
             subscriptions,
             include: currentList(section, section_id, "include"),
             exclude: currentList(section, section_id, "exclude"),
+            addresses,
           })
             .then((response) => {
               result.replaceChildren(

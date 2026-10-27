@@ -7,8 +7,8 @@ msgid ""
 msgstr ""
 "Project-Id-Version: PODKOP\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-27 10:16+0000\n"
-"PO-Revision-Date: 2026-10-27 10:16+0000\n"
+"POT-Creation-Date: 2026-10-27 11:41+0000\n"
+"PO-Revision-Date: 2026-10-27 11:41+0000\n"
 "Last-Translator: FiyeroT <me@fiyero.xyz>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "Language: \n"
@@ -16,7 +16,7 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:46
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:62
 msgid "%d of %d servers are chosen"
 msgstr ""
 
@@ -46,11 +46,11 @@ msgstr ""
 msgid "A loop: %s"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:101
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:115
 msgid "A server is chosen when its name contains one of these words, in any case of letters (a flag, a country, a city). None: every server"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:111
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:125
 msgid "A server whose name contains one of these words is never chosen"
 msgstr ""
 
@@ -62,7 +62,7 @@ msgstr ""
 msgid "Additional marking rules found"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:34
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:47
 msgid "all the servers of its subscriptions are used"
 msgstr ""
 
@@ -79,7 +79,7 @@ msgstr ""
 msgid "Applicable for SOCKS and Shadowsocks proxy"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:170
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:184
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:148
 msgid "Asking the router…"
 msgstr ""
@@ -147,7 +147,7 @@ msgstr ""
 msgid "Cannot receive checks result"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:192
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:211
 msgid "Check"
 msgstr ""
 
@@ -175,8 +175,8 @@ msgstr ""
 msgid "Choose a group: groups are made on the tab Groups"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:94
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:163
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:108
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:177
 msgid "Choose a subscription"
 msgstr ""
 
@@ -500,11 +500,11 @@ msgstr ""
 msgid "Global check"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:123
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:137
 msgid "Go as another section does"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:124
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:138
 msgid "Go directly"
 msgstr ""
 
@@ -662,11 +662,11 @@ msgstr ""
 msgid "must start with"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:100
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:114
 msgid "Name contains"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:110
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:124
 msgid "Name does not contain"
 msgstr ""
 
@@ -686,7 +686,7 @@ msgstr ""
 msgid "no IPv4 address now"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:68
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:83
 msgid "No list of %s"
 msgstr ""
 
@@ -694,7 +694,7 @@ msgstr ""
 msgid "No other marking rules found"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:58
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:74
 msgid "No server is chosen (of %d): %s"
 msgstr ""
 
@@ -809,7 +809,7 @@ msgstr ""
 msgid "Proxy Configuration URL"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:125
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:139
 msgid "Refuse the connections"
 msgstr ""
 
@@ -882,7 +882,7 @@ msgstr ""
 msgid "Russia inside restrictions"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:131
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:145
 msgid "Section"
 msgstr ""
 
@@ -951,7 +951,7 @@ msgstr ""
 msgid "Selector Proxy Links"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:150
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:164
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:156
 msgid "Servers"
 msgstr ""
@@ -1029,7 +1029,7 @@ msgstr ""
 msgid "Subscription address"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:79
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:93
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/podkop.js:108
 msgid "Subscriptions"
 msgstr ""
@@ -1084,11 +1084,11 @@ msgstr ""
 msgid "The connection to the server of this section goes through the chosen section: the server sees the address of the server of that section, not the one of the router"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:32
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:45
 msgid "the connections of its sections are refused"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:30
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:43
 msgid "the connections of its sections go directly"
 msgstr ""
 
@@ -1136,7 +1136,7 @@ msgstr ""
 msgid "The name %s is taken: sections, groups and subscriptions need names of their own"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:183
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:202
 #: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/subscription.js:185
 msgid "The router did not answer"
 msgstr ""
@@ -1145,11 +1145,11 @@ msgstr ""
 msgid "The router downloads the list…"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:132
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:146
 msgid "The section whose way the connections take"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:26
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:39
 msgid "the sections of the group go as section %s does"
 msgstr ""
 
@@ -1157,7 +1157,7 @@ msgstr ""
 msgid "The settings are not saved. The engine of the router refuses these links:"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:80
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:94
 msgid "The subscriptions the group chooses servers from"
 msgstr ""
 
@@ -1181,7 +1181,7 @@ msgstr ""
 msgid "The web panel of sing-box, opened from the devices chosen below; without it the panel's API is reached from the router only"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:118
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:132
 msgid "The words choose nothing, or the subscription has no list yet: what the sections of the group do then"
 msgstr ""
 
@@ -1278,7 +1278,7 @@ msgstr ""
 msgid "URLTest Tolerance"
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:122
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:136
 msgid "Use all the servers of the subscriptions"
 msgstr ""
 
@@ -1354,7 +1354,7 @@ msgstr ""
 msgid "Warning: Russia inside can only be used with %s. %s already in Russia inside and have been removed from selection."
 msgstr ""
 
-#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:117
+#: ../luci-app-podkop/htdocs/luci-static/resources/view/podkop/group.js:131
 msgid "When no server is chosen"
 msgstr ""
 

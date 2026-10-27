@@ -237,6 +237,8 @@ export namespace Podkop {
     subscriptions: string[];
     include: string[];
     exclude: string[];
+    // the addresses of the form by name: a subscription not saved yet has its address there only
+    addresses?: Record<string, string>;
   }
 
   export interface GroupPreview {

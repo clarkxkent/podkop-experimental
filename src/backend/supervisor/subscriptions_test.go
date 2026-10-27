@@ -223,7 +223,18 @@ func TestSubscriptionPreviews(t *testing.T) {
 	check := s.CheckGroup(context.Background(), GroupCheck{Subscriptions: []string{"prov1", "prov1", "gone"}, Include: []string{"nl", "de"}, Exclude: []string{"de 1"}})
 	require.Equal(t, []string{"NL 1"}, check.Chosen)
 	require.Equal(t, 2, check.Total)
-	require.Equal(t, []string{"gone: not in the saved settings"}, check.Missing)
+	require.Equal(t, []string{"gone: the address is not set"}, check.Missing)
+	require.Len(t, fake.built, 1)
+
+	// a subscription not saved yet: the address of the form; the list Load got is used again
+	asked := len(source.asked)
+	check = s.CheckGroup(context.Background(), GroupCheck{Subscriptions: []string{"fresh"}, Include: []string{"nl"}, Addresses: map[string]string{"fresh": "https://other.example/sub/X"}})
+	require.Equal(t, []string{"NL 1"}, check.Chosen)
+	require.Empty(t, check.Missing)
+	require.Equal(t, asked, len(source.asked), "the list Load got for the address")
+	check = s.CheckGroup(context.Background(), GroupCheck{Subscriptions: []string{"fresh"}, Addresses: map[string]string{"fresh": "https://third.example/sub/Y"}})
+	require.Equal(t, 2, check.Total)
+	require.Greater(t, len(source.asked), asked, "another address is downloaded")
 	require.Len(t, fake.built, 1)
 	s.Stop()
 }

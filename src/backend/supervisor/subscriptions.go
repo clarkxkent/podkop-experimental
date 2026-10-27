@@ -41,6 +41,8 @@ const (
 	firstDownloadDelay = 10 * time.Second
 	// a list that could not be downloaded is tried again sooner than at its interval
 	downloadRetry = 10 * time.Minute
+	// how long a list downloaded for the page is used again by the page
+	previewKept = 10 * time.Minute
 )
 
 // subscriptions is what the supervisor knows of the subscriptions of the settings. The
@@ -60,6 +62,9 @@ type subscriptions struct {
 	verdicts map[string]string
 	// waiting are the callers of UpdateSubscriptions, by name ("" for all)
 	waiting map[string][]chan []SubscriptionState
+	// previews are the lists downloaded for the page (LoadSubscription, CheckGroup), by the
+	// key of their address, for a while: Check of a group takes the list Load just got
+	previews map[string]*subscription.Saved
 	// changed tells that a list was taken since the settings were last applied: they are
 	// applied again once no download is under way, once for all the lists of a round, and
 	// no download loses the sing-box it goes through to a new configuration meanwhile
@@ -95,6 +100,7 @@ func (s *Supervisor) syncSubscriptions(settings *model.Config) {
 	if t.lists == nil {
 		t.addresses, t.intervals, t.lists = make(map[string]string), make(map[string]time.Duration), make(map[string]*subscription.Saved)
 		t.states, t.verdicts, t.waiting = make(map[string]*SubscriptionState), make(map[string]string), make(map[string][]chan []SubscriptionState)
+		t.previews = make(map[string]*subscription.Saved)
 	}
 	var names []string
 	now := time.Now()
@@ -448,11 +454,13 @@ func (s *Supervisor) LoadSubscription(ctx context.Context, address string) Subsc
 	ctx, cancel := context.WithTimeout(ctx, previewBudget)
 	defer cancel()
 	preview := SubscriptionPreview{Servers: []api.PreviewServer{}}
-	list, _, err := s.fetch(ctx, strings.TrimSpace(address), previewProxies, previewEach)
+	address = strings.TrimSpace(address)
+	list, _, err := s.fetch(ctx, address, previewProxies, previewEach)
 	if err != nil {
 		preview.Error = oneLine(err.Error())
 		return preview
 	}
+	s.keepPreview(list)
 	preview.Route = list.Route
 	for _, server := range list.Servers {
 		scheme, endpoint := server.Endpoint()
@@ -461,9 +469,10 @@ func (s *Supervisor) LoadSubscription(ctx context.Context, address string) Subsc
 	return preview
 }
 
-// CheckGroup tells which servers a group would choose, by the lists taken; a subscription of
-// the settings that has none yet is downloaded for it, not taken. It is for callers outside
-// the goroutine of Run.
+// CheckGroup tells which servers a group would choose. A subscription's list is the one
+// taken when the form has the address the settings have, else the one Load got for the address
+// of the form a while ago, else one downloaded for it; none of these is taken. It is for
+// callers outside the goroutine of Run.
 func (s *Supervisor) CheckGroup(ctx context.Context, check GroupCheck) GroupPreview {
 	ctx, cancel := context.WithTimeout(ctx, previewBudget)
 	defer cancel()
@@ -475,21 +484,10 @@ func (s *Supervisor) CheckGroup(ctx context.Context, check GroupCheck) GroupPrev
 			continue
 		}
 		seen = append(seen, name)
-		t := &s.subscriptions
-		t.access.Lock()
-		list, address := t.lists[name], t.addresses[name]
-		t.access.Unlock()
-		if list == nil {
-			if address == "" {
-				preview.Missing = append(preview.Missing, name+": not in the saved settings")
-				continue
-			}
-			var err error
-			list, _, err = s.fetch(ctx, address, previewProxies, previewEach)
-			if err != nil {
-				preview.Missing = append(preview.Missing, name+": "+oneLine(err.Error()))
-				continue
-			}
+		list, err := s.groupList(ctx, name, strings.TrimSpace(check.Addresses[name]))
+		if err != nil {
+			preview.Missing = append(preview.Missing, name+": "+oneLine(err.Error()))
+			continue
 		}
 		for _, server := range list.Servers {
 			if !server.Usable() {
@@ -502,6 +500,51 @@ func (s *Supervisor) CheckGroup(ctx context.Context, check GroupCheck) GroupPrev
 		}
 	}
 	return preview
+}
+
+// groupList is the list of a subscription for CheckGroup, by the address of the form (none:
+// that of the settings).
+func (s *Supervisor) groupList(ctx context.Context, name string, address string) (*subscription.Saved, error) {
+	t := &s.subscriptions
+	t.access.Lock()
+	saved, list := t.addresses[name], t.lists[name]
+	if address == "" {
+		address = saved
+	}
+	if list != nil && address == saved {
+		t.access.Unlock()
+		return list, nil
+	}
+	kept := t.previews[subscription.AddressKey(address)]
+	t.access.Unlock()
+	if address == "" {
+		return nil, E.New("the address is not set")
+	}
+	if kept != nil && time.Since(kept.Changed) < previewKept {
+		return kept, nil
+	}
+	list, _, err := s.fetch(ctx, address, previewProxies, previewEach)
+	if err != nil {
+		return nil, err
+	}
+	s.keepPreview(list)
+	return list, nil
+}
+
+// keepPreview keeps a list downloaded for the page for a while, and forgets those older.
+func (s *Supervisor) keepPreview(list *subscription.Saved) {
+	t := &s.subscriptions
+	t.access.Lock()
+	defer t.access.Unlock()
+	if t.previews == nil {
+		t.previews = make(map[string]*subscription.Saved)
+	}
+	for key, kept := range t.previews {
+		if time.Since(kept.Changed) >= previewKept {
+			delete(t.previews, key)
+		}
+	}
+	t.previews[list.Address] = list
 }
 
 // choiceChanged tells whether the groups of the settings that run would choose other servers
