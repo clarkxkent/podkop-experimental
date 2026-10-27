@@ -119,10 +119,17 @@ func TestSubscriptionLists(t *testing.T) {
 	require.Equal(t, written, file.ModTime())
 	require.Contains(t, string(s.current.result.Config), `"prov1: NL 1"`)
 
+	// the same servers, the names swapped: what the group chooses changes, and the list is taken
+	source.serve("vless://u1@nl1.example:443?security=tls&sni=nl1.example#DE%201\nvless://u2@de1.example:443?security=tls&sni=de1.example#NL%201\n")
+	downloadNow(t, s)
+	require.Len(t, fake.built, 3)
+	require.Contains(t, string(s.current.result.Config), `"server": "de1.example"`)
+	require.NotContains(t, string(s.current.result.Config), `"server": "nl1.example"`)
+
 	// another server: a new configuration
 	source.serve("vless://u1@nl1.example:443?security=tls&sni=nl1.example#NL%201\nvless://u3@nl2.example:443?security=tls&sni=nl2.example#NL%202\n")
 	downloadNow(t, s)
-	require.Len(t, fake.built, 3)
+	require.Len(t, fake.built, 4)
 	require.Contains(t, string(s.current.result.Config), `"prov1: NL 2"`)
 	s.Stop()
 

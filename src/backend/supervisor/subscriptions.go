@@ -275,7 +275,8 @@ func (s *Supervisor) downloadDue(now time.Time, force string) {
 
 // takeList takes a list downloaded in the background: a list with other servers is kept and
 // the settings are applied again with it; one that has the same servers, under other names
-// or in another order, is not, and nothing changes.
+// or in another order, is not, and nothing changes, unless the new names change what a group
+// chooses (a server the provider calls DE now, not NL).
 func (s *Supervisor) takeList(result downloaded) {
 	t := &s.subscriptions
 	t.access.Lock()
@@ -298,7 +299,7 @@ func (s *Supervisor) takeList(result downloaded) {
 	}
 	state.Error, state.Next, state.Checked, state.Route = "", &next, &now, result.list.Route
 	old := t.lists[result.name]
-	if old != nil && subscription.SameServers(old.Servers, result.list.Servers) {
+	if old != nil && subscription.SameServers(old.Servers, result.list.Servers) && !s.choiceChanged(result.name, old.Servers, result.list.Servers) {
 		t.access.Unlock()
 		s.log("info", "subscription ", result.name, ": the list has not changed (", result.list.Route, ")")
 		s.answerWaiting(result.name)
@@ -463,4 +464,29 @@ func (s *Supervisor) CheckGroup(ctx context.Context, check GroupCheck) GroupPrev
 		}
 	}
 	return preview
+}
+
+// choiceChanged tells whether the groups of the settings that run would choose other servers
+// of a subscription by the names of its new list than by those of the old one.
+func (s *Supervisor) choiceChanged(name string, old []subscription.Server, fresh []subscription.Server) bool {
+	if s.current == nil {
+		return false
+	}
+	chosen := func(group *model.Group, servers []subscription.Server) []string {
+		var ids []string
+		for index := range servers {
+			if servers[index].Usable() && group.Takes(servers[index].Name) {
+				ids = append(ids, servers[index].ID)
+			}
+		}
+		slices.Sort(ids)
+		return ids
+	}
+	for index := range s.current.settings.Groups {
+		group := &s.current.settings.Groups[index]
+		if slices.Contains(group.Subscriptions, name) && !slices.Equal(chosen(group, old), chosen(group, fresh)) {
+			return true
+		}
+	}
+	return false
 }
