@@ -12,6 +12,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -173,4 +174,22 @@ func cleanName(name string, number int) string {
 		return "server " + strconv.Itoa(number)
 	}
 	return name
+}
+
+// Endpoint is the scheme of the link of a server and the address of the server (host:port)
+// as its outbound has it; no address for a link that cannot be decoded.
+func (s *Server) Endpoint() (scheme string, address string) {
+	scheme, _, _ = strings.Cut(s.Link, "://")
+	scheme = strings.ToLower(scheme)
+	var fields struct {
+		Server string `json:"server"`
+		Port   any    `json:"server_port"`
+	}
+	if s.outbound == nil || json.Unmarshal(s.outbound, &fields) != nil || fields.Server == "" {
+		return scheme, ""
+	}
+	if number, isNumber := fields.Port.(float64); isNumber {
+		return scheme, net.JoinHostPort(fields.Server, strconv.Itoa(int(number)))
+	}
+	return scheme, fields.Server
 }

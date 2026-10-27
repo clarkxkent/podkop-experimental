@@ -36,6 +36,11 @@ b.example'
   "password": "it'\''s"
 }'
 	option interface 'wg0'
+	option urltest_testing_url 'https://kept.example/generate_204'
+
+config subscription 'prov1'
+	option url 'https://sub.example/api/sub/TOK3N'
+	option update_interval '12h'
 
 config section 'vpn'
 	option domain_resolver_dns_server 'dns.example.org/secret-path?x'
@@ -45,7 +50,9 @@ vless://second'
 	option after 'kept'
 `
 	masked := MaskSettings([]byte(settings))
-	for _, secret := range []string{"abc123", "s3cret", "uuid@host", "trojan://", "ss://", "socks5://", "vless://", "password", "secret-path", `"type"`} {
+	require.Contains(t, masked, "kept.example/generate_204")
+	require.Contains(t, masked, "option update_interval '12h'")
+	for _, secret := range []string{"abc123", "s3cret", "uuid@host", "trojan://", "ss://", "socks5://", "vless://", "password", "secret-path", `"type"`, "TOK3N"} {
 		require.NotContains(t, masked, secret)
 	}
 	require.Equal(t, `config settings 'settings'
@@ -64,6 +71,11 @@ b.example'
 	list urltest_fallback_links 'MASKED'
 	option outbound_json 'MASKED'
 	option interface 'wg0'
+	option urltest_testing_url 'https://kept.example/generate_204'
+
+config subscription 'prov1'
+	option url 'MASKED'
+	option update_interval '12h'
 
 config section 'vpn'
 	option domain_resolver_dns_server 'dns.example.org/MASKED'

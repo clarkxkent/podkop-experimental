@@ -58,7 +58,7 @@ func counted(value bool, text string) string {
 //
 // engine tells what the sing-box inside is (podkop.Engine); outbounds tests the outbound of
 // every section and the direct one (outboundLines).
-func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, sections []model.Section, version string, singBoxVersion string, engine string, running bool, routerFakeIP func() (works bool, answered bool), outbounds func() []string, device *deviceCheck) string {
+func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings, sections []model.Section, version string, singBoxVersion string, engine string, running bool, routerFakeIP func() (works bool, answered bool), outbounds func() []string, subscriptions func() []string, device *deviceCheck) string {
 	var lines []string
 	add := func(text ...string) { lines = append(lines, text...) }
 
@@ -89,6 +89,7 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		works, answered bool
 		address         string
 		outboundResults []string
+		subscriptionAt  []string
 		deviceLines     []string
 		clockReport     []string
 		client          netip.Addr
@@ -117,6 +118,11 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 		func() {
 			if running && outbounds != nil {
 				outboundResults = outbounds()
+			}
+		},
+		func() {
+			if running && subscriptions != nil {
+				subscriptionAt = subscriptions()
 			}
 		},
 	}
@@ -166,6 +172,11 @@ func globalCheck(ctx context.Context, paths diag.Paths, settings *model.Settings
 	// another program on an address sing-box listens on keeps it from starting
 	for _, taken := range diag.BackendPorts(listeners) {
 		add("❌ " + taken)
+	}
+
+	if len(subscriptionAt) > 0 {
+		add(rule, "🗂️ Subscriptions")
+		add(subscriptionAt...)
 	}
 
 	add(rule, "🔌 Interfaces")

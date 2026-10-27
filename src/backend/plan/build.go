@@ -255,8 +255,10 @@ type Link struct {
 	// Section is the section of the settings the link is in.
 	Section string
 	// Name is the name of the outbound: the section's, or with the number of the link in
-	// a group ("main-2", "main-fallback-1").
+	// a group ("main-2", "main-fallback-1"); the tag of a server of a subscription.
 	Name string
+	// Tag is the tag of the outbound.
+	Tag string
 	// Text is the link as the settings hold it, a secret.
 	Text string
 }
@@ -655,7 +657,7 @@ func (b *builder) addLinkOutbound(section *model.Section, name string, link stri
 	}
 	b.setDetour(section, name, outbound)
 	b.outbounds = append(b.outbounds, outbound)
-	b.links = append(b.links, Link{Section: section.Name, Name: name, Text: link})
+	b.links = append(b.links, Link{Section: section.Name, Name: name, Tag: outboundTag(name), Text: link})
 	return nil
 }
 

@@ -34,6 +34,10 @@ var inProcess = map[string]bool{
 	"show_system_info":      true,
 	"check_nft":             true,
 	"list_status":           true,
+	"subscription_load":     true,
+	"group_check":           true,
+	"subscription_status":   true,
+	"hwid":                  true,
 }
 
 // ExecResult is the answer of "run", in the form of the answer of rpcd's file.exec, so that

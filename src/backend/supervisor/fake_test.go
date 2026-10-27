@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +17,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/firewall"
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
+	"github.com/podkop-net/podkop-experimental/src/backend/subscription"
 	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 	E "github.com/sagernet/sing/common/exceptions"
 
@@ -37,6 +40,14 @@ type fakeEngine struct {
 	// instance; noAddresses are the tags of those without a rule of addresses
 	lists       map[string][]byte
 	noAddresses map[string]bool
+	// delays are what the URL tests found, by tag; unusable are texts of links sing-box
+	// cannot build; dial, when set, opens a connection through an outbound, dialed are the
+	// tags dialed through
+	delays   map[string]uint16
+	unusable []string
+	dial     func(ctx context.Context, tag string, address string) (net.Conn, error)
+	dialed   []string
+	access   sync.Mutex
 }
 
 type fakeInstance struct {
@@ -87,6 +98,29 @@ func (e *fakeEngine) Ready(ctx context.Context) error {
 
 func (e *fakeEngine) Notes() []string { return nil }
 
+func (e *fakeEngine) CheckServers(servers []subscription.Server, known map[string]string) map[string]string {
+	verdicts := make(map[string]string)
+	for index := range servers {
+		if servers[index].Usable() && has([]byte(servers[index].Link), e.unusable) {
+			servers[index].Reason = "this sing-box cannot build it"
+		}
+		if servers[index].ID != "" {
+			verdicts[servers[index].ID] = servers[index].Reason
+		}
+	}
+	return verdicts
+}
+
+func (e *fakeEngine) Delays(tags []string) map[string]uint16 {
+	result := make(map[string]uint16)
+	for _, tag := range tags {
+		if delay, found := e.delays[tag]; found {
+			result[tag] = delay
+		}
+	}
+	return result
+}
+
 func (i *fakeInstance) OnRuleSetUpdate(tags []string, updated func(tag string)) {
 	i.loaded = updated
 }
@@ -131,6 +165,17 @@ func (i *fakeInstance) FakeIPAddress(string) (netip.Addr, bool, error) {
 func (i *fakeInstance) UpdateRuleSets(context.Context) (engine.RuleSetUpdate, error) {
 	return engine.RuleSetUpdate{}, nil
 }
+func (i *fakeInstance) Dial(ctx context.Context, tag string, address string) (net.Conn, error) {
+	i.engine.access.Lock()
+	i.engine.dialed = append(i.engine.dialed, tag)
+	dial := i.engine.dial
+	i.engine.access.Unlock()
+	if dial == nil {
+		return nil, E.New("no way through ", tag)
+	}
+	return dial(ctx, tag, address)
+}
+
 func (i *fakeInstance) Traffic() (engine.Traffic, error) {
 	if !i.started || i.closed {
 		return engine.Traffic{}, engine.ErrClosed

@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/podkop-net/podkop-experimental/src/backend"
 	"github.com/podkop-net/podkop-experimental/src/backend/api"
 	"github.com/podkop-net/podkop-experimental/src/backend/clock"
 	"github.com/podkop-net/podkop-experimental/src/backend/dataplane"
@@ -19,6 +20,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	"github.com/podkop-net/podkop-experimental/src/backend/netcfg"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/subscription"
 	"github.com/podkop-net/podkop-experimental/src/backend/supervisor"
 	"github.com/podkop-net/podkop-experimental/src/backend/ubus"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
@@ -102,7 +104,12 @@ var commandDaemon = &cobra.Command{
 			ConfigDir:      configDir,
 			DownloadURL:    downloadURL,
 			Clock:          keeper,
-			Log:            say,
+			// the lists of the subscriptions stay over a reboot: a start without the
+			// network has the servers
+			SubscriptionDir: dataplane.DataDir + "/subscriptions",
+			Device:          subscription.ReadDevice("/"),
+			Version:         podkop.Version,
+			Log:             say,
 			EngineLog: func(level string, message string) {
 				logs.Write("sing-box", level, message)
 			},

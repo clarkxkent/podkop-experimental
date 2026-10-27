@@ -16,6 +16,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"net"
+	"net/http"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -36,6 +38,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
 	"github.com/podkop-net/podkop-experimental/src/backend/render"
 	"github.com/podkop-net/podkop-experimental/src/backend/sockets"
+	"github.com/podkop-net/podkop-experimental/src/backend/subscription"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 	E "github.com/sagernet/sing/common/exceptions"
@@ -98,6 +101,11 @@ type Engine interface {
 	Ready(ctx context.Context) error
 	// Notes returns what sing-box noted that was not returned before (engine.Notes).
 	Notes() []string
+	// CheckServers finds the servers of a list sing-box cannot build, those of known taking
+	// the verdicts they had, and returns the verdicts of the list (subscription.Check).
+	CheckServers(servers []subscription.Server, known map[string]string) map[string]string
+	// Delays are what the URL tests last found for outbounds, by tag (engine.Delays).
+	Delays(tags []string) map[string]uint16
 }
 
 // Instance is a sing-box of one configuration (engine.Instance).
@@ -112,6 +120,7 @@ type Instance interface {
 	UpdateRuleSets(ctx context.Context) (engine.RuleSetUpdate, error)
 	FakeIPAddress(name string) (netip.Addr, bool, error)
 	Traffic() (engine.Traffic, error)
+	Dial(ctx context.Context, tag string, address string) (net.Conn, error)
 }
 
 var _ Instance = (*engine.Instance)(nil)
@@ -137,6 +146,16 @@ func (realEngine) Ready(ctx context.Context) error {
 }
 
 func (realEngine) Notes() []string { return engine.Notes() }
+
+func (realEngine) CheckServers(servers []subscription.Server, known map[string]string) map[string]string {
+	checkAll := func(configuration []byte) error {
+		_, err := engine.Check(configuration)
+		return err
+	}
+	return subscription.Check(servers, known, checkAll, engine.CheckLink)
+}
+
+func (realEngine) Delays(tags []string) map[string]uint16 { return engine.Delays(tags) }
 
 // Options say where the supervisor finds and puts things.
 type Options struct {
@@ -175,6 +194,15 @@ type Options struct {
 	Watcher *probe.Watcher
 	// Clock, when set, is kicked after a start of sing-box and when an interface comes up.
 	Clock Clock
+	// SubscriptionDir is where the lists of the subscriptions are kept over a reboot; none:
+	// in memory only.
+	SubscriptionDir string
+	// Device is what a provider is told of the router, Version the version of the backend
+	// it is told as the client (subscription.Device.Headers).
+	Device  subscription.Device
+	Version string
+	// Download downloads a list in place of subscription.Download (a test).
+	Download func(ctx context.Context, address string, header http.Header, routes []subscription.Route, each time.Duration) (*subscription.Answer, error)
 }
 
 // The files of Options.ConfigDir (api.RunningConfig, api.LastConfig, api.RejectedConfig).
@@ -253,8 +281,17 @@ type Supervisor struct {
 	statusAccess sync.Mutex
 	status       Status
 	facts        api.Facts
-	// live is the instance that runs, for the goroutines that ask what goes through it
-	live Instance
+	// live is the instance that runs, for the goroutines that ask what goes through it, and
+	// liveLinks the proxy links of its configuration
+	live      Instance
+	liveLinks []plan.Link
+
+	// subscriptions are the lists of the subscriptions and what is known of them;
+	// downloads bring what a download in the background came to, subscriptionRequests
+	// the downloads asked for from another goroutine
+	subscriptions        subscriptions
+	downloads            chan downloaded
+	subscriptionRequests chan subscriptionRequest
 }
 
 // running is a state of the router that was brought up.
@@ -301,7 +338,8 @@ func New(options Options) *Supervisor {
 	if options.Engine == nil {
 		options.Engine = realEngine{}
 	}
-	return &Supervisor{options: options, derive: make(chan struct{}, 1), requests: make(chan chan Result), updates: make(chan chan ListsUpdate), probes: make(chan probeRequest), statuses: make(chan chan []ListState), restores: make(chan chan string)}
+	return &Supervisor{options: options, derive: make(chan struct{}, 1), requests: make(chan chan Result), updates: make(chan chan ListsUpdate), probes: make(chan probeRequest), statuses: make(chan chan []ListState), restores: make(chan chan string),
+		downloads: make(chan downloaded), subscriptionRequests: make(chan subscriptionRequest)}
 }
 
 func (s *Supervisor) log(level string, message ...any) {
@@ -363,9 +401,9 @@ func (s *Supervisor) done(ok bool, replaced bool, message ...any) Result {
 	}
 	s.status.Last, s.status.LastAt = result, now
 	s.facts = factsOf(s.current)
-	s.live = nil
+	s.live, s.liveLinks = nil, nil
 	if s.current != nil {
-		s.live = s.current.instance
+		s.live, s.liveLinks = s.current.instance, s.current.result.Links
 	}
 	switch {
 	case s.current != nil:
@@ -837,6 +875,8 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 	var mergeFirst time.Time
 	bridged := time.NewTicker(bridgedCheckInterval)
 	defer bridged.Stop()
+	subscriptionTicker := time.NewTicker(subscriptionTick)
+	defer subscriptionTicker.Stop()
 	for !s.stuck {
 		select {
 		case <-ctx.Done():
@@ -846,6 +886,12 @@ func (s *Supervisor) Run(ctx context.Context, reload <-chan struct{}) error {
 			if s.current != nil {
 				s.allowBridged()
 			}
+		case now := <-subscriptionTicker.C:
+			s.downloadDue(now, "")
+		case result := <-s.downloads:
+			s.takeList(result)
+		case request := <-s.subscriptionRequests:
+			s.askDownload(request)
 		case <-reload:
 			s.Apply()
 		case reply := <-s.requests:
@@ -990,6 +1036,8 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 		return nil, E.Cause(err, "read the settings")
 	}
 	s.clashKey(settings)
+	s.syncSubscriptions(settings)
+	servers := s.servers()
 	facts := plan.Facts{LANAddress: s.options.System.LANAddress(), Devices: s.options.System.Devices(plan.InterfaceNames(settings)), NTPServerNames: s.options.System.NTPServerNames()}
 	if facts.Devices == nil && s.current != nil {
 		// netifd did not answer: the devices the names stood for so far, not the names
@@ -1005,7 +1053,7 @@ func (s *Supervisor) prepare() (next *candidate, err error) {
 	}
 	build := func(ruleSetDir string) (*plan.Result, error) {
 		options := plan.Options{RuleSetDir: ruleSetDir, DecodeLink: engine.DecodeLink, CheckList: s.checkList(used), DownloadURL: s.options.DownloadURL,
-			ExternalUI: s.options.YACDServedDir, NoExternalUI: noExternalUI}
+			ExternalUI: s.options.YACDServedDir, NoExternalUI: noExternalUI, Servers: servers}
 		if s.options.Watcher != nil {
 			options.CheckNames = plan.CheckNames{Suffix: probe.Suffix, DeadEndAddress: probe.DeadEndAddress, DeadEndPort: probe.DeadEndPort}
 		}

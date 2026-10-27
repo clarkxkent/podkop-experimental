@@ -5,8 +5,10 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -112,6 +114,63 @@ type LogPage struct {
 	Lines []string `json:"lines"`
 }
 
+// SubscriptionState is what is known of a subscription of the settings.
+type SubscriptionState struct {
+	Name string `json:"name"`
+	// Servers is the number of servers of the list taken, Usable of those sing-box can use.
+	Servers int `json:"servers"`
+	Usable  int `json:"usable"`
+	// Changed is when the list taken was downloaded; Checked when a download last brought
+	// a list, changed or not; Route the way it came.
+	Changed *time.Time `json:"changed,omitempty"`
+	Checked *time.Time `json:"checked,omitempty"`
+	Route   string     `json:"route,omitempty"`
+	// Error is why the last download failed; empty when it did not.
+	Error string `json:"error,omitempty"`
+	// Next is when the next download is due; Busy tells that one is under way.
+	Next *time.Time `json:"next,omitempty"`
+	Busy bool       `json:"busy,omitempty"`
+}
+
+// SubscriptionPreview is a list downloaded to be shown, not taken.
+type SubscriptionPreview struct {
+	// Route is the way it came; Error why no list came.
+	Route   string          `json:"route,omitempty"`
+	Error   string          `json:"error,omitempty"`
+	Servers []PreviewServer `json:"servers"`
+}
+
+// PreviewServer is a server of a list as the page shows it.
+type PreviewServer struct {
+	Name string `json:"name"`
+	// Scheme and Address (host:port) are of its link, which Link is, a secret shown to the
+	// user who asked.
+	Scheme  string `json:"scheme"`
+	Address string `json:"address,omitempty"`
+	Link    string `json:"link"`
+	// Reason is why sing-box cannot use it; Notes what of the link it leaves out.
+	Reason string   `json:"reason,omitempty"`
+	Notes  []string `json:"notes,omitempty"`
+}
+
+// GroupCheck asks which servers a group would choose: the group as the form has it, not
+// as the settings saved it.
+type GroupCheck struct {
+	Subscriptions []string `json:"subscriptions"`
+	Include       []string `json:"include"`
+	Exclude       []string `json:"exclude"`
+}
+
+// GroupPreview is which servers a group would choose.
+type GroupPreview struct {
+	// Chosen are the names of the servers it chooses, in the order of the group; Total is
+	// the number of servers of its subscriptions sing-box can use.
+	Chosen []string `json:"chosen"`
+	Total  int      `json:"total"`
+	// Missing are the subscriptions that have no list (with why, when known).
+	Missing []string `json:"missing,omitempty"`
+}
+
 // Backend is the running backend as the socket shows it.
 type Backend interface {
 	Status() Status
@@ -129,6 +188,15 @@ type Backend interface {
 	Probe(ctx context.Context, label string, wait time.Duration) ProbeResult
 	// ProbeSelf checks the router itself with a check name.
 	ProbeSelf(ctx context.Context) ProbeResult
+	// Subscriptions tells what is known of each subscription.
+	Subscriptions(ctx context.Context) []SubscriptionState
+	// UpdateSubscriptions downloads the list of a subscription now, or of all of them with
+	// no name, and returns what is known of them then.
+	UpdateSubscriptions(ctx context.Context, name string) []SubscriptionState
+	// LoadSubscription downloads a list from an address to be shown.
+	LoadSubscription(ctx context.Context, address string) SubscriptionPreview
+	// CheckGroup tells which servers a group would choose.
+	CheckGroup(ctx context.Context, check GroupCheck) GroupPreview
 }
 
 // Serve listens on the socket until the context ends. The socket is for root only: who
@@ -187,6 +255,30 @@ func Serve(ctx context.Context, path string, backend Backend, logs *logbuf.Buffe
 	mux.HandleFunc("GET /probe/self", func(writer http.ResponseWriter, request *http.Request) {
 		answer(writer, backend.ProbeSelf(request.Context()))
 	})
+	mux.HandleFunc("GET /subscriptions", func(writer http.ResponseWriter, request *http.Request) {
+		answer(writer, backend.Subscriptions(request.Context()))
+	})
+	mux.HandleFunc("POST /subscriptions/update", func(writer http.ResponseWriter, request *http.Request) {
+		answer(writer, backend.UpdateSubscriptions(request.Context(), request.URL.Query().Get("name")))
+	})
+	mux.HandleFunc("POST /subscriptions/load", func(writer http.ResponseWriter, request *http.Request) {
+		var asked struct {
+			Address string `json:"address"`
+		}
+		if json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&asked) != nil {
+			http.Error(writer, "the request is not JSON", http.StatusBadRequest)
+			return
+		}
+		answer(writer, backend.LoadSubscription(request.Context(), asked.Address))
+	})
+	mux.HandleFunc("POST /groups/check", func(writer http.ResponseWriter, request *http.Request) {
+		var check GroupCheck
+		if json.NewDecoder(io.LimitReader(request.Body, 64<<10)).Decode(&check) != nil {
+			http.Error(writer, "the request is not JSON", http.StatusBadRequest)
+			return
+		}
+		answer(writer, backend.CheckGroup(request.Context(), check))
+	})
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
 	go func() {
 		<-ctx.Done()
@@ -206,6 +298,11 @@ type Client struct {
 }
 
 func (c Client) call(method string, path string, timeout time.Duration, result any) error {
+	return c.send(method, path, timeout, nil, result)
+}
+
+// send is call with a body of JSON, when body is not nil.
+func (c Client) send(method string, path string, timeout time.Duration, body any, result any) error {
 	transport := &http.Transport{
 		DialContext: func(ctx context.Context, network string, address string) (net.Conn, error) {
 			return (&net.Dialer{}).DialContext(ctx, "unix", c.Path)
@@ -215,7 +312,15 @@ func (c Client) call(method string, path string, timeout time.Duration, result a
 	defer transport.CloseIdleConnections()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	request, err := http.NewRequestWithContext(ctx, method, "http://backend"+path, nil)
+	var content io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			return err
+		}
+		content = bytes.NewReader(encoded)
+	}
+	request, err := http.NewRequestWithContext(ctx, method, "http://backend"+path, content)
 	if err != nil {
 		return err
 	}
@@ -320,4 +425,39 @@ func (c Client) ProbeSelf() (*ProbeResult, error) {
 		return nil, err
 	}
 	return result, nil
+}
+
+// Subscriptions returns what the backend knows of each subscription.
+func (c Client) Subscriptions() ([]SubscriptionState, error) {
+	var states []SubscriptionState
+	err := c.call(http.MethodGet, "/subscriptions", 5*time.Second, &states)
+	return states, err
+}
+
+// UpdateSubscriptions makes the backend download the list of a subscription now (all of
+// them with no name) and returns what it knows of them then.
+func (c Client) UpdateSubscriptions(name string) ([]SubscriptionState, error) {
+	var states []SubscriptionState
+	err := c.call(http.MethodPost, "/subscriptions/update?name="+url.QueryEscape(name), 3*time.Minute, &states)
+	return states, err
+}
+
+// LoadSubscription makes the backend download a list from an address to be shown.
+func (c Client) LoadSubscription(address string, timeout time.Duration) (*SubscriptionPreview, error) {
+	preview := new(SubscriptionPreview)
+	err := c.send(http.MethodPost, "/subscriptions/load", timeout, map[string]string{"address": address}, preview)
+	if err != nil {
+		return nil, err
+	}
+	return preview, nil
+}
+
+// CheckGroup asks the backend which servers a group would choose.
+func (c Client) CheckGroup(check GroupCheck, timeout time.Duration) (*GroupPreview, error) {
+	preview := new(GroupPreview)
+	err := c.send(http.MethodPost, "/groups/check", timeout, check, preview)
+	if err != nil {
+		return nil, err
+	}
+	return preview, nil
 }

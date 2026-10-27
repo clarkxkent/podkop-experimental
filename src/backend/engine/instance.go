@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"net"
 	"net/netip"
 	"regexp"
 	"runtime/debug"
@@ -18,6 +19,8 @@ import (
 	"github.com/sagernet/sing-box/option"
 	E "github.com/sagernet/sing/common/exceptions"
 	"github.com/sagernet/sing/common/json"
+	M "github.com/sagernet/sing/common/metadata"
+	N "github.com/sagernet/sing/common/network"
 	"github.com/sagernet/sing/service"
 
 	mDNS "github.com/miekg/dns"
@@ -387,4 +390,45 @@ func (i *Instance) Traffic() (Traffic, error) {
 	}
 	up, down := manager.Total()
 	return Traffic{Up: up, Down: down, Connections: manager.ConnectionsLen()}, nil
+}
+
+// Dial opens a TCP connection to an address (host:port) through an outbound of the instance,
+// by its tag: a name is resolved the way the outbound resolves names, by the DNS of the
+// configuration for direct-out, by the server for a proxy. The connection ends with the
+// context, and with the instance.
+func (i *Instance) Dial(ctx context.Context, tag string, address string) (net.Conn, error) {
+	if !i.enter() {
+		return nil, ErrClosed
+	}
+	defer i.leave()
+	manager := service.FromContext[adapter.OutboundManager](i.ctx)
+	if manager == nil {
+		return nil, E.New("this sing-box has no outbounds")
+	}
+	outbound, found := manager.Outbound(tag)
+	if !found {
+		return nil, E.New("there is no outbound ", tag)
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	stop := context.AfterFunc(i.ctx, cancel)
+	conn, err := outbound.DialContext(ctx, N.NetworkTCP, M.ParseSocksaddr(address))
+	if err != nil {
+		stop()
+		cancel()
+		return nil, err
+	}
+	return &dialed{Conn: conn, stop: stop, cancel: cancel}, nil
+}
+
+// dialed is a connection of Dial: closed, it lets go of the context it was opened with.
+type dialed struct {
+	net.Conn
+	stop   func() bool
+	cancel context.CancelFunc
+}
+
+func (c *dialed) Close() error {
+	c.stop()
+	c.cancel()
+	return c.Conn.Close()
 }

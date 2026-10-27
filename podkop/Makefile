@@ -131,6 +131,9 @@ define Package/podkop-exp/install
 	$(INSTALL_DATA) ./files/etc/hotplug.d/ntp/60-podkop $(1)/etc/hotplug.d/ntp/60-podkop
 	$(INSTALL_DIR) $(1)/lib/upgrade
 	$(INSTALL_DATA) ./files/lib/upgrade/podkop.sh $(1)/lib/upgrade/podkop.sh
+	# the identifier of a router whose hardware has none, made once (x-hwid of subscriptions)
+	$(INSTALL_DIR) $(1)/lib/upgrade/keep.d
+	$(INSTALL_DATA) ./files/lib/upgrade/keep.d/podkop-exp $(1)/lib/upgrade/keep.d/podkop-exp
 endef
 
 $(eval $(call BuildPackage,podkop-exp))

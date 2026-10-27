@@ -54,7 +54,7 @@ func TestBusObject(t *testing.T) {
 	require.NotZero(t, answer.(ExecResult).Code)
 
 	// what the backend does not answer itself: the page runs the program
-	for _, command := range []string{"start", "stop", "restart", "reload", "list_update", "restore_routing", "global_check", "", "sh"} {
+	for _, command := range []string{"start", "stop", "restart", "reload", "list_update", "restore_routing", "global_check", "subscription_update", "", "sh"} {
 		_, status = run(ctx, map[string]any{"command": command})
 		require.Equal(t, ubus.StatusNotSupported, status, command)
 	}

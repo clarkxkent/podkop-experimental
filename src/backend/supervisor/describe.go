@@ -31,6 +31,8 @@ func describeConfig(next *candidate) string {
 			}
 		case "vpn":
 			what = "interface " + section.Interface
+		case "group":
+			what = "group " + strings.Join(section.Groups, ", ")
 		}
 		if section.ConnectionType == "proxy" && section.Detour != "" {
 			what += " via " + section.Detour

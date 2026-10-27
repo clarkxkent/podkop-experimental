@@ -239,7 +239,9 @@ func FakeIPAddress(ctx context.Context) string {
 }
 
 // the options of the settings whose values are not shown: links, outbounds, secrets
-var secretOptions = []string{"option proxy_string", "option outbound_json", "list urltest_proxy_links", "list urltest_fallback_links", "list selector_proxy_links", "option yacd_secret_key"}
+var secretOptions = []string{"option proxy_string", "option outbound_json", "list urltest_proxy_links", "list urltest_fallback_links", "list selector_proxy_links", "option yacd_secret_key",
+	// the address of a subscription: its token is the account
+	"option url"}
 
 // the path of a DNS server may hold the identifier of an account
 var serverPath = regexp.MustCompile(`(option (?:dns_server|domain_resolver_dns_server) '[^/']*)/[^']*'`)
@@ -260,6 +262,10 @@ func MaskSettings(content []byte) string {
 		for _, option := range secretOptions {
 			at := strings.Index(line, option)
 			if at < 0 || strings.TrimSpace(line[:at]) != "" {
+				continue
+			}
+			// the whole name: "option url" is not "option urltest_testing_url"
+			if rest := line[at+len(option):]; rest != "" && !strings.ContainsRune(" \t'", rune(rest[0])) {
 				continue
 			}
 			result.WriteString(line[:at] + option + " 'MASKED'\n")

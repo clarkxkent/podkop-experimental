@@ -274,7 +274,7 @@ func (b *builder) addServer(section *model.Section, server groupServer) {
 	}
 	b.servers[server.tag] = true
 	b.outbounds = append(b.outbounds, b.serverOutbound(server.subscription, server.index))
-	b.links = append(b.links, Link{Section: section.Name, Name: server.tag, Text: b.options.Servers[server.subscription][server.index].Link})
+	b.links = append(b.links, Link{Section: section.Name, Name: server.tag, Tag: server.tag, Text: b.options.Servers[server.subscription][server.index].Link})
 }
 
 // isRefused tells whether the connections of a section are refused: a section of the type

@@ -40,6 +40,7 @@ func outboundLines(caller *clashCaller, sections []model.Section) []string {
 		members                    int
 	}
 	var tests []test
+	var refused []string
 	for _, section := range sections {
 		if section.ConnectionType == "block" || section.ConnectionType == "exclusion" {
 			continue
@@ -47,6 +48,9 @@ func outboundLines(caller *clashCaller, sections []model.Section) []string {
 		tag := section.Name + "-out"
 		proxy, found := listed.Proxies[tag]
 		if !found {
+			if section.ConnectionType == "group" {
+				refused = append(refused, "⛔ "+section.Name+": its group chooses no server, and its connections are refused")
+			}
 			continue
 		}
 		// a section that connects through another one says so: its test goes through that one
@@ -73,6 +77,7 @@ func outboundLines(caller *clashCaller, sections []model.Section) []string {
 		}()
 	}
 	tested.Wait()
+	results = append(results, refused...)
 	if len(results) == 0 {
 		return []string{"⚠️ No section has an outbound"}
 	}

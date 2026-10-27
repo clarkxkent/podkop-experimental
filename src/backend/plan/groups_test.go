@@ -180,14 +180,14 @@ func TestEmptyGroups(t *testing.T) {
 func TestGroupMistakes(t *testing.T) {
 	list := map[string][]SubscriptionServer{"prov1": servers("A")}
 	for settings, want := range map[string]string{
-		groupSection("youtube", "nope"): "there is no group nope",
+		groupSection("youtube", "nope"):                                  "there is no group nope",
 		"\nconfig section 'youtube'\n\toption connection_type 'group'\n": "the group is not set",
 		"\nconfig group 'g'\n\tlist subscription 'prov1'\n\tlist include 'zzz'\n\toption empty 'section'\n\toption empty_section 'youtube'\n" + groupSection("youtube", "g"): "loop: youtube → youtube",
 		"\nconfig group 'g'\n\tlist subscription 'prov1'\n\tlist include 'zzz'\n\toption empty 'section'\n\toption empty_section 'b'\n" +
 			"\nconfig group 'h'\n\tlist subscription 'prov1'\n\tlist include 'zzz'\n\toption empty 'section'\n\toption empty_section 'a'\n" +
 			groupSection("a", "g") + groupSection("b", "h"): "loop: a → b → a",
 		"\nconfig group 'g'\n\tlist subscription 'prov1'\n\tlist include 'zzz'\n\toption empty 'section'\n\toption empty_section 'gone'\n" + groupSection("youtube", "g"): "there is no section gone",
-		proxySection("main", "\toption detour 'youtube'\n") + "\nconfig group 'g'\n\tlist subscription 'prov1'\n" + groupSection("youtube", "g"): "a group cannot be connected through yet",
+		proxySection("main", "\toption detour 'youtube'\n") + "\nconfig group 'g'\n\tlist subscription 'prov1'\n" + groupSection("youtube", "g"):                          "a group cannot be connected through yet",
 	} {
 		_, err := buildGroups(t, twoSubscriptions+settings, list)
 		require.ErrorContains(t, err, want, settings)

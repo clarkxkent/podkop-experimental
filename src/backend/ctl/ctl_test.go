@@ -30,6 +30,13 @@ type backend struct {
 	facts  api.Facts
 	probed []string
 	asked  int
+
+	subscriptions []api.SubscriptionState
+	preview       api.SubscriptionPreview
+	group         api.GroupPreview
+	updated       []string
+	loaded        []string
+	checked       []api.GroupCheck
 }
 
 func (b *backend) UpdateLists(context.Context) api.ListsUpdate { return b.lists }
@@ -40,6 +47,20 @@ func (b *backend) Probe(_ context.Context, label string, wait time.Duration) api
 	return b.probe
 }
 func (b *backend) ProbeSelf(context.Context) api.ProbeResult { return b.probe }
+
+func (b *backend) Subscriptions(context.Context) []api.SubscriptionState { return b.subscriptions }
+func (b *backend) UpdateSubscriptions(_ context.Context, name string) []api.SubscriptionState {
+	b.updated = append(b.updated, name)
+	return b.subscriptions
+}
+func (b *backend) LoadSubscription(_ context.Context, address string) api.SubscriptionPreview {
+	b.loaded = append(b.loaded, address)
+	return b.preview
+}
+func (b *backend) CheckGroup(_ context.Context, check api.GroupCheck) api.GroupPreview {
+	b.checked = append(b.checked, check)
+	return b.group
+}
 
 func (b *backend) Status() api.Status { return b.status }
 func (b *backend) Facts() api.Facts   { return b.facts }
@@ -369,4 +390,48 @@ func TestNewestLines(t *testing.T) {
 	require.Equal(t, lines[len(lines)-1], kept[len(kept)-1])
 	require.Greater(t, len(kept), 150)
 	require.Equal(t, []string{"a"}, newest([]string{"a"}))
+}
+
+// The commands of the subscriptions ask the backend and print its answers; without a
+// backend the page gets an answer it can show.
+func TestSubscriptionCommands(t *testing.T) {
+	changed := time.Now().Add(-3 * time.Hour)
+	running := &backend{
+		status:        api.Status{Running: true},
+		subscriptions: []api.SubscriptionState{{Name: "prov1", Servers: 12, Usable: 10, Changed: &changed, Route: "direct"}, {Name: "prov2", Error: "the provider answers 403 Forbidden"}},
+		preview:       api.SubscriptionPreview{Route: "direct", Servers: []api.PreviewServer{{Name: "NL 1", Scheme: "vless", Address: "nl1.example:443", Link: "vless://x"}}},
+		group:         api.GroupPreview{Chosen: []string{"NL 1"}, Total: 3},
+	}
+	env := Environment{Socket: serve(t, running, logbuf.New(1<<10))}
+	output, status := run(env, "subscription_load", "https://sub.example/sub/TOKEN")
+	require.Zero(t, status)
+	require.Equal(t, []string{"https://sub.example/sub/TOKEN"}, running.loaded)
+	var preview api.SubscriptionPreview
+	require.NoError(t, json.Unmarshal([]byte(output), &preview))
+	require.Equal(t, "NL 1", preview.Servers[0].Name)
+	output, status = run(env, "group_check", `{"subscriptions":["prov1"],"include":["NL"],"exclude":[]}`)
+	require.Zero(t, status)
+	require.Equal(t, []string{"NL"}, running.checked[0].Include)
+	require.JSONEq(t, `{"chosen":["NL 1"],"total":3}`, output)
+	output, status = run(env, "subscription_status")
+	require.Zero(t, status)
+	require.Contains(t, output, `"name":"prov1"`)
+	output, status = run(env, "subscription_update", "prov1")
+	require.Zero(t, status)
+	require.Equal(t, []string{"prov1"}, running.updated)
+	require.Contains(t, output, "✅ prov1: 12 servers, 10 can be used; taken 3 h ago (direct)")
+	require.Contains(t, output, "❌ prov2: no list: the provider answers 403 Forbidden")
+	_, status = run(env, "group_check", "not json")
+	require.NotZero(t, status)
+
+	none := Environment{Socket: filepath.Join(t.TempDir(), "none.sock")}
+	output, status = run(none, "subscription_load", "https://sub.example/sub/TOKEN")
+	require.Zero(t, status)
+	require.Contains(t, output, "podkop does not run")
+	output, status = run(none, "subscription_status")
+	require.Zero(t, status)
+	require.Equal(t, "[]\n", output)
+	output, status = run(none, "hwid")
+	require.Zero(t, status)
+	require.Contains(t, output, "source: ")
 }

@@ -100,3 +100,16 @@ func (h *sharedHistory) forgetChanged(next map[string]dialer) {
 		h.storage.DeleteURLTestHistory(tag)
 	}
 }
+
+// Delays are the delays the URL tests of the process last found for the outbounds of the
+// tags, in milliseconds; an outbound that was never tested, or failed its last test, is not
+// there.
+func Delays(tags []string) map[string]uint16 {
+	result := make(map[string]uint16)
+	for _, tag := range tags {
+		if found := history.storage.LoadURLTestHistory(tag); found != nil && found.Delay > 0 {
+			result[tag] = found.Delay
+		}
+	}
+	return result
+}

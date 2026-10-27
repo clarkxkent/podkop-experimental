@@ -21,6 +21,7 @@ import (
 	"github.com/podkop-net/podkop-experimental/src/backend/model"
 	"github.com/podkop-net/podkop-experimental/src/backend/plan"
 	"github.com/podkop-net/podkop-experimental/src/backend/probe"
+	"github.com/podkop-net/podkop-experimental/src/backend/subscription"
 	"github.com/podkop-net/podkop-experimental/src/backend/uci"
 	"github.com/podkop-net/podkop-experimental/src/backend/yacd"
 )
@@ -87,6 +88,11 @@ var Commands = [][2]string{
 	{"yacd_builtin", "The dashboard YACD of the package served again in place of the one upgraded from GitHub"},
 	{"global_check", "[label port]: every check as one report; with the label of a check name and a port the device that asks opens connections to meanwhile, also what came of its DNS question and its connections"},
 	{"check_links", "<link>...: each proxy link as the engine of this build takes it when the settings run, as JSON: [{ok, error}]"},
+	{"subscription_load", "<address>: download the list of a subscription to be shown, not taken, as JSON: {route, error, servers: [{name, scheme, address, link, reason, notes}]}"},
+	{"group_check", "<JSON {subscriptions, include, exclude}>: the servers a group would choose, as JSON: {chosen, total, missing}"},
+	{"subscription_status", "Each subscription of the settings, as JSON: its servers, when its list was taken and checked, the way it came, the last error, the next download"},
+	{"subscription_update", "[name]: download the list of a subscription now (every one without a name)"},
+	{"hwid", "What the identifier of this device that providers are told (x-hwid) is made of, and its beginning"},
 	{"check_logs", "[--since RUN:NUMBER]: the log of the backend and of sing-box; with --since, as JSON, only the lines after that number of that run (all of another run), and where to go on from"},
 	{"show_sing_box_config", "The sing-box configuration that runs, secrets masked; --rejected: the last one refused"},
 	{"show_config", "The settings, secrets masked"},
@@ -167,6 +173,47 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 			results = append(results, result)
 		}
 		return compact(results)
+	case "subscription_load":
+		if len(arguments) < 2 {
+			return usage(errorOutput)
+		}
+		preview, err := client.LoadSubscription(arguments[1], 19*time.Second)
+		if err != nil {
+			preview = &api.SubscriptionPreview{Servers: []api.PreviewServer{}, Error: "podkop does not run: a subscription is downloaded by its backend"}
+		}
+		return compact(preview)
+	case "group_check":
+		var check api.GroupCheck
+		if len(arguments) < 2 || json.Unmarshal([]byte(arguments[1]), &check) != nil {
+			return usage(errorOutput)
+		}
+		preview, err := client.CheckGroup(check, 19*time.Second)
+		if err != nil {
+			return 1
+		}
+		return compact(preview)
+	case "subscription_status":
+		states, err := client.Subscriptions()
+		if err != nil {
+			states = []api.SubscriptionState{}
+		}
+		return compact(states)
+	case "subscription_update":
+		name := ""
+		if len(arguments) > 1 {
+			name = arguments[1]
+		}
+		states, err := client.UpdateSubscriptions(name)
+		if err != nil {
+			io.WriteString(errorOutput, "podkop does not run: "+err.Error()+"\n")
+			return 1
+		}
+		io.WriteString(output, strings.Join(subscriptionLines(states, time.Now()), "\n")+"\n")
+		return 0
+	case "hwid":
+		device := subscription.ReadDevice("/")
+		io.WriteString(output, "source: "+device.Source+"\nhwid: "+device.HWID[:min(8, len(device.HWID))]+"…\n")
+		return 0
 	case "get_sing_box_features":
 		features := env.Features
 		if features == nil {
@@ -225,7 +272,13 @@ func Run(env Environment, arguments []string, output io.Writer, errorOutput io.W
 		io.WriteString(output, globalCheck(ctx, env.Paths, settings, sections, env.Version, env.SingBoxVersion, env.Engine, running(), func() (bool, bool) {
 			result, err := client.ProbeSelf()
 			return err == nil && result.DNS && result.Connection, err == nil
-		}, func() []string { return outboundLines(&clashCaller{client: client}, sections) }, device))
+		}, func() []string { return outboundLines(&clashCaller{client: client}, sections) }, func() []string {
+			states, err := client.Subscriptions()
+			if err != nil {
+				return nil
+			}
+			return subscriptionLines(states, time.Now())
+		}, device))
 		return 0
 	case "check_logs":
 		if len(arguments) > 2 && arguments[1] == "--since" {
