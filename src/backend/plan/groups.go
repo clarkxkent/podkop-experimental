@@ -148,15 +148,21 @@ func (b *builder) sectionExit(section *model.Section, path []string) (groupExit,
 		return exit, nil
 	}
 	path = append(path, section.Name)
+	// the build names the section it starts from (buildSections); a section reached through a
+	// group with no server is named here
+	where := ""
+	if len(path) > 1 {
+		where = "section " + section.Name + ": "
+	}
 	switch {
 	case len(section.Groups) == 0:
-		return groupExit{}, E.New("section ", section.Name, ": the group is not set")
+		return groupExit{}, E.New(where, "the group is not set")
 	case len(section.Groups) > 1:
-		return groupExit{}, E.New("section ", section.Name, ": a section takes one group so far")
+		return groupExit{}, E.New(where, "a section takes one group so far")
 	}
 	group := b.config.Group(section.Groups[0])
 	if group == nil {
-		return groupExit{}, E.New("section ", section.Name, ": there is no group ", section.Groups[0])
+		return groupExit{}, E.New(where, "there is no group ", section.Groups[0])
 	}
 	exit := groupExit{kind: exitServers, group: group.Name, servers: b.groupServers(group, false)}
 	if len(exit.servers) == 0 {
@@ -190,7 +196,14 @@ func (b *builder) emptyExit(section *model.Section, group *model.Group, path []s
 		case target == nil:
 			return groupExit{}, E.New("group ", group.Name, ": there is no section ", name, " for no server")
 		case slices.Contains(path, name):
-			return groupExit{}, E.New("section ", path[0], ": the groups with no server lead round in a loop: ", strings.Join(append(path, name), " → "))
+			return groupExit{}, E.New("the groups with no server lead round in a loop: ", strings.Join(append(path, name), " → "))
+		case target.ConnectionType == "block":
+			// the section may have been turned so after the group was set: it is followed
+			b.warnOnce("group ", group.Name, " chooses no server, and section ", name, " refuses its connections: so does section ", section.Name)
+			return groupExit{kind: exitBlock}, nil
+		case target.ConnectionType == "exclusion":
+			b.warnOnce("group ", group.Name, " chooses no server, and section ", name, " is an exclusion: the connections of section ", section.Name, " go directly")
+			return groupExit{kind: exitDirect}, nil
 		case !target.HasOutbound():
 			return groupExit{}, E.New("group ", group.Name, ": the section ", name, " for no server is of the type ", target.ConnectionType, ", which has no outbound")
 		}

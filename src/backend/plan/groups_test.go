@@ -167,6 +167,25 @@ func TestEmptyGroups(t *testing.T) {
 		config, byTag := parsed(t, result)
 		check(config, byTag, result)
 	}
+	// the section for no server turned block or exclusion after the group was set: followed
+	for kind, check := range map[string]func(configuration, map[string]outbound){
+		"block": func(config configuration, byTag map[string]outbound) {
+			require.NotContains(t, byTag, "youtube-out")
+			require.Equal(t, "reject", sectionRule(config, "youtube")["action"])
+		},
+		"exclusion": func(config configuration, byTag map[string]outbound) {
+			require.Equal(t, []string{"direct-out"}, byTag["youtube-out"].Outbounds)
+		},
+	} {
+		settings := twoSubscriptions + "\nconfig section 'main'\n\toption connection_type '" + kind + "'\n\toption user_domain_list_type 'dynamic'\n\tlist user_domains 'main.lab.example'\n" +
+			"\nconfig group 'nl'\n\tlist subscription 'prov1'\n\tlist include 'NL'\n\toption empty 'section'\n\toption empty_section 'main'\n" +
+			groupSection("youtube", "nl")
+		result, err := buildGroups(t, settings, list)
+		require.NoError(t, err, kind)
+		config, byTag := parsed(t, result)
+		check(config, byTag)
+		require.Contains(t, strings.Join(result.Warnings, "\n"), "section main", kind)
+	}
 	// no list at all: refused, whatever the group says
 	result, err := buildGroups(t, head+"\nconfig group 'nl'\n\tlist subscription 'prov1'\n"+groupSection("youtube", "nl")+
 		"\toption mixed_proxy_enabled '1'\n\toption mixed_proxy_port '2080'\n", nil)
@@ -191,6 +210,7 @@ func TestGroupMistakes(t *testing.T) {
 	} {
 		_, err := buildGroups(t, twoSubscriptions+settings, list)
 		require.ErrorContains(t, err, want, settings)
+		require.NotContains(t, err.Error(), "section youtube: section youtube", "the section is named once")
 	}
 }
 
