@@ -3,6 +3,8 @@
 "require form";
 "require baseclass";
 "require network";
+"require uci";
+"require ui";
 "require view.podkop.main as main";
 
 // Settings content
@@ -11,11 +13,36 @@
 // Sections content
 "require view.podkop.section as section";
 
+// Groups and subscriptions content
+"require view.podkop.group as group";
+"require view.podkop.subscription as subscription";
+
 // Dashboard content
 "require view.podkop.dashboard as dashboard";
 
 // Diagnostic content
 "require view.podkop.diagnostic as diagnostic";
+
+// Sections, groups and subscriptions are sections of one file, and its names are one
+// namespace: a group named as a section would merge into it. A name taken is refused.
+function uniqueNames(typedSection) {
+  const add = typedSection.handleAdd;
+  typedSection.handleAdd = function (ev, name) {
+    if (name && uci.get("podkop", name)) {
+      ui.addNotification(
+        null,
+        E("p", {}, [
+          _(
+            "The name %s is taken: sections, groups and subscriptions need names of their own",
+          ).format(name),
+        ]),
+        "error",
+      );
+      return Promise.resolve();
+    }
+    return add.apply(this, arguments);
+  };
+}
 
 const EntryPoint = {
   async render() {
@@ -61,6 +88,29 @@ const EntryPoint = {
 
     // Render section content
     section.createSectionContent(sectionsSection, singBoxFeatures);
+    uniqueNames(sectionsSection);
+
+    // Groups tab: servers of subscriptions chosen by their names
+    const groupsSection = podkopMap.section(
+      form.TypedSection,
+      "group",
+      _("Groups"),
+    );
+    groupsSection.anonymous = false;
+    groupsSection.addremove = true;
+    group.createGroupContent(groupsSection);
+    uniqueNames(groupsSection);
+
+    // Subscriptions tab: the addresses providers list their servers at
+    const subscriptionsSection = podkopMap.section(
+      form.TypedSection,
+      "subscription",
+      _("Subscriptions"),
+    );
+    subscriptionsSection.anonymous = false;
+    subscriptionsSection.addremove = true;
+    subscription.createSubscriptionContent(subscriptionsSection);
+    uniqueNames(subscriptionsSection);
 
     // Settings tab
     const settingsSection = podkopMap.section(

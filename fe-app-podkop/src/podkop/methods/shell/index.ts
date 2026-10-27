@@ -105,4 +105,24 @@ export const PodkopShellMethods = {
     ),
   getSingBoxFeatures: async () =>
     callBaseMethod<string[]>(Podkop.AvailableMethods.GET_SING_BOX_FEATURES),
+  // the router downloads the list of an address of the form: directly, or through its
+  // servers when the provider is blocked; LuCI aborts a call after 20 s
+  subscriptionLoad: async (address: string) =>
+    callBaseMethod<Podkop.SubscriptionPreview>(
+      Podkop.AvailableMethods.SUBSCRIPTION_LOAD,
+      [address],
+      '/usr/bin/podkop',
+      19000,
+    ),
+  subscriptionStatus: async () =>
+    callBaseMethod<Podkop.SubscriptionState[]>(
+      Podkop.AvailableMethods.SUBSCRIPTION_STATUS,
+    ),
+  groupCheck: async (check: Podkop.GroupCheck) =>
+    callBaseMethod<Podkop.GroupPreview>(
+      Podkop.AvailableMethods.GROUP_CHECK,
+      [JSON.stringify(check)],
+      '/usr/bin/podkop',
+      19000,
+    ),
 };

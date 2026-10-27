@@ -136,3 +136,49 @@ describe('getDashboardSections, a section that connects through another', () => 
     ]);
   });
 });
+
+describe('getDashboardSections, group section', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the test of the group first, then its servers by their tags', async () => {
+    getConfigSections.mockResolvedValue([
+      { '.name': 'youtube', connection_type: 'group', group: 'nl' },
+    ]);
+    PodkopShellMethods.getClashApiProxies.mockResolvedValue({
+      success: true,
+      data: {
+        proxies: {
+          'youtube-out': proxy('youtube-out', {
+            type: 'Selector',
+            now: 'nl-group',
+            all: ['nl-group', 'prov1: NL 1', 'prov1: NL 2'],
+          }),
+          'nl-group': proxy('nl-group', { type: 'URLTest' }),
+          'prov1: NL 1': proxy('prov1: NL 1', { type: 'VLESS' }),
+          'prov1: NL 2': proxy('prov1: NL 2', { type: 'VLESS' }),
+        },
+      },
+    });
+
+    const result = await getDashboardSections();
+    expect(result.data[0].withTagSelect).toBe(true);
+    expect(result.data[0].code).toBe('youtube-out');
+    expect(
+      result.data[0].outbounds.map((outbound) => outbound.displayName),
+    ).toEqual(['Fastest', 'prov1: NL 1', 'prov1: NL 2']);
+    expect(result.data[0].outbounds[0].selected).toBe(true);
+  });
+
+  it('shows no server of a group that refuses', async () => {
+    getConfigSections.mockResolvedValue([
+      { '.name': 'youtube', connection_type: 'group', group: 'nl' },
+    ]);
+    PodkopShellMethods.getClashApiProxies.mockResolvedValue({
+      success: true,
+      data: { proxies: { 'direct-out': proxy('direct-out') } },
+    });
+
+    const result = await getDashboardSections();
+    expect(result.data[0].outbounds).toEqual([]);
+  });
+});

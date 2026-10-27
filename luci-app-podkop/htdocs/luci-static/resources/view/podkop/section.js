@@ -118,8 +118,43 @@ function createSectionContent(section, singBoxFeatures = []) {
   );
   o.value("proxy", "Proxy");
   o.value("vpn", "VPN");
+  o.value("group", _("Group"));
   o.value("block", "Block");
   o.value("exclusion", "Exclusion");
+
+  // the group of servers of subscriptions the traffic goes through (tab Groups)
+  o = section.option(
+    form.ListValue,
+    "group",
+    _("Group"),
+    _(
+      "The group of servers of subscriptions the traffic of this section goes through: the fastest of them, or the one chosen on the dashboard",
+    ),
+  );
+  o.depends("connection_type", "group");
+  o.rmempty = false;
+  o.load = function (section_id) {
+    this.keylist = [];
+    this.vallist = [];
+    uci.sections("podkop", "group").forEach((item) => {
+      this.value(item[".name"], item[".name"]);
+    });
+    const value = uci.get("podkop", section_id, "group");
+    // a group that is no longer there stays shown, and validate tells why
+    if (value && !this.keylist.includes(value)) {
+      this.value(value, value + " (" + _("not available") + ")");
+    }
+    return form.ListValue.prototype.load.call(this, section_id);
+  };
+  o.validate = function (section_id, value) {
+    if (!value) {
+      return _("Choose a group: groups are made on the tab Groups");
+    }
+    if (!uci.get("podkop", value) || uci.get("podkop", value)[".type"] !== "group") {
+      return _("There is no group %s").format(value);
+    }
+    return true;
+  };
 
   o = section.option(
     form.ListValue,
@@ -880,6 +915,7 @@ function createSectionContent(section, singBoxFeatures = []) {
   o.rmempty = true;
   o.depends("connection_type", "proxy");
   o.depends("connection_type", "vpn");
+  o.depends("connection_type", "group");
   o.validate = function (section_id, value) {
     // Optional
     if (!value || value.length === 0) {
@@ -907,6 +943,7 @@ function createSectionContent(section, singBoxFeatures = []) {
   o.rmempty = false;
   o.depends("connection_type", "proxy");
   o.depends("connection_type", "vpn");
+  o.depends("connection_type", "group");
 
   o = section.option(
     form.Value,
@@ -930,6 +967,7 @@ function createSectionContent(section, singBoxFeatures = []) {
   o.rmempty = false;
   o.depends("connection_type", "proxy");
   o.depends("connection_type", "vpn");
+  o.depends("connection_type", "group");
 }
 
 const EntryPoint = {

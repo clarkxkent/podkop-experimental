@@ -68,6 +68,9 @@ export namespace Podkop {
     CHECK_LOGS = 'check_logs',
     GET_SYSTEM_INFO = 'get_system_info',
     GET_SING_BOX_FEATURES = 'get_sing_box_features',
+    SUBSCRIPTION_LOAD = 'subscription_load',
+    SUBSCRIPTION_STATUS = 'subscription_status',
+    GROUP_CHECK = 'group_check',
   }
 
   export enum AvailableClashAPIMethods {
@@ -134,6 +137,12 @@ export namespace Podkop {
     connection_type: 'exclusion';
   }
 
+  // a section that goes through a group of servers of subscriptions
+  export interface ConfigGroupSection {
+    connection_type: 'group';
+    group?: string;
+  }
+
   export type ConfigBaseSection =
     | ConfigProxyUrlTestSection
     | ConfigProxySelectorSection
@@ -141,11 +150,12 @@ export namespace Podkop {
     | ConfigProxyOutboundSection
     | ConfigVpnSection
     | ConfigBlockSection
-    | ConfigExclusionSection;
+    | ConfigExclusionSection
+    | ConfigGroupSection;
 
   export type ConfigSection = ConfigBaseSection & {
     '.name': string;
-    '.type': 'settings' | 'section';
+    '.type': 'settings' | 'section' | 'subscription' | 'group';
     yacd_secret_key?: string;
     detour?: string;
   };
@@ -204,6 +214,48 @@ export namespace Podkop {
   export interface LinkCheck {
     ok: boolean;
     error?: string;
+  }
+
+  // a list of a subscription downloaded to be shown (subscription_load)
+  export interface PreviewServer {
+    name: string;
+    scheme: string;
+    address?: string;
+    link: string;
+    reason?: string;
+    notes?: string[];
+  }
+
+  export interface SubscriptionPreview {
+    route?: string;
+    error?: string;
+    servers: PreviewServer[];
+  }
+
+  // which servers a group of the form would choose (group_check)
+  export interface GroupCheck {
+    subscriptions: string[];
+    include: string[];
+    exclude: string[];
+  }
+
+  export interface GroupPreview {
+    chosen: string[];
+    total: number;
+    missing?: string[];
+  }
+
+  // what the backend knows of a subscription (subscription_status)
+  export interface SubscriptionState {
+    name: string;
+    servers: number;
+    usable: number;
+    changed?: string;
+    checked?: string;
+    route?: string;
+    error?: string;
+    next?: string;
+    busy?: boolean;
   }
 
   export interface FakeIPClientCheckResult {

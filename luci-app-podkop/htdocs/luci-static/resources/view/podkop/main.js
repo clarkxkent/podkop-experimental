@@ -454,7 +454,11 @@ function parseValueList(value) {
 
 // src/podkop/methods/custom/getConfigSections.ts
 async function getConfigSections() {
-  return uci.load("podkop").then(() => uci.sections("podkop"));
+  return uci.load("podkop").then(
+    () => uci.sections("podkop").filter(
+      (section) => section[".type"] !== "subscription" && section[".type"] !== "group"
+    )
+  );
 }
 
 // src/podkop/methods/shell/callBaseMethod.ts
@@ -507,6 +511,9 @@ var Podkop;
     AvailableMethods2["CHECK_LOGS"] = "check_logs";
     AvailableMethods2["GET_SYSTEM_INFO"] = "get_system_info";
     AvailableMethods2["GET_SING_BOX_FEATURES"] = "get_sing_box_features";
+    AvailableMethods2["SUBSCRIPTION_LOAD"] = "subscription_load";
+    AvailableMethods2["SUBSCRIPTION_STATUS"] = "subscription_status";
+    AvailableMethods2["GROUP_CHECK"] = "group_check";
   })(AvailableMethods = Podkop2.AvailableMethods || (Podkop2.AvailableMethods = {}));
   let AvailableClashAPIMethods;
   ((AvailableClashAPIMethods2) => {
@@ -599,7 +606,24 @@ var PodkopShellMethods = {
   getSystemInfo: async () => callBaseMethod(
     Podkop.AvailableMethods.GET_SYSTEM_INFO
   ),
-  getSingBoxFeatures: async () => callBaseMethod(Podkop.AvailableMethods.GET_SING_BOX_FEATURES)
+  getSingBoxFeatures: async () => callBaseMethod(Podkop.AvailableMethods.GET_SING_BOX_FEATURES),
+  // the router downloads the list of an address of the form: directly, or through its
+  // servers when the provider is blocked; LuCI aborts a call after 20 s
+  subscriptionLoad: async (address) => callBaseMethod(
+    Podkop.AvailableMethods.SUBSCRIPTION_LOAD,
+    [address],
+    "/usr/bin/podkop",
+    19e3
+  ),
+  subscriptionStatus: async () => callBaseMethod(
+    Podkop.AvailableMethods.SUBSCRIPTION_STATUS
+  ),
+  groupCheck: async (check) => callBaseMethod(
+    Podkop.AvailableMethods.GROUP_CHECK,
+    [JSON.stringify(check)],
+    "/usr/bin/podkop",
+    19e3
+  )
 };
 
 // src/podkop/methods/custom/getDashboardSections.ts
@@ -723,6 +747,26 @@ async function getDashboardSections() {
           ]
         };
       }
+    }
+    if (section.connection_type === "group") {
+      const selector = proxies.find(
+        (proxy) => proxy.code === `${section[".name"]}-out`
+      );
+      const members = (selector?.value?.all ?? []).map(
+        (code) => proxies.find((item) => item.code === code)
+      );
+      return {
+        withTagSelect: true,
+        code: selector?.code || section[".name"],
+        displayName: section[".name"],
+        outbounds: members.map((item) => ({
+          code: item?.code || "",
+          displayName: item?.value?.type === "URLTest" ? _("Fastest") : item?.code || item?.value?.name || "",
+          latency: item?.value?.history?.[0]?.delay || 0,
+          type: item?.value?.type || "",
+          selected: selector?.value?.now === item?.code
+        }))
+      };
     }
     if (section.connection_type === "vpn") {
       const outbound = proxies.find(
@@ -4641,9 +4685,57 @@ ${PartialStyles}
     display: none;
 }
 
+/* Hide extra H3 for the tabs of the subscriptions and the groups */
+#cbi-podkop-subscription > h3:nth-child(1),
+#cbi-podkop-group > h3:nth-child(1) {
+    display: none;
+}
+
 /* Vertical align for remove section action button */
-#cbi-podkop-section > .cbi-section-remove {
+#cbi-podkop-section > .cbi-section-remove,
+#cbi-podkop-subscription > .cbi-section-remove,
+#cbi-podkop-group > .cbi-section-remove {
     margin-bottom: -32px;
+}
+
+/* The servers of a subscription and of a group (subscription.js, group.js) */
+.pdk-sub-result {
+    margin-top: 8px;
+}
+
+.pdk-sub-list ul {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.pdk-sub-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color-medium, #ddd);
+    overflow-wrap: anywhere;
+}
+
+.pdk-sub-endpoint,
+.pdk-sub-notes {
+    opacity: 0.7;
+}
+
+.pdk-sub-unusable strong {
+    text-decoration: line-through;
+}
+
+.pdk-sub-reason,
+.pdk-sub-error {
+    color: var(--error-color-high, #c0392b);
+}
+
+.pdk-sub-link code {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.85em;
 }
 
 /* The links the router refuses at a save (linkCheck.ts) */

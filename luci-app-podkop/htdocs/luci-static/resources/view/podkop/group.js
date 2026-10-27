@@ -1,0 +1,202 @@
+"use strict";
+"require form";
+"require baseclass";
+"require uci";
+"require view.podkop.main as main";
+
+// The value an option of a group has in the form now: what is being edited, else what is
+// saved; a list as a list.
+function currentList(section, section_id, option) {
+  const value = section.formvalue(section_id, option);
+  const list = value != null ? value : uci.get("podkop", section_id, option);
+  return L.toArray(list)
+    .map((item) => String(item).trim())
+    .filter(Boolean);
+}
+
+function currentValue(section, section_id, option) {
+  const value = section.formvalue(section_id, option);
+  return value != null ? value : uci.get("podkop", section_id, option);
+}
+
+// What the sections of a group do when it chooses no server, as a line.
+function emptyLine(section, section_id) {
+  switch (currentValue(section, section_id, "empty") || "all") {
+    case "section":
+      return _("the sections of the group go as section %s does").format(
+        currentValue(section, section_id, "empty_section") || "?",
+      );
+    case "direct":
+      return _("the connections of its sections go directly");
+    case "block":
+      return _("the connections of its sections are refused");
+    default:
+      return _("all the servers of its subscriptions are used");
+  }
+}
+
+// Which servers the group of the form would choose, by the lists the router has.
+function renderChosen(section, section_id, preview) {
+  const chosen = preview.chosen || [];
+  const lines = [];
+  if (chosen.length) {
+    lines.push(
+      E("details", { class: "pdk-sub-list", open: "" }, [
+        E("summary", {}, [
+          _("%d of %d servers are chosen").format(chosen.length, preview.total),
+        ]),
+        E(
+          "ul",
+          {},
+          chosen.map((name) => E("li", {}, [name])),
+        ),
+      ]),
+    );
+  } else {
+    lines.push(
+      E("div", { class: "pdk-sub-error" }, [
+        _("No server is chosen (of %d): %s").format(
+          preview.total,
+          emptyLine(section, section_id),
+        ),
+      ]),
+    );
+  }
+  (preview.missing || []).forEach((missing) => {
+    lines.push(
+      E("div", { class: "pdk-sub-error" }, [
+        _("No list of %s").format(missing),
+      ]),
+    );
+  });
+  return E("div", {}, lines);
+}
+
+function createGroupContent(section) {
+  let o = section.option(
+    form.MultiValue,
+    "subscription",
+    _("Subscriptions"),
+    _("The subscriptions the group chooses servers from"),
+  );
+  o.load = function (section_id) {
+    this.keylist = [];
+    this.vallist = [];
+    uci.sections("podkop", "subscription").forEach((item) => {
+      this.value(item[".name"], item[".name"]);
+    });
+    return form.MultiValue.prototype.load.call(this, section_id);
+  };
+  o.rmempty = false;
+  o.validate = function (section_id) {
+    return currentList(section, section_id, "subscription").length
+      ? true
+      : _("Choose a subscription");
+  };
+
+  o = section.option(
+    form.DynamicList,
+    "include",
+    _("Name contains"),
+    _(
+      "A server is chosen when its name contains one of these words, in any case of letters (a flag, a country, a city). None: every server",
+    ),
+  );
+  o.placeholder = "NL";
+
+  o = section.option(
+    form.DynamicList,
+    "exclude",
+    _("Name does not contain"),
+    _("A server whose name contains one of these words is never chosen"),
+  );
+
+  o = section.option(
+    form.ListValue,
+    "empty",
+    _("When no server is chosen"),
+    _(
+      "The words choose nothing, or the subscription has no list yet: what the sections of the group do then",
+    ),
+  );
+  o.value("all", _("Use all the servers of the subscriptions"));
+  o.value("section", _("Go as another section does"));
+  o.value("direct", _("Go directly"));
+  o.value("block", _("Refuse the connections"));
+  o.default = "all";
+
+  o = section.option(
+    form.ListValue,
+    "empty_section",
+    _("Section"),
+    _("The section whose way the connections take"),
+  );
+  o.depends("empty", "section");
+  o.load = function (section_id) {
+    this.keylist = [];
+    this.vallist = [];
+    uci
+      .sections("podkop", "section")
+      .filter((item) =>
+        ["proxy", "vpn", "group"].includes(item.connection_type),
+      )
+      .forEach((item) => {
+        this.value(item[".name"], item[".name"]);
+      });
+    return form.ListValue.prototype.load.call(this, section_id);
+  };
+
+  // the servers the group of the form chooses, by the lists the router has
+  o = section.option(form.DummyValue, "_check", _("Servers"));
+  o.rawhtml = true;
+  o.cfgvalue = function (section_id) {
+    const result = E("div", { class: "pdk-sub-result" }, []);
+    const button = E(
+      "button",
+      {
+        class: "cbi-button cbi-button-action",
+        click: (ev) => {
+          ev.preventDefault();
+          const subscriptions = currentList(section, section_id, "subscription");
+          if (!subscriptions.length) {
+            result.replaceChildren(
+              E("div", { class: "pdk-sub-error" }, [_("Choose a subscription")]),
+            );
+            return;
+          }
+          button.disabled = true;
+          result.replaceChildren(
+            E("div", { class: "cbi-value-description" }, [
+              _("Asking the router…"),
+            ]),
+          );
+          main.PodkopShellMethods.groupCheck({
+            subscriptions,
+            include: currentList(section, section_id, "include"),
+            exclude: currentList(section, section_id, "exclude"),
+          })
+            .then((response) => {
+              result.replaceChildren(
+                response.success
+                  ? renderChosen(section, section_id, response.data)
+                  : E("div", { class: "pdk-sub-error" }, [
+                      _("The router did not answer"),
+                    ]),
+              );
+            })
+            .finally(() => {
+              button.disabled = false;
+            });
+        },
+      },
+      [_("Check")],
+    );
+    return E("div", {}, [button, result]);
+  };
+}
+
+const EntryPoint = {
+  createGroupContent,
+};
+
+return baseclass.extend(EntryPoint);

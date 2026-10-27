@@ -161,6 +161,33 @@ export async function getDashboardSections(): Promise<IGetDashboardSectionsRespo
         }
       }
 
+      // a selector of the URL test of the group and of its servers, the test first; a
+      // group that chose no server and refuses has none
+      if (section.connection_type === 'group') {
+        const selector = proxies.find(
+          (proxy) => proxy.code === `${section['.name']}-out`,
+        );
+        const members = (selector?.value?.all ?? []).map((code) =>
+          proxies.find((item) => item.code === code),
+        );
+
+        return {
+          withTagSelect: true,
+          code: selector?.code || section['.name'],
+          displayName: section['.name'],
+          outbounds: members.map((item) => ({
+            code: item?.code || '',
+            displayName:
+              item?.value?.type === 'URLTest'
+                ? _('Fastest')
+                : item?.code || item?.value?.name || '',
+            latency: item?.value?.history?.[0]?.delay || 0,
+            type: item?.value?.type || '',
+            selected: selector?.value?.now === item?.code,
+          })),
+        };
+      }
+
       if (section.connection_type === 'vpn') {
         const outbound = proxies.find(
           (proxy) => proxy.code === `${section['.name']}-out`,

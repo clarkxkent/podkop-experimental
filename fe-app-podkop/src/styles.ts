@@ -18,9 +18,57 @@ ${PartialStyles}
     display: none;
 }
 
+/* Hide extra H3 for the tabs of the subscriptions and the groups */
+#cbi-podkop-subscription > h3:nth-child(1),
+#cbi-podkop-group > h3:nth-child(1) {
+    display: none;
+}
+
 /* Vertical align for remove section action button */
-#cbi-podkop-section > .cbi-section-remove {
+#cbi-podkop-section > .cbi-section-remove,
+#cbi-podkop-subscription > .cbi-section-remove,
+#cbi-podkop-group > .cbi-section-remove {
     margin-bottom: -32px;
+}
+
+/* The servers of a subscription and of a group (subscription.js, group.js) */
+.pdk-sub-result {
+    margin-top: 8px;
+}
+
+.pdk-sub-list ul {
+    list-style: none;
+    margin: 4px 0 0;
+    padding: 0;
+    max-height: 420px;
+    overflow-y: auto;
+}
+
+.pdk-sub-list li {
+    padding: 4px 0;
+    border-bottom: 1px solid var(--border-color-medium, #ddd);
+    overflow-wrap: anywhere;
+}
+
+.pdk-sub-endpoint,
+.pdk-sub-notes {
+    opacity: 0.7;
+}
+
+.pdk-sub-unusable strong {
+    text-decoration: line-through;
+}
+
+.pdk-sub-reason,
+.pdk-sub-error {
+    color: var(--error-color-high, #c0392b);
+}
+
+.pdk-sub-link code {
+    display: block;
+    white-space: pre-wrap;
+    word-break: break-all;
+    font-size: 0.85em;
 }
 
 /* The links the router refuses at a save (linkCheck.ts) */
