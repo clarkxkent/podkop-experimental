@@ -217,7 +217,7 @@ func TestSubscriptionPreviews(t *testing.T) {
 	require.NotEmpty(t, preview.Servers[1].Reason)
 	require.Len(t, fake.built, 1, "a preview takes nothing")
 	_, err := os.Stat(filepath.Join(directory, "subscriptions"))
-	require.True(t, os.IsNotExist(err))
+	require.True(t, os.IsNotExist(err), "a preview writes nothing")
 
 	// a subscription of the settings without a list is downloaded for the check, not taken
 	check := s.CheckGroup(context.Background(), GroupCheck{Subscriptions: []string{"prov1", "prov1", "gone"}, Include: []string{"nl", "de"}, Exclude: []string{"de 1"}})
@@ -236,6 +236,21 @@ func TestSubscriptionPreviews(t *testing.T) {
 	require.Equal(t, 2, check.Total)
 	require.Greater(t, len(source.asked), asked, "another address is downloaded")
 	require.Len(t, fake.built, 1)
+
+	// a subscription added with the address Load just got: its servers are there at the apply
+	// that adds it, before any download, and kept on flash
+	asked = len(source.asked)
+	settings, err := os.ReadFile(options.SettingsPath)
+	require.NoError(t, err)
+	settings = append(settings, []byte("\nconfig subscription 'fresh'\n\toption url 'https://other.example/sub/X'\n"+
+		"\nconfig group 'fresh_all'\n\tlist subscription 'fresh'\n"+
+		"\nconfig section 'third'\n\toption connection_type 'group'\n\toption group 'fresh_all'\n\toption user_domain_list_type 'dynamic'\n\tlist user_domains 'third.lab.example'\n")...)
+	require.NoError(t, os.WriteFile(options.SettingsPath, settings, 0o644))
+	require.True(t, s.Apply().OK)
+	require.Contains(t, string(s.current.result.Config), `"fresh: NL 1"`)
+	require.Equal(t, asked, len(source.asked))
+	_, err = os.Stat(filepath.Join(directory, "subscriptions", "fresh.json"))
+	require.NoError(t, err)
 	s.Stop()
 }
 

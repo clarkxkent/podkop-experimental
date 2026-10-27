@@ -115,10 +115,26 @@ func (s *Supervisor) syncSubscriptions(settings *model.Config) {
 		next := now.Add(firstDownloadDelay)
 		state := &SubscriptionState{Name: item.Name, Next: &next}
 		t.states[item.Name] = state
-		if s.options.SubscriptionDir == "" {
-			continue
+		var saved *subscription.Saved
+		found := false
+		if s.options.SubscriptionDir != "" {
+			saved, found = s.store().Load(item.Name, item.URL)
 		}
-		if saved, found := s.store().Load(item.Name, item.URL); found {
+		if kept := t.previews[subscription.AddressKey(item.URL)]; !found && kept != nil && now.Sub(kept.Changed) < previewKept {
+			// the list the page got for the address a while ago (Load, Check of a group): a
+			// subscription just added has its servers at the apply that adds it, and is
+			// downloaded again at its interval
+			saved, found = kept, true
+			checked := kept.Changed
+			next = checked.Add(t.intervals[item.Name])
+			state.Checked, state.Next = &checked, &next
+			if s.options.SubscriptionDir != "" {
+				if err := s.store().Save(item.Name, kept); err != nil {
+					s.log("warn", "subscription ", item.Name, ": ", err)
+				}
+			}
+		}
+		if found {
 			t.lists[item.Name] = saved
 			for id, reason := range saved.Verdicts() {
 				t.verdicts[id] = reason
