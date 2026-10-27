@@ -76,6 +76,30 @@ const EntryPoint = {
       });
     };
 
+    // The tabs in the order the traffic is set up: where the servers come from, the groups
+    // of them, the sections that send traffic to a group
+    // Subscriptions tab: the addresses providers list their servers at
+    const subscriptionsSection = podkopMap.section(
+      form.TypedSection,
+      "subscription",
+      _("Subscriptions"),
+    );
+    subscriptionsSection.anonymous = false;
+    subscriptionsSection.addremove = true;
+    subscription.createSubscriptionContent(subscriptionsSection);
+    uniqueNames(subscriptionsSection);
+
+    // Groups tab: servers of subscriptions chosen by their names
+    const groupsSection = podkopMap.section(
+      form.TypedSection,
+      "group",
+      _("Groups"),
+    );
+    groupsSection.anonymous = false;
+    groupsSection.addremove = true;
+    group.createGroupContent(groupsSection);
+    uniqueNames(groupsSection);
+
     // Sections tab
     const sectionsSection = podkopMap.section(
       form.TypedSection,
@@ -89,28 +113,6 @@ const EntryPoint = {
     // Render section content
     section.createSectionContent(sectionsSection, singBoxFeatures);
     uniqueNames(sectionsSection);
-
-    // Groups tab: servers of subscriptions chosen by their names
-    const groupsSection = podkopMap.section(
-      form.TypedSection,
-      "group",
-      _("Groups"),
-    );
-    groupsSection.anonymous = false;
-    groupsSection.addremove = true;
-    group.createGroupContent(groupsSection);
-    uniqueNames(groupsSection);
-
-    // Subscriptions tab: the addresses providers list their servers at
-    const subscriptionsSection = podkopMap.section(
-      form.TypedSection,
-      "subscription",
-      _("Subscriptions"),
-    );
-    subscriptionsSection.anonymous = false;
-    subscriptionsSection.addremove = true;
-    subscription.createSubscriptionContent(subscriptionsSection);
-    uniqueNames(subscriptionsSection);
 
     // Settings tab
     const settingsSection = podkopMap.section(
