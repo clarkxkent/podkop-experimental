@@ -10,7 +10,17 @@ function currentValue(section, section_id, option) {
   const value = section.formvalue(section_id, option);
   return value != null ? value : uci.get("podkop", section_id, option);
 }
-
+// Read the current URL from the GridSection modal.
+function currentAddress(section, section_id) {  
+  const field = document.getElementById(
+    "widget.cbid.podkop." + section_id + ".url",
+  );
+  if (field) {
+    return field.value.trim();
+  }
+  const value = currentValue(section, section_id, "url");
+  return value != null ? String(value).trim() : "";
+}
 // The state of the subscriptions as the router knows them, asked once a render of the tab.
 let states = null;
 function subscriptionStates() {
@@ -163,7 +173,7 @@ function createSubscriptionContent(section) {
         class: "cbi-button cbi-button-action",
         click: (ev) => {
           ev.preventDefault();
-          const address = (currentValue(section, section_id, "url") || "").trim();
+          const address = currentAddress(section, section_id);
           if (!address) {
             result.replaceChildren(
               E("div", { class: "pdk-sub-error" }, [_("The address is not set")]),
