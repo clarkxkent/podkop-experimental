@@ -97,7 +97,7 @@ const EntryPoint = {
     };
 
     // The tabs in the order the traffic is set up: where the servers come from, the groups
-    // of them, the sections that send traffic to a group    
+    // of them, the sections that send traffic to a group
     // Subscriptions tab: the addresses providers list their servers at
     const subscriptionsSection = podkopMap.section(
       form.GridSection,
