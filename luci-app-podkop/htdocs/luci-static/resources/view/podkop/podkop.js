@@ -97,41 +97,64 @@ const EntryPoint = {
     };
 
     // The tabs in the order the traffic is set up: where the servers come from, the groups
-    // of them, the sections that send traffic to a group
+    // of them, the sections that send traffic to a group    
     // Subscriptions tab: the addresses providers list their servers at
     const subscriptionsSection = podkopMap.section(
-      form.TypedSection,
+      form.GridSection,
       "subscription",
       _("Subscriptions"),
     );
     subscriptionsSection.anonymous = false;
     subscriptionsSection.addremove = true;
+    subscriptionsSection.modalpopup = true;
+    subscriptionsSection.sortable = true;
+    subscriptionsSection.modaltitle = function (sectionId) {
+      return _("Subscription") + ": " + sectionId;
+    };
     subscription.createSubscriptionContent(subscriptionsSection);
+    subscriptionsSection.children.forEach(function (option) {
+      option.modalonly = true;
+    });
     stageSections(subscriptionsSection);
 
     // Groups tab: servers of subscriptions chosen by their names
     const groupsSection = podkopMap.section(
-      form.TypedSection,
+      form.GridSection,
       "group",
       _("Groups"),
     );
     groupsSection.anonymous = false;
     groupsSection.addremove = true;
+    groupsSection.modalpopup = true;
+    groupsSection.sortable = true;
+    groupsSection.modaltitle = function (sectionId) {
+      return _("Group") + ": " + sectionId;
+    };
     group.createGroupContent(groupsSection);
+    groupsSection.children.forEach(function (option) {
+      option.modalonly = true;
+    });
     stageSections(groupsSection);
 
     // Sections tab
     const sectionsSection = podkopMap.section(
-      form.TypedSection,
+      form.GridSection,
       "section",
       _("Sections"),
     );
     sectionsSection.anonymous = false;
     sectionsSection.addremove = true;
-    sectionsSection.template = "cbi/simpleform";
+    sectionsSection.modalpopup = true;
+    sectionsSection.sortable = true;
+    sectionsSection.modaltitle = function (sectionId) {
+      return _("Section") + ": " + sectionId;
+    };
 
     // Render section content
     section.createSectionContent(sectionsSection, singBoxFeatures);
+    sectionsSection.children.forEach(function (option) {
+      option.modalonly = true;
+    });
     stageSections(sectionsSection);
 
     // Settings tab
