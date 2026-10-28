@@ -106,8 +106,8 @@ function createGroupContent(section) {
     return form.MultiValue.prototype.load.call(this, section_id);
   };
   o.rmempty = false;
-  o.validate = function (section_id) {
-    return currentList(section, section_id, "subscription").length
+  o.validate = function (section_id, value) {
+    return L.toArray(value).some((item) => String(item).trim())
       ? true
       : _("Choose a subscription");
   };
@@ -179,6 +179,19 @@ function createGroupContent(section) {
         click: (ev) => {
           ev.preventDefault();
           const subscriptions = currentList(section, section_id, "subscription");
+          // Read unsaved subscription selections from the GridSection modal.
+          if (!subscriptions.length) {
+            const field = document.getElementById(
+              "cbid.podkop." + section_id + ".subscription",
+            );
+            if (field) {
+              field.querySelectorAll('input[type="hidden"]').forEach((input) => {
+                if (input.value && !subscriptions.includes(input.value)) {
+                  subscriptions.push(input.value);
+                }
+              });
+            }
+          }
           if (!subscriptions.length) {
             result.replaceChildren(
               E("div", { class: "pdk-sub-error" }, [_("Choose a subscription")]),
